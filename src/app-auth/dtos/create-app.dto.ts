@@ -132,3 +132,11 @@ export class CreateAppDto {
   @IsBoolean()
   hasDomainVerified: boolean;
 }
+
+export class DeleteAppResponse {
+  @ApiProperty({
+    description: 'Application id',
+    example: '3420d77a5547b60fe265a463a0e5897578d3',
+  })
+  appId: string;
+}

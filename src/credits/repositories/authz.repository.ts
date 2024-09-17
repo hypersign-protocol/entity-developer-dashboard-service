@@ -17,4 +17,7 @@ export class AuthZCreditsRepository {
   async find(authZCreditsFilterQuery: FilterQuery<AuthZCredits>) {
     return this.authZCreditModel.find(authZCreditsFilterQuery);
   }
+  async deleteAuthzDetail(authZCreditsFilterQuery: FilterQuery<AuthZCredits>) {
+    return this.authZCreditModel.findOneAndDelete(authZCreditsFilterQuery);
+  }
 }

@@ -15,7 +15,10 @@ import {
   Delete,
   Logger,
 } from '@nestjs/common';
-import { CreateAppDto } from 'src/app-auth/dtos/create-app.dto';
+import {
+  CreateAppDto,
+  DeleteAppResponse,
+} from 'src/app-auth/dtos/create-app.dto';
 import { RegenrateAppApiSecretResponse } from '../dtos/generate-token.dto';
 import { AppAuthService } from 'src/app-auth/services/app-auth.service';
 import {
@@ -203,27 +206,21 @@ export class AppAuthController {
   @Delete(':appId')
   @ApiResponse({
     status: 200,
-    description: 'App deleted',
-    type: App,
+    description: 'App deleted successfully',
+    type: DeleteAppResponse,
   })
   @ApiNotFoundResponse({
     description: ' App not found',
     type: AppError,
   })
-  @UseInterceptors(
-    MongooseClassSerializerInterceptor(App, {
-      excludePrefixes: ['apiKeySecret', 'apiKeyPrefix', '_', '__'],
-    }),
-  )
   async deleteApp(
     @Req() req: any,
     @Param('appId') appId: string,
-  ): Promise<App> {
+  ): Promise<DeleteAppResponse> {
     Logger.log('deleteApp() method: starts', 'AppAuthController');
 
     const userId = req.user.userId;
-    const app = await this.appAuthService.deleteApp(appId, userId);
-    return app;
+    return this.appAuthService.deleteApp(appId, userId);
   }
 
   @ApiBearerAuth('Authorization')

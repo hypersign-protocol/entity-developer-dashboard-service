@@ -23,7 +23,8 @@ export interface IEdvClientManager {
   initate(): Promise<IEdvClientManager>;
   insertDocument(doc: EDVDocType): any;
   updateDocument(): any;
-  deleteDocument(): any;
+  deleteDocument(id: string): any;
+  deleteVault(id: string): any;
   getDecryptedDocument(id: string): Promise<any>;
   getDocument(id: string): Promise<IResponse>;
   prepareEdvDocument(
@@ -113,10 +114,26 @@ export class EdvClientManger implements IEdvClientManager {
   updateDocument(): any {
     throw new Error('not implemented');
   }
-  deleteDocument(): any {
-    throw new Error('not implemented');
+  async deleteDocument(id: string) {
+    Logger.log(
+      'deleteDocument() method: starts, deleting docs from edvClient',
+      'EdvService',
+    );
+    const resp: IResponse = await this.vault.deleteDoc({
+      edvId: this.edvId,
+      documentId: id,
+    });
+    return resp;
   }
 
+  async deleteVault(edvId: string) {
+    Logger.log(
+      'deletVault() method: starts, deleting entire vault',
+      'EdvService',
+    );
+    const resp = await this.vault.deleteVaultData({ edvId: edvId });
+    return resp;
+  }
   async getDocument(id: string): Promise<IResponse> {
     Logger.log(
       'getDocument() method: starts, fetching docs from edvClient',

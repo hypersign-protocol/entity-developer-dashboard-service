@@ -98,66 +98,65 @@ export class AppAuthService {
         this.authzWalletInstance.wallet,
       );
     }
-
     const { mnemonic, address } = await this.hidWalletService.generateWallet();
     const appId = await this.appAuthApiKeyService.generateAppId();
 
-    const vaultPrefixInEnv = this.config.get('VAULT_PREFIX');
-    const vaultPrefix = vaultPrefixInEnv ? vaultPrefixInEnv : 'hs:studio-api:';
-    const edvId = vaultPrefix + 'app:' + appId;
+    let subdomain;
+    let edvId;
+    let kmsId;
+    if (service.id !== SERVICE_TYPES.QUEST) {
+      const vaultPrefixInEnv = this.config.get('VAULT_PREFIX');
+      const vaultPrefix = vaultPrefixInEnv
+        ? vaultPrefixInEnv
+        : 'hs:studio-api:';
+      edvId = vaultPrefix + 'app:' + appId;
 
-    Logger.log(
-      'createAnApp() method: initialising edv service',
-      'AppAuthService',
-    );
+      Logger.log(
+        'createAnApp() method: initialising edv service',
+        'AppAuthService',
+      );
 
-    // Store menemonic and edvId in the key manager vault and get the kmsId.
-    const doc = {
-      mnemonic,
-      edvId: edvId,
-    };
-    Logger.log(
-      'createAnApp() method: Prepareing app keys to insert in kms vault',
-    );
+      // Store menemonic and edvId in the key manager vault and get the kmsId.
+      const doc = {
+        mnemonic,
+        edvId: edvId,
+      };
+      Logger.log(
+        'createAnApp() method: Prepareing app keys to insert in kms vault',
+      );
 
-    if (!globalThis.kmsVault) {
-      throw new InternalServerErrorException('KMS vault is not initialized');
+      if (!globalThis.kmsVault) {
+        throw new InternalServerErrorException('KMS vault is not initialized');
+      }
+      const edvDocToInsert = globalThis.kmsVault.prepareEdvDocument(doc, [
+        { index: 'content.edvId', unique: true },
+      ]);
+
+      Logger.log(
+        'createAnApp() method: Inserting app keys to insert in kms vault',
+      );
+      const { id } = await globalThis.kmsVault.insertDocument(edvDocToInsert);
+      kmsId = id;
+
+      Logger.log('createAnApp() method: Preparing wallet for the app');
+      // TODO generate vault for this app.
+      const appVaultWallet = await VaultWalletManager.getWallet(mnemonic);
+      // we do not need to storing anything in the app's vault, we just create a vault for this guy
+      Logger.log('createAnApp() method: Creating vault for the app');
+      await EdvClientManagerFactoryService.createEdvClientManger(
+        appVaultWallet,
+        edvId,
+      );
+      subdomain = await this.getRandomSubdomain();
     }
-
-    const edvDocToInsert = globalThis.kmsVault.prepareEdvDocument(doc, [
-      { index: 'content.edvId', unique: true },
-    ]);
-
-    Logger.log(
-      'createAnApp() method: Inserting app keys to insert in kms vault',
-    );
-    const { id: kmsId } = await globalThis.kmsVault.insertDocument(
-      edvDocToInsert,
-    );
-
     // TODO use mnemonic as a seed to generate API keys
     Logger.log('createAnApp() method: generating api key', 'AppAuthService');
     const { apiSecretKey, apiSecret } =
       await this.appAuthApiKeyService.generateApiKey();
-
-    Logger.log('createAnApp() method: Preparing wallet for the app');
-    // TODO generate vault for this app.
-    const appVaultWallet = await VaultWalletManager.getWallet(mnemonic);
-    // we do not need to storing anything in the app's vault, we just create a vault for this guy
-    Logger.log('createAnApp() method: Creating vault for the app');
-    await EdvClientManagerFactoryService.createEdvClientManger(
-      appVaultWallet,
-      edvId,
-    );
-
     Logger.log(
       'createAnApp() method: before creating new app doc in db',
       'AppAuthService',
     );
-    let subdomain;
-    if (service.id !== SERVICE_TYPES.QUEST) {
-      subdomain = await this.getRandomSubdomain();
-    }
     // AUTHZ
     if (service.id == SERVICE_TYPES.SSI_API) {
       // Perform AuthZ Grant
@@ -691,8 +690,7 @@ export class AppAuthService {
 
     if (accessList.length <= 0) {
       throw new UnauthorizedException(
-        'You are not authorized to access service of type ',
-        serviceType,
+        `You are not authorized to access service of type ${serviceType}`,
       );
     }
 
@@ -838,11 +836,9 @@ export class AppAuthService {
         throw new BadRequestException('Invalid service ' + appId);
       }
     }
-
     if (accessList.length <= 0) {
       throw new UnauthorizedException(
-        'You are not authorized to access service of type ',
-        serviceType,
+        `You are not authorized to access service of type ${serviceType}`,
       );
     }
 

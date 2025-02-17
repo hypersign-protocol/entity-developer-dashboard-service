@@ -215,28 +215,30 @@ export class PeopleService {
       throw new BadRequestException('Admin user not found');
     }
     const userId = user.userId;
+    let adminPeople = user;
+    let role;
+    if (userId !== adminId) {
+      adminPeople = await this.adminPeopleService.findOne({
+        adminId,
+        userId,
+      });
 
-    const adminPeople = await this.adminPeopleService.findOne({
-      adminId,
-      userId,
-    });
+      if (adminPeople == null) {
+        throw new NotFoundException(
+          'You are not the member of ' + adminData.email,
+        );
+      }
 
-    if (adminPeople == null) {
-      throw new NotFoundException(
-        'You are not the member of ' + adminData.email,
-      );
+      if (adminPeople.roleId == null) {
+        throw new BadRequestException(
+          'You do not have any role to access admin account',
+        );
+      }
+
+      role = await this.roleRepository.findOne({
+        _id: adminPeople.roleId,
+      });
     }
-
-    if (adminPeople.roleId == null) {
-      throw new BadRequestException(
-        'You do not have any role to access admin account',
-      );
-    }
-
-    const role = await this.roleRepository.findOne({
-      _id: adminPeople.roleId,
-    });
-
     // const jwt = await this.socialLoginService.socialLogin({
     //   user: {
     //     email: adminData.email,
@@ -249,7 +251,7 @@ export class PeopleService {
 
     const accessAccount = {
       ...adminData,
-      accessList: role.permissions,
+      accessList: role?.permissions || adminPeople.accessList,
     };
     const payload = {
       appUserID: user.userId,

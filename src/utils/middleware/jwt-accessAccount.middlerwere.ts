@@ -20,10 +20,11 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
         // @ts-ignore
 
         const adminId = req.user.accessAccount.userId;
-
-        const member = await this.adminPeople.findOne({ adminId, userId });
-        if (member == null) {
-          throw new Error('Your access has been revoked');
+        if (adminId !== userId) {
+          const member = await this.adminPeople.findOne({ adminId, userId });
+          if (member == null) {
+            throw new Error('Your access has been revoked');
+          }
         }
         // @ts-ignore
 

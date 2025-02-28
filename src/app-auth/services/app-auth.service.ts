@@ -25,15 +25,6 @@ import {
   SERVICE_TYPES,
 } from 'src/supported-service/services/iServiceList';
 import { UserRepository } from 'src/user/repository/user.repository';
-import {
-  generateAuthzGrantTxnMessage,
-  generatePerformFeegrantAllowanceTxn,
-  MSG_CREATE_DID_TYPEURL,
-  MSG_REGISTER_CREDENTIAL_SCHEMA,
-  MSG_REGISTER_CREDENTIAL_STATUS,
-  MSG_UPDATE_CREDENTIAL_STATUS,
-  MSG_UPDATE_DID_TYPEURL,
-} from 'src/utils/authz';
 import { AuthzCreditService } from 'src/credits/services/credits.service';
 import { AuthZCreditsRepository } from 'src/credits/repositories/authz.repository';
 import { EdvClientKeysManager } from 'src/edv/services/edv.singleton';
@@ -152,60 +143,6 @@ export class AppAuthService {
       'createAnApp() method: before creating new app doc in db',
       'AppAuthService',
     );
-    // AUTHZ
-    if (service.id == SERVICE_TYPES.SSI_API) {
-      // Perform AuthZ Grant
-      const authGrantTxnMsgAndFeeDID = await generateAuthzGrantTxnMessage(
-        address,
-        this.authzWalletInstance.address,
-        MSG_CREATE_DID_TYPEURL,
-      );
-      const authGrantTxnMsgAndFeeDIDUpdate = await generateAuthzGrantTxnMessage(
-        address,
-        this.authzWalletInstance.address,
-        MSG_UPDATE_DID_TYPEURL,
-      );
-      const authGrantTxnMsgAndFeeUpdateCredStatus =
-        await generateAuthzGrantTxnMessage(
-          address,
-          this.authzWalletInstance.address,
-          MSG_UPDATE_CREDENTIAL_STATUS,
-        );
-
-      const authGrantTxnMsgAndFeeSchema = await generateAuthzGrantTxnMessage(
-        address,
-        this.authzWalletInstance.address,
-        MSG_REGISTER_CREDENTIAL_SCHEMA,
-      );
-      const authGrantTxnMsgAndFeeCred = await generateAuthzGrantTxnMessage(
-        address,
-        this.authzWalletInstance.address,
-        MSG_REGISTER_CREDENTIAL_STATUS,
-      );
-      // Perform FeeGrant Allowence
-      const performFeegrantAllowence =
-        await generatePerformFeegrantAllowanceTxn(
-          address,
-          this.authzWalletInstance.address,
-          this.config.get('BASIC_ALLOWANCE') || '5000000uhid',
-        );
-      await this.granterClient.signAndBroadcast(
-        this.authzWalletInstance.address,
-        [
-          authGrantTxnMsgAndFeeDIDUpdate.txMsg,
-          authGrantTxnMsgAndFeeDID.txMsg,
-          authGrantTxnMsgAndFeeCred.txMsg,
-          authGrantTxnMsgAndFeeSchema.txMsg,
-          performFeegrantAllowence.txMsg,
-          authGrantTxnMsgAndFeeUpdateCredStatus.txMsg,
-        ],
-        authGrantTxnMsgAndFeeDID.fee,
-      );
-      await this.authzCreditService.createAuthzCredits({
-        userId,
-        appId,
-      });
-    }
 
     // Finally stroring application in db
     // const txns = {

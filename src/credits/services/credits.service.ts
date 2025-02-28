@@ -1,16 +1,37 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { AuthZCreditsRepository } from '../repositories/authz.repository';
 import { scope } from '../../credits/schemas/authz.schema';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { APP_ENVIRONMENT } from 'src/supported-service/services/iServiceList';
+import { AppRepository } from 'src/app-auth/repositories/app.repository';
+import { SigningStargateClient } from '@cosmjs/stargate';
+import { HidWalletService } from 'src/hid-wallet/services/hid-wallet.service';
+import {
+  generateAuthzGrantTxnMessage,
+  generatePerformFeegrantAllowanceTxn,
+  MSG_CREATE_DID_TYPEURL,
+  MSG_REGISTER_CREDENTIAL_SCHEMA,
+  MSG_REGISTER_CREDENTIAL_STATUS,
+  MSG_UPDATE_CREDENTIAL_STATUS,
+  MSG_UPDATE_DID_TYPEURL,
+} from 'src/utils/authz';
 
 @Injectable()
 export class AuthzCreditService {
+  private authzWalletInstance;
+  private granterClient: SigningStargateClient;
   constructor(
     private readonly authzCreditsRepository: AuthZCreditsRepository,
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
+    private readonly appRepository: AppRepository,
+    private readonly hidWalletService: HidWalletService,
   ) {}
 
   async createAuthzCredits(authz: { userId; appId }) {
@@ -74,5 +95,93 @@ export class AuthzCreditService {
     }).catch((error) => {
       Logger.error('Failed to grant credit:', error);
     });
+  }
+  async grantSSICredit(appId, allowance) {
+    Logger.log(
+      'Inside grantSSICredit to provide Authz grant',
+      'AuthzCreditService',
+    );
+    let appDetail;
+    try {
+      appDetail = await this.appRepository.findOne({ appId });
+      if (!appDetail || appDetail === null) {
+        throw new NotFoundException([`No app found for appId ${appId}`]);
+      }
+      const walletAddress = appDetail.walletAddress;
+      if (!this.authzWalletInstance) {
+        this.authzWalletInstance = await this.hidWalletService.generateWallet(
+          this.config.get('MNEMONIC'),
+        );
+      }
+      if (!this.granterClient) {
+        this.granterClient = await SigningStargateClient.connectWithSigner(
+          this.config.get('HID_NETWORK_RPC'),
+          this.authzWalletInstance.wallet,
+        );
+      }
+      // Perform AuthZ Grant
+      const authGrantTxnMsgAndFeeDID = await generateAuthzGrantTxnMessage(
+        walletAddress,
+        this.authzWalletInstance.address,
+        MSG_CREATE_DID_TYPEURL,
+      );
+      const authGrantTxnMsgAndFeeDIDUpdate = await generateAuthzGrantTxnMessage(
+        walletAddress,
+        this.authzWalletInstance.address,
+        MSG_UPDATE_DID_TYPEURL,
+      );
+      const authGrantTxnMsgAndFeeUpdateCredStatus =
+        await generateAuthzGrantTxnMessage(
+          walletAddress,
+          this.authzWalletInstance.address,
+          MSG_UPDATE_CREDENTIAL_STATUS,
+        );
+
+      const authGrantTxnMsgAndFeeSchema = await generateAuthzGrantTxnMessage(
+        walletAddress,
+        this.authzWalletInstance.address,
+        MSG_REGISTER_CREDENTIAL_SCHEMA,
+      );
+      const authGrantTxnMsgAndFeeCred = await generateAuthzGrantTxnMessage(
+        walletAddress,
+        this.authzWalletInstance.address,
+        MSG_REGISTER_CREDENTIAL_STATUS,
+      );
+      // Perform FeeGrant Allowence
+      const performFeegrantAllowence =
+        await generatePerformFeegrantAllowanceTxn(
+          walletAddress,
+          this.authzWalletInstance.address,
+          `${allowance}uhid`,
+        );
+      await this.granterClient.signAndBroadcast(
+        this.authzWalletInstance.address,
+        [
+          authGrantTxnMsgAndFeeDIDUpdate.txMsg,
+          authGrantTxnMsgAndFeeDID.txMsg,
+          authGrantTxnMsgAndFeeCred.txMsg,
+          authGrantTxnMsgAndFeeSchema.txMsg,
+          performFeegrantAllowence.txMsg,
+          authGrantTxnMsgAndFeeUpdateCredStatus.txMsg,
+        ],
+        authGrantTxnMsgAndFeeDID.fee,
+      );
+      return {
+        credit: {
+          amount: allowance,
+          denom: 'uhid',
+        },
+        creditScope: [
+          scope.MsgRegisterDID,
+          scope.MsgDeactivateDID,
+          scope.MsgRegisterCredentialSchema,
+          scope.MsgUpdateDID,
+          scope.MsgUpdateCredentialStatus,
+          scope.MsgRegisterCredentialStatus,
+        ],
+      };
+    } catch (e) {
+      throw new BadRequestException([e.message]);
+    }
   }
 }

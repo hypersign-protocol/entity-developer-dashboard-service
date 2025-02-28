@@ -46,7 +46,6 @@ import {
   providers: [
     AppAuthService,
     AppRepository,
-
     HidWalletService,
     AppAuthSecretService,
     AppAuthApiKeyService,

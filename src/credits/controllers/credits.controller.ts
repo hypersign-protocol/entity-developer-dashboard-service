@@ -1,6 +1,7 @@
 import { UseFilters, Controller, Get, Query, Req, Param } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiExcludeEndpoint,
   ApiOkResponse,
   ApiQuery,
   ApiResponse,
@@ -28,7 +29,7 @@ export class CreditsController {
     const appId = query.appId;
     return this.creditService.getCreditDetails(appId, userId);
   }
-
+  @ApiExcludeEndpoint()
   // @ApiBearerAuth('Authorization') we will implement basic authentication and will set the userId and password on ssi service
   @ApiOkResponse({
     description: 'Granted allowance to specific wallet successfully',

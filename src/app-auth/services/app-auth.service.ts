@@ -473,6 +473,22 @@ export class AppAuthService {
 
       throw new NotFoundException([`No App found for appId ${appId}`]);
     }
+    const checkIfAppIsLinkedWithOtherApp =
+      await this.appRepository.findAppsByPipeline([
+        {
+          $match: {
+            dependentServices: appId,
+          },
+        },
+      ]);
+    if (
+      checkIfAppIsLinkedWithOtherApp &&
+      checkIfAppIsLinkedWithOtherApp.length > 0
+    ) {
+      throw new BadRequestException([
+        `App with appId ${appId} is linked to another app. Please unlink it or delete that app before proceeding with deletion.`,
+      ]);
+    }
     const { edvId, kmsId } = appDetail;
     const appDataFromVault = await globalThis.kmsVault.getDecryptedDocument(
       kmsId,

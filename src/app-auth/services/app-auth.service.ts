@@ -485,8 +485,14 @@ export class AppAuthService {
       checkIfAppIsLinkedWithOtherApp &&
       checkIfAppIsLinkedWithOtherApp.length > 0
     ) {
+      const linkedServicesMessage = checkIfAppIsLinkedWithOtherApp
+        .map(
+          (service, index) =>
+            `${index + 1}. ${service.appName} (${service.appId})`,
+        )
+        .join('\n');
       throw new BadRequestException([
-        `App with appId ${appId} is linked to another app. Please unlink it or delete that app before proceeding with deletion.`,
+        `This service is linked with the following services:\n\n${linkedServicesMessage}.\n\nPlease delink or delete the linked services before deleting the SSI service.`,
       ]);
     }
     const { edvId, kmsId } = appDetail;

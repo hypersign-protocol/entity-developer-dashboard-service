@@ -79,7 +79,7 @@ export class PeopleService {
       mailName: 'sendTeamMatemail',
       teamMateMailId: emailId,
       adminEmailId: adminUserData.email,
-      mailSubject: `${adminUserData.email} has invited you to collaborate on the entity developer dashboard.`,
+      mailSubject: " You're invited to join Entity Studio Dashboard",
       inviteLink: `${this.configService.get('INVITATIONURL')}?token=`, // will modify this link later based on ui implamentation
     });
     return invite;

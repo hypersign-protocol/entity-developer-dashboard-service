@@ -27,6 +27,10 @@ export class MailNotificationService {
       '@@SenderEmailId@@',
       adminEmailId,
     );
+    tempMailTemplate = tempMailTemplate.replace(
+      '@@InviteeName@@',
+      teamMateMailId.split('@')[0],
+    );
     tempMailTemplate = tempMailTemplate.replace('@@InviteLink@@', inviteLink);
     const mailStructure = {
       name: mailName,

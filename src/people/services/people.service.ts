@@ -18,6 +18,7 @@ import { RoleRepository } from 'src/roles/repository/role.repository';
 import { SocialLoginService } from 'src/social-login/services/social-login.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
 
 @Injectable()
 export class PeopleService {
@@ -28,6 +29,7 @@ export class PeopleService {
     private readonly socialLoginService: SocialLoginService,
     private readonly jwt: JwtService,
     private readonly configService: ConfigService,
+    private readonly mailNotificationService: MailNotificationService,
   ) {}
   async createInvitation(createPersonDto: CreateInviteDto, adminUserData) {
     const { emailId } = createPersonDto;
@@ -67,11 +69,19 @@ export class PeopleService {
     const invite = await this.adminPeopleService.create({
       adminId: adminUserData.userId,
       userId: userDetails.userId,
-      inviteCode: uuidv4(),
+      inviteCode: `${Date.now()}-${uuidv4()}`,
       accepted: false,
-      invitationValidTill: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      invitationValidTill: new Date(
+        Date.now() + 2 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
     });
-
+    this.mailNotificationService.addJobToMailQueue({
+      mailName: 'sendTeamMatemail',
+      teamMateMailId: emailId,
+      adminEmailId: adminUserData.email,
+      mailSubject: `${adminUserData.email} has invited you to collaborate on the entity developer dashboard.`,
+      inviteLink: `${this.configService.get('INVITATIONURL')}?token=`, // will modify this link later based on ui implamentation
+    });
     return invite;
   }
 

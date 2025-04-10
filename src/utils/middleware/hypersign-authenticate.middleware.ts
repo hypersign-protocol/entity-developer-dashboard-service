@@ -26,7 +26,7 @@ export class HypersignAuthenticateMiddleware implements NestMiddleware {
     const userIndb: User = await this.userRepository.findOne({ email: email });
     let userId;
     if (!userIndb) {
-      userId = uuidv4(); // can't generate userId here fetch userId based on email and use that userID
+      userId = `${Date.now()}-${uuidv4()}`; // can't generate userId here fetch userId based on email and use that userID
     } else {
       userId = userIndb.userId;
     }

@@ -61,7 +61,7 @@ export class SocialLoginService {
     });
     let appUserID;
     if (!userInfo) {
-      appUserID = uuidv4();
+      appUserID = `${Date.now()}-${uuidv4()}`;
       // Giving default access of services...
       const ssiAccessList = this.supportedServiceList.getDefaultServicesAccess(
         SERVICE_TYPES.SSI_API,

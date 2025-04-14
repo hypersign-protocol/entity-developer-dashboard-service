@@ -80,7 +80,7 @@ export class PeopleService {
       teamMateMailId: emailId,
       adminEmailId: adminUserData.email,
       mailSubject: " You're invited to join Entity Studio Dashboard",
-      inviteLink: `${this.configService.get('INVITATIONURL')}?token=`, // will modify this link later based on ui implamentation
+      inviteLink: `${this.configService.get('INVITATIONURL')}`,
     });
     return invite;
   }

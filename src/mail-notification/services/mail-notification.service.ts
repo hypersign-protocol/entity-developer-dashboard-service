@@ -10,7 +10,7 @@ export class MailNotificationService {
     @InjectQueue('Entity_Dashboard_Queue')
     private readonly mailQueue: Queue,
     private readonly config: ConfigService,
-  ) {}
+  ) { }
   async addJobToMailQueue({
     mailName,
     teamMateMailId,

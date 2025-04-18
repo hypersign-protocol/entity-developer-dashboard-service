@@ -10,7 +10,7 @@ export class MailNotificationService {
     @InjectQueue('Entity_Dashboard_Queue')
     private readonly mailQueue: Queue,
     private readonly config: ConfigService,
-  ) { }
+  ) {}
   async addJobToMailQueue({
     mailName,
     teamMateMailId,
@@ -35,7 +35,7 @@ export class MailNotificationService {
     const mailStructure = {
       name: mailName,
       data: {
-        serverName: this.config.get('SERVER_NAME'),
+        serverName: this.config.get('MFA_ISSUER'),
         to: teamMateMailId,
         subject: mailSubject,
         message: tempMailTemplate,

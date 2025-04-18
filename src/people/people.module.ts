@@ -6,13 +6,12 @@ import { AdminPeople, AdminPeopleSchema } from './schema/people.schema';
 import { JWTAuthorizeMiddleware } from 'src/utils/middleware/jwt-authorization.middleware';
 import { UserModule } from 'src/user/user.module';
 import { UserService } from 'src/user/services/user.service';
-// import { Invite, InviteSchema } from './schema/invite.schema';
 import { AdminPeopleRepository } from './repository/people.repository';
 import { RoleRepository } from 'src/roles/repository/role.repository';
 import { Role, RoleSchema } from 'src/roles/schemas/role.schema';
 import { SocialLoginModule } from 'src/social-login/social-login.module';
 import { JwtModule } from '@nestjs/jwt';
-// import { InviteRepository } from './repository/invite.respository';
+import { MailNotificationModule } from 'src/mail-notification/mail-notification.module';
 
 @Module({
   imports: [
@@ -23,6 +22,7 @@ import { JwtModule } from '@nestjs/jwt';
     SocialLoginModule,
     UserModule,
     JwtModule,
+    MailNotificationModule,
   ],
   controllers: [PeopleController],
   providers: [

@@ -81,6 +81,12 @@ spec:
           value: __GOOGLE_CLIENT_SECRET__
         - name: REDIRECT_URL
           value: __REDIRECT_URL__
+        - name: INVITATIONURL
+          value: __INVITATIONURL__
+        - name: MAIL_QUEUE
+          value: __MAIL_QUEUE__
+        - name: SERVER_NAME
+          value: __SERVER_NAME__
         volumeMounts:
         - name: mongo
           mountPath: "/data"

@@ -118,6 +118,13 @@ jobs:
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__GOOGLE_CLIENT_SECRET__/${{ secrets.GOOGLE_CLIENT_SECRET }}/g'' {} \;
     - name: "Replace secrets"
-      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__REDIRECT_URL__#${{ secrets.REDIRECT_URL }}#" {} \;
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__REDIRECT_URL__#${{ secrets.REDIRECT_URL }}#" {} \; 
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__INVITATIONURL__#${{ secrets.INVITATIONURL }}#" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MAIL_QUEUE__#${{ secrets.MAIL_QUEUE }}#" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__SERVER_NAME__#${{ secrets.SERVER_NAME }}#" {} \;
+    
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

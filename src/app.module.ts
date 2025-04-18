@@ -15,6 +15,7 @@ import { HypersignauthLoginModule } from './hypersignauth-login/hypersignauth-lo
 import { CreditModule } from './credits/credits.module';
 import { TeamModule } from './roles/role.module';
 import { PeopleModule } from './people/people.module';
+import { MailNotificationModule } from './mail-notification/mail-notification.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { PeopleModule } from './people/people.module';
     HypersignauthLoginModule,
     TeamModule,
     PeopleModule,
+    MailNotificationModule,
   ],
   controllers: [],
   providers: [

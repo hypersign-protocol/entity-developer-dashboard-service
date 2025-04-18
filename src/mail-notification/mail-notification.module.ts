@@ -4,7 +4,7 @@ import { MailNotificationService } from './services/mail-notification.service';
 @Module({
   imports: [
     BullModule.registerQueue({
-      name: 'Entity_Dashboard_Queue',
+      name: 'Entity-Dashboard-Mail-Queue',
     }),
   ],
   providers: [MailNotificationService],

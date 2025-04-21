@@ -41,7 +41,15 @@ export class MailNotificationService {
         message: tempMailTemplate,
       },
     };
-    const job = await this.mailQueue.add(mailStructure.name, mailStructure.data);
-    Logger.log(job, 'job detail')
+    const job = await this.mailQueue.add(
+      mailStructure.name,
+      mailStructure.data,
+    );
+    if (job) {
+      Logger.log(job, 'job detail');
+      Logger.log(job.id);
+    } else {
+      Logger.error('inside else');
+    }
   }
 }

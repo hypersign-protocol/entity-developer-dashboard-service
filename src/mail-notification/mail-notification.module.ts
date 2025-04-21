@@ -6,6 +6,12 @@ import { MailNotificationService } from './services/mail-notification.service';
     BullModule.registerQueue({
       name: 'Entity-Dashboard-Mail-Queue',
     }),
+    BullModule.forRoot({
+      connection: {
+        host: 'redis-stack-service.hypermine-development.svc.cluster.local',
+        port: 6379,
+      },
+    }),
   ],
   providers: [MailNotificationService],
   exports: [MailNotificationService],

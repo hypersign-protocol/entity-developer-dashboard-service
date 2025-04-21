@@ -22,7 +22,6 @@ import { MailNotificationModule } from './mail-notification/mail-notification.mo
     AppAuthModule,
     CreditModule,
     ConfigModule.forRoot({
-      envFilePath: '',
       isGlobal: true,
     }),
     MongooseModule.forRoot(process.env.DATABASE_CONNECTION_PATH),

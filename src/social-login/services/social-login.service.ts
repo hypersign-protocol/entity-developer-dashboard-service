@@ -20,6 +20,7 @@ import {
   Generate2FA,
   MFACodeVerificationDto,
 } from '../dto/request.dto';
+import { UserDocument } from 'src/user/schema/user.schema';
 
 @Injectable()
 export class SocialLoginService {
@@ -55,7 +56,7 @@ export class SocialLoginService {
 
   async socialLogin(req) {
     Logger.log('socialLogin() starts', 'SocialLoginService');
-    const { email, name } = req.user;
+    const { email, name, profileIcon } = req.user;
     let userInfo = await this.userRepository.findOne({
       email,
     });
@@ -74,8 +75,18 @@ export class SocialLoginService {
       userInfo = await this.userRepository.create({
         email,
         userId: appUserID,
+        name: name,
+        profileIcon,
         accessList: [...ssiAccessList, ...kycAccessList, ...questAccessList],
       });
+    } else {
+      const updates: Partial<UserDocument> = {};
+      if (!userInfo.name) updates.name = name;
+      if (!userInfo.profileIcon) updates.profileIcon = profileIcon;
+      if (Object.keys(updates).length > 0) {
+        this.userRepository.findOneUpdate({ email }, updates);
+      }
+
     }
     Logger.log('socialLogin() starts', 'SocialLoginService');
 
@@ -94,6 +105,7 @@ export class SocialLoginService {
     const payload = {
       name,
       email,
+      profileIcon,
       appUserID: userInfo.userId,
       userAccessList: userInfo.accessList,
       isTwoFactorEnabled: authenticator ? true : false,

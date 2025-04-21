@@ -41,4 +41,4 @@ import { MailNotificationModule } from './mail-notification/mail-notification.mo
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })
-export class AppModule {}
+export class AppModule { }

@@ -30,7 +30,7 @@ export class PeopleService {
     private readonly jwt: JwtService,
     private readonly configService: ConfigService,
     private readonly mailNotificationService: MailNotificationService,
-  ) { }
+  ) {}
   async createInvitation(createPersonDto: CreateInviteDto, adminUserData) {
     const { emailId } = createPersonDto;
     if (emailId === adminUserData?.email) {
@@ -151,9 +151,7 @@ export class PeopleService {
   }
 
   async getAllPeople(user) {
-    return await this.adminPeopleService.findAllPeopleByAdmin(
-      user.userId,
-    );
+    return await this.adminPeopleService.findAllPeopleByAdmin(user.userId);
   }
 
   async getAllInvites(user) {

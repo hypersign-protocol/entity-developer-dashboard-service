@@ -123,6 +123,7 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__INVITATIONURL__#${{ secrets.INVITATIONURL }}#" {} \;
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MAIL_QUEUE__#${{ secrets.MAIL_QUEUE }}#" {} \;
-    
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__SERVER_NAME__#${{ secrets.SERVER_NAME }}#" {} \;
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

@@ -85,6 +85,8 @@ spec:
           value: __INVITATIONURL__
         - name: MAIL_QUEUE
           value: __MAIL_QUEUE__
+        - name: SERVER_NAME
+          value: __SERVER_NAME__
         volumeMounts:
         - name: mongo
           mountPath: "/data"

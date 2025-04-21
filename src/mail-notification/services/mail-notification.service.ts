@@ -35,7 +35,7 @@ export class MailNotificationService {
     const mailStructure = {
       name: mailName,
       data: {
-        serverName: this.config.get('MFA_ISSUER'),
+        serverName: this.config.get('SERVER_NAME'),
         to: teamMateMailId,
         subject: mailSubject,
         message: tempMailTemplate,

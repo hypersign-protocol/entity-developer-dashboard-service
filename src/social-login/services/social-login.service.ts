@@ -86,7 +86,6 @@ export class SocialLoginService {
       if (Object.keys(updates).length > 0) {
         this.userRepository.findOneUpdate({ email }, updates);
       }
-
     }
     Logger.log('socialLogin() starts', 'SocialLoginService');
 

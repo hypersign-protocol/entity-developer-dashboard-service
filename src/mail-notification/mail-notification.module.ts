@@ -16,4 +16,4 @@ import { MailNotificationService } from './services/mail-notification.service';
   providers: [MailNotificationService],
   exports: [MailNotificationService],
 })
-export class MailNotificationModule { }
+export class MailNotificationModule {}

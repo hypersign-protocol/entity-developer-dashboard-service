@@ -62,11 +62,15 @@ export class AdminPeopleRepository {
       {
         $unwind: {
           path: '$peoples',
+          preserveNullAndEmptyArrays: true,
         },
       },
       {
         $addFields: {
-          userEmailId: '$peoples.email',
+          // userEmailId: '$peoples.email',
+          userEmailId: {
+            $ifNull: ['$peoples.email', '$userId'],
+          },
           authenticators: '$peoples.authenticators',
         },
       },
@@ -96,11 +100,11 @@ export class AdminPeopleRepository {
       },
     ]);
   }
-  async findAllAdminByUser(userId) {
+  async findAllAdminByUser(userId, emailId) {
     return this.adminPeopleModel.aggregate([
       {
         $match: {
-          userId,
+          $or: [{ userId: userId }, { userId: emailId }],
         },
       },
       {

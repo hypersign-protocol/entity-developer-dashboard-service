@@ -41,6 +41,7 @@ export class MailNotificationService {
         message: tempMailTemplate,
       },
     };
-    await this.mailQueue.add(mailStructure.name, mailStructure.data);
+    const job = await this.mailQueue.add(mailStructure.name, mailStructure.data);
+    Logger.log(job, 'job detail')
   }
 }

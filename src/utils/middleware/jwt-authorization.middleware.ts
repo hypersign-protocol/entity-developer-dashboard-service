@@ -48,9 +48,9 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
         const requestOrigin =
           req?.headers?.origin || req?.headers?.referer || req?.headers?.host;
         if (!skipDomainValidation) {
-          if (decoded.domain) {
+          if (decoded.aud) {
             const ifDomainValid = sanitizeUrl(requestOrigin, false).includes(
-              sanitizeUrl(decoded.domain, false),
+              sanitizeUrl(decoded.aud, false),
             );
             if (!ifDomainValid) {
               throw new Error(

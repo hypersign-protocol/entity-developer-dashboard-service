@@ -15,7 +15,7 @@ export class supportedServiceResponseDto {
   dBSuffix: string;
   @ApiProperty({
     description: 'name',
-    example: 'cavach',
+    example: 'CAVACH_API',
   })
   @IsEnum(SERVICE_TYPES, {
     each: true,
@@ -37,7 +37,7 @@ export class supportedServiceResponseDto {
   description: string;
   @ApiProperty({
     description: 'swaggerAPIDocPath',
-    example: '/ssi',
+    example: '/api',
   })
   swaggerAPIDocPath: string;
 }

@@ -34,7 +34,7 @@ export class PeopleService {
   async createInvitation(createPersonDto: CreateInviteDto, adminUserData) {
     const { emailId } = createPersonDto;
     if (emailId === adminUserData?.email) {
-      throw new Error('Self invitation is not available');
+      throw new BadRequestException('Self invitation is not available');
     }
     const userDetails = await this.userService.findOne({
       email: emailId,

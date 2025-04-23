@@ -221,6 +221,9 @@ export class PeopleService {
     );
   }
   async adminLogin(body: AdminLoginDTO, user: any) {
+    const rawUrl = this.configService.get('INVITATIONURL');
+    const url = new URL(rawUrl);
+    const domain = url.origin;
     const { adminId } = body;
     const adminData = await this.userService.findOne({
       userId: adminId,
@@ -270,6 +273,7 @@ export class PeopleService {
     const payload = {
       appUserID: user.userId,
       ...user,
+      aud: domain,
     };
     delete payload._id;
 

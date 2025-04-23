@@ -34,20 +34,20 @@ export class PeopleService {
   async createInvitation(createPersonDto: CreateInviteDto, adminUserData) {
     const { emailId } = createPersonDto;
     if (emailId === adminUserData?.email) {
-      throw new Error('Self invitation is not available');
+      throw new BadRequestException('Self invitation is not available');
     }
     const userDetails = await this.userService.findOne({
       email: emailId,
     });
-    if (userDetails == null) {
-      throw new NotFoundException(
-        `Cannot invite an non existing user with email: ${emailId}`,
-        `User not found`,
-      );
-    }
+    // if (userDetails == null) {
+    //   throw new NotFoundException(
+    //     `Cannot invite an non existing user with email: ${emailId}`,
+    //     `User not found`,
+    //   );
+    // }
 
     const adminPeople = await this.adminPeopleService.findOne({
-      userId: userDetails.userId,
+      userId: userDetails?.userId || emailId,
       adminId: adminUserData.userId,
     });
     if (adminPeople != null) {
@@ -68,7 +68,7 @@ export class PeopleService {
 
     const invite = await this.adminPeopleService.create({
       adminId: adminUserData.userId,
-      userId: userDetails.userId,
+      userId: userDetails?.userId || emailId,
       inviteCode: `${Date.now()}-${uuidv4()}`,
       accepted: false,
       invitationValidTill: new Date(
@@ -87,7 +87,7 @@ export class PeopleService {
 
   async acceptInvite(inviteCode: string, userDetails) {
     const adminPeople = await this.adminPeopleService.findOne({
-      userId: userDetails?.userId,
+      // userId: userDetails?.userId,
       inviteCode,
     });
     if (adminPeople == null) {
@@ -111,10 +111,11 @@ export class PeopleService {
     }
     const acceptedInvite = await this.adminPeopleService.findOneAndUpdate(
       {
-        userId: userDetails?.userId,
+        // userId: userDetails?.userId,
         inviteCode,
       },
       {
+        userId: userDetails?.userId,
         accepted: true,
         acceptedAt: new Date().toISOString(),
       },
@@ -154,29 +155,32 @@ export class PeopleService {
   }
 
   async getAllInvites(user) {
-    return await this.adminPeopleService.findAllAdminByUser(user.userId);
+    return await this.adminPeopleService.findAllAdminByUser(
+      user.userId,
+      user.email,
+    );
   }
   async deletePerson(adminUserData, body: DeletePersonDto) {
     const { emailId } = body;
     const userDetails = await this.userService.findOne({
       email: emailId,
     });
-    if (userDetails == null) {
-      throw new NotFoundException(
-        `Cannot invite an non existing user with email: ${emailId}`,
-        `User not found`,
-      );
-    }
+    // if (userDetails == null) {
+    //   throw new NotFoundException(
+    //     `Cannot invite an non existing user with email: ${emailId}`,
+    //     `User not found`,
+    //   );
+    // }
     const adminPeople = await this.adminPeopleService.findOne({
-      userId: userDetails.userId,
+      userId: userDetails?.userId || emailId,
       adminId: adminUserData.userId,
     });
     if (adminPeople == null) {
-      throw new ConflictException('User doesnot exists', 'Already Delted');
+      throw new ConflictException('User doesnot exists', 'Already Deleted');
     }
 
     return this.adminPeopleService.findOneAndDelete({
-      userId: userDetails.userId,
+      userId: userDetails?.userId || emailId,
       adminId: adminUserData.userId,
     });
   }

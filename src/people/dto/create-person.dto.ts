@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, Matches } from 'class-validator';
 
 export class CreateInviteDto {
   @ApiProperty({
@@ -7,6 +7,9 @@ export class CreateInviteDto {
     type: String,
   })
   @IsEmail()
+  @Matches(/^.+@gmail\.com$/, {
+    message: 'Email must be a valid Gmail address',
+  })
   emailId: string;
 }
 

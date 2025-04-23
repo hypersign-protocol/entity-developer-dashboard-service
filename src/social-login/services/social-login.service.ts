@@ -20,6 +20,7 @@ import {
   Generate2FA,
   MFACodeVerificationDto,
 } from '../dto/request.dto';
+import { UserDocument } from 'src/user/schema/user.schema';
 
 @Injectable()
 export class SocialLoginService {
@@ -55,7 +56,10 @@ export class SocialLoginService {
 
   async socialLogin(req) {
     Logger.log('socialLogin() starts', 'SocialLoginService');
-    const { email, name } = req.user;
+    const { email, name, profileIcon } = req.user;
+    const rawUrl = this.config.get('INVITATIONURL');
+    const url = new URL(rawUrl);
+    const domain = url.origin;
     let userInfo = await this.userRepository.findOne({
       email,
     });
@@ -74,8 +78,17 @@ export class SocialLoginService {
       userInfo = await this.userRepository.create({
         email,
         userId: appUserID,
+        name: name,
+        profileIcon,
         accessList: [...ssiAccessList, ...kycAccessList, ...questAccessList],
       });
+    } else {
+      const updates: Partial<UserDocument> = {};
+      if (!userInfo.name) updates.name = name;
+      if (!userInfo.profileIcon) updates.profileIcon = profileIcon;
+      if (Object.keys(updates).length > 0) {
+        this.userRepository.findOneUpdate({ email }, updates);
+      }
     }
     Logger.log('socialLogin() starts', 'SocialLoginService');
 
@@ -94,6 +107,7 @@ export class SocialLoginService {
     const payload = {
       name,
       email,
+      profileIcon,
       appUserID: userInfo.userId,
       userAccessList: userInfo.accessList,
       isTwoFactorEnabled: authenticator ? true : false,
@@ -101,6 +115,7 @@ export class SocialLoginService {
         ? req.user.isTwoFactorAuthenticated
         : false,
       authenticatorType: authenticator?.type,
+      domain,
     };
     const secret = this.config.get('JWT_SECRET');
     const token = await this.jwt.signAsync(payload, {
@@ -171,7 +186,9 @@ export class SocialLoginService {
         { authenticators: user.authenticators },
       );
     }
-
+    const rawUrl = this.config.get('INVITATIONURL');
+    const url = new URL(rawUrl);
+    const domain = url.origin;
     const payload = {
       email: user.email,
       appUserID: user.userId,
@@ -180,6 +197,7 @@ export class SocialLoginService {
       isTwoFactorAuthenticated: isVerified,
       authenticatorType,
       accessAccount: user.accessAccount,
+      domain,
     };
     const accessToken = await this.jwt.signAsync(payload, {
       expiresIn: '24h',

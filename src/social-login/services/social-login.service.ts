@@ -57,6 +57,9 @@ export class SocialLoginService {
   async socialLogin(req) {
     Logger.log('socialLogin() starts', 'SocialLoginService');
     const { email, name, profileIcon } = req.user;
+    const rawUrl = this.config.get('INVITATIONURL');
+    const url = new URL(rawUrl);
+    const domain = url.origin;
     let userInfo = await this.userRepository.findOne({
       email,
     });
@@ -112,6 +115,7 @@ export class SocialLoginService {
         ? req.user.isTwoFactorAuthenticated
         : false,
       authenticatorType: authenticator?.type,
+      domain,
     };
     const secret = this.config.get('JWT_SECRET');
     const token = await this.jwt.signAsync(payload, {
@@ -182,7 +186,9 @@ export class SocialLoginService {
         { authenticators: user.authenticators },
       );
     }
-
+    const rawUrl = this.config.get('INVITATIONURL');
+    const url = new URL(rawUrl);
+    const domain = url.origin;
     const payload = {
       email: user.email,
       appUserID: user.userId,
@@ -191,6 +197,7 @@ export class SocialLoginService {
       isTwoFactorAuthenticated: isVerified,
       authenticatorType,
       accessAccount: user.accessAccount,
+      domain,
     };
     const accessToken = await this.jwt.signAsync(payload, {
       expiresIn: '24h',

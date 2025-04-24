@@ -1,5 +1,4 @@
 import {
-    BadRequestException,
     Injectable,
     NestMiddleware,
 } from '@nestjs/common';

@@ -37,7 +37,7 @@ import {
 @ApiTags('Application')
 @Controller('/api/v1/app')
 export class AppOauthController {
-  constructor(private readonly appAuthService: AppAuthService) { }
+  constructor(private readonly appAuthService: AppAuthService) {}
 
   @ApiHeader({
     name: 'X-Api-Secret-Key',

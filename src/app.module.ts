@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AppAuthModule } from './app-auth/app-auth.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
@@ -16,6 +16,7 @@ import { CreditModule } from './credits/credits.module';
 import { TeamModule } from './roles/role.module';
 import { PeopleModule } from './people/people.module';
 import { MailNotificationModule } from './mail-notification/mail-notification.module';
+import { AllowedOriginMiddleware } from './utils/middleware/allowedOrigin.middleware';
 
 @Module({
   imports: [
@@ -41,4 +42,8 @@ import { MailNotificationModule } from './mail-notification/mail-notification.mo
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(AllowedOriginMiddleware).forRoutes('*');
+  }
+}

@@ -12,6 +12,7 @@ import { Role, RoleSchema } from 'src/roles/schemas/role.schema';
 import { SocialLoginModule } from 'src/social-login/social-login.module';
 import { JwtModule } from '@nestjs/jwt';
 import { MailNotificationModule } from 'src/mail-notification/mail-notification.module';
+import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
 
 @Module({
   imports: [
@@ -36,5 +37,6 @@ import { MailNotificationModule } from 'src/mail-notification/mail-notification.
 export class PeopleModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(JWTAuthorizeMiddleware).forRoutes(PeopleController);
+    consumer.apply(RateLimitMiddleware).forRoutes(PeopleController);
   }
 }

@@ -30,6 +30,7 @@ import {
   AdminPeople,
   AdminPeopleSchema,
 } from 'src/people/schema/people.schema';
+import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
 
 @Module({
   imports: [
@@ -80,5 +81,6 @@ export class AppAuthModule implements NestModule {
       .apply(TwoFAAuthorizationMiddleware)
       .exclude({ path: '/api/v1/app/marketplace', method: RequestMethod.GET })
       .forRoutes(AppAuthController);
+    consumer.apply(RateLimitMiddleware).forRoutes(AppAuthController);
   }
 }

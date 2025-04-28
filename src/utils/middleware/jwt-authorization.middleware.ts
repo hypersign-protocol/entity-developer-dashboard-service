@@ -13,17 +13,12 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
   constructor(private readonly userRepository: UserRepository) {}
   async use(req: Request, res: Response, next: NextFunction) {
     Logger.log('Inside JWTAuthorizeMiddleware', 'JWTAuthorizeMiddleware');
-    if (!req.header('authorization') || req.headers['authorization'] === '') {
+    let authToken: string = req?.cookies?.authToken;
+    if (!authToken) {
       throw new UnauthorizedException([
-        'Please pass authorization token in the header',
+        'Please pass authorization token in cookie',
       ]);
-    }
-    const authToken = req.header('authorization');
-    const tokenParts: Array<string> = authToken.split(' ');
-    if (tokenParts[0] !== 'Bearer') {
-      Logger.log('Bearer authToken is not passed in header');
-      throw new UnauthorizedException(['Please pass Bearer auth token']);
-    }
+   }
     let decoded;
     try {
       const publicEp = sanitizeUrl(
@@ -42,7 +37,7 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
         isToolRequest ||
         (req.headers.origin && req.headers.origin.includes(publicEp)) ||
         (req.headers.referer && req.headers.referer.includes(publicEp));
-      decoded = jwt.verify(tokenParts[1], process.env.JWT_SECRET);
+      decoded = jwt.verify(authToken, process.env.JWT_SECRET);
       if (decoded) {
         // verifying the domain of frontend and token domain
         const requestOrigin =

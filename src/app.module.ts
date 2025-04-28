@@ -1,4 +1,9 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { AppAuthModule } from './app-auth/app-auth.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
@@ -44,6 +49,12 @@ import { AllowedOriginMiddleware } from './utils/middleware/allowedOrigin.middle
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(AllowedOriginMiddleware).forRoutes('*');
+    consumer
+      .apply(AllowedOriginMiddleware)
+      .exclude({
+        path: '/api/v1/login/callback',
+        method: RequestMethod.GET,
+      })
+      .forRoutes('*');
   }
 }

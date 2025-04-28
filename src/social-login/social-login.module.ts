@@ -77,10 +77,16 @@ export class SocialLoginModule implements NestModule {
       .forRoutes(SocialLoginController);
     consumer
       .apply(RateLimitMiddleware)
-      .exclude({
-        path: '/api/v1/login/callback',
-        method: RequestMethod.GET,
-      })
+      .exclude(
+        {
+          path: '/api/v1/login/callback',
+          method: RequestMethod.GET,
+        },
+        {
+          path: '/api/v1/auth',
+          method: RequestMethod.POST,
+        },
+      )
       .forRoutes(SocialLoginController);
   }
 }

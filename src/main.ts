@@ -134,16 +134,7 @@ async function bootstrap() {
       .build();
 
     const orgDocuments = SwaggerModule.createDocument(app, orgDocConfig, {
-      include: [
-        AppAuthModule,
-        CreditModule,
-        AppOauthModule,
-        UserModule,
-        SupportedServiceModule,
-        SocialLoginModule,
-        TeamModule,
-        PeopleModule,
-      ], // don't include, say, BearsModule
+      include: [AppOauthModule],
     });
     const tenantOptions = {
       swaggerOptions: {

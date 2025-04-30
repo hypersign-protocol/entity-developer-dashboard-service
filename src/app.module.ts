@@ -51,10 +51,13 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(AllowedOriginMiddleware)
-      .exclude({
-        path: '/api/v1/login/callback',
-        method: RequestMethod.GET,
-      })
+      .exclude(
+        {
+          path: '/api/v1/login/callback',
+          method: RequestMethod.GET,
+        },
+        { path: 'api/v1/app/oauth', method: RequestMethod.POST },
+      )
       .forRoutes('*');
   }
 }

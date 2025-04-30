@@ -36,7 +36,7 @@ const hidNetworkUrls = Object.freeze({
   },
 });
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { logger: false });
+  const app = await NestFactory.create(AppModule);
 
   app.use(json({ limit: '10mb' }));
   app.use(urlencoded({ extended: true, limit: '10mb' }));
@@ -134,16 +134,7 @@ async function bootstrap() {
       .build();
 
     const orgDocuments = SwaggerModule.createDocument(app, orgDocConfig, {
-      include: [
-        AppAuthModule,
-        CreditModule,
-        AppOauthModule,
-        UserModule,
-        SupportedServiceModule,
-        SocialLoginModule,
-        TeamModule,
-        PeopleModule,
-      ], // don't include, say, BearsModule
+      include: [AppOauthModule],
     });
     const tenantOptions = {
       swaggerOptions: {

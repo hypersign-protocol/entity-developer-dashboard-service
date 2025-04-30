@@ -80,8 +80,11 @@ export class SocialLoginController {
     res.cookie('authToken', token, {
       httpOnly: true,
       secure: true,
-      sameSite: 'lax',
+      domain: '.dashboard.hypersign.id',
       maxAge: 24 * 60 * 60 * 1000,
+      sameSite: 'None',
+      path: '/',
+    });
     });
     res.redirect(`${this.config.get('REDIRECT_URL')}`);
   }
@@ -151,8 +154,17 @@ export class SocialLoginController {
   async verifyMFA(
     @Req() req,
     @Body() mfaVerificationDto: MFACodeVerificationDto,
+    @Res() res
   ) {
-    return this.socialLoginService.verifyMFACode(req.user, mfaVerificationDto);
+    const data = await this.socialLoginService.verifyMFACode(req.user, mfaVerificationDto);
+    res.cookie('authToken', data?.authToken, {
+      httpOnly: true,
+      secure: true,
+      domain: '.dashboard.hypersign.id',
+      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: 'None',
+    });
+    res.json({ isVerified: data.isVerified })
   }
   @ApiOkResponse({
     description: 'Removed MFA successfully',
@@ -170,5 +182,32 @@ export class SocialLoginController {
   @Delete('/api/v1/auth/mfa')
   async removeMFA(@Req() req, @Body() mfaremoveDto: DeleteMFADto) {
     return this.socialLoginService.removeMFA(req.user, mfaremoveDto);
+  }
+  @ApiBadRequestResponse({
+    status: 400,
+    type: AppError,
+  })
+  @ApiUnauthorizedResponse({
+    status: 401,
+    type: UnauthorizedError,
+  })
+  @ApiBearerAuth('Authorization')
+  @Post('/api/v1/auth/logout')
+  async logout(@Req() req, @Res() res) {
+    res.clearCookie('authToken', {
+      path: '/',
+      domain: '.dashboard.hypersign.id',
+      sameSite: 'None',
+      secure: true,
+      httpOnly: true,
+    });
+    res.clearCookie('refreshToken', {
+      path: '/',
+      domain: '.dashboard.hypersign.id',
+      sameSite: 'None',
+      secure: true,
+      httpOnly: true,
+    });
+    return res.status(200).json({ message: 'Logged out successfully' });
   }
 }

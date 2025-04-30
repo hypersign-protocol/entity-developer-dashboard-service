@@ -35,7 +35,6 @@ import {
 
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Application')
-@ApiBearerAuth('Authorization')
 @Controller('/api/v1/app')
 export class AppOauthController {
   constructor(private readonly appAuthService: AppAuthService) {}
@@ -99,6 +98,7 @@ export class AppOauthController {
     description: 'Error occured at the time of generating access token',
     type: AppError,
   })
+  @ApiBearerAuth('Authorization')
   @Get('access-control/token')
   @HttpCode(200)
   @ApiResponse({

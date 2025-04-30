@@ -25,15 +25,6 @@ import {
   SERVICE_TYPES,
 } from 'src/supported-service/services/iServiceList';
 import { UserRepository } from 'src/user/repository/user.repository';
-import {
-  generateAuthzGrantTxnMessage,
-  generatePerformFeegrantAllowanceTxn,
-  MSG_CREATE_DID_TYPEURL,
-  MSG_REGISTER_CREDENTIAL_SCHEMA,
-  MSG_REGISTER_CREDENTIAL_STATUS,
-  MSG_UPDATE_CREDENTIAL_STATUS,
-  MSG_UPDATE_DID_TYPEURL,
-} from 'src/utils/authz';
 import { AuthzCreditService } from 'src/credits/services/credits.service';
 import { AuthZCreditsRepository } from 'src/credits/repositories/authz.repository';
 import { EdvClientKeysManager } from 'src/edv/services/edv.singleton';
@@ -88,130 +79,70 @@ export class AppAuthService {
     }
 
     if (!this.granterClient) {
-      console.log(
-        this.config.get('HID_NETWORK_RPC'),
-        this.authzWalletInstance.wallet,
-      );
-
       this.granterClient = await SigningStargateClient.connectWithSigner(
         this.config.get('HID_NETWORK_RPC'),
         this.authzWalletInstance.wallet,
       );
     }
-
     const { mnemonic, address } = await this.hidWalletService.generateWallet();
     const appId = await this.appAuthApiKeyService.generateAppId();
 
-    const vaultPrefixInEnv = this.config.get('VAULT_PREFIX');
-    const vaultPrefix = vaultPrefixInEnv ? vaultPrefixInEnv : 'hs:studio-api:';
-    const edvId = vaultPrefix + 'app:' + appId;
+    let subdomain;
+    let edvId;
+    let kmsId;
+    if (service.id !== SERVICE_TYPES.QUEST) {
+      const vaultPrefixInEnv = this.config.get('VAULT_PREFIX');
+      const vaultPrefix = vaultPrefixInEnv
+        ? vaultPrefixInEnv
+        : 'hs:studio-api:';
+      edvId = vaultPrefix + 'app:' + appId;
 
-    Logger.log(
-      'createAnApp() method: initialising edv service',
-      'AppAuthService',
-    );
+      Logger.log(
+        'createAnApp() method: initialising edv service',
+        'AppAuthService',
+      );
 
-    // Store menemonic and edvId in the key manager vault and get the kmsId.
-    const doc = {
-      mnemonic,
-      edvId: edvId,
-    };
-    Logger.log(
-      'createAnApp() method: Prepareing app keys to insert in kms vault',
-    );
+      // Store menemonic and edvId in the key manager vault and get the kmsId.
+      const doc = {
+        mnemonic,
+        edvId: edvId,
+      };
+      Logger.log(
+        'createAnApp() method: Prepareing app keys to insert in kms vault',
+      );
 
-    if (!globalThis.kmsVault) {
-      throw new InternalServerErrorException('KMS vault is not initialized');
+      if (!globalThis.kmsVault) {
+        throw new InternalServerErrorException('KMS vault is not initialized');
+      }
+      const edvDocToInsert = globalThis.kmsVault.prepareEdvDocument(doc, [
+        { index: 'content.edvId', unique: true },
+      ]);
+
+      Logger.log(
+        'createAnApp() method: Inserting app keys to insert in kms vault',
+      );
+      const { id } = await globalThis.kmsVault.insertDocument(edvDocToInsert);
+      kmsId = id;
+
+      Logger.log('createAnApp() method: Preparing wallet for the app');
+      // TODO generate vault for this app.
+      const appVaultWallet = await VaultWalletManager.getWallet(mnemonic);
+      // we do not need to storing anything in the app's vault, we just create a vault for this guy
+      Logger.log('createAnApp() method: Creating vault for the app');
+      await EdvClientManagerFactoryService.createEdvClientManger(
+        appVaultWallet,
+        edvId,
+      );
+      subdomain = await this.getRandomSubdomain();
     }
-
-    const edvDocToInsert = globalThis.kmsVault.prepareEdvDocument(doc, [
-      { index: 'content.edvId', unique: true },
-    ]);
-
-    Logger.log(
-      'createAnApp() method: Inserting app keys to insert in kms vault',
-    );
-    const { id: kmsId } = await globalThis.kmsVault.insertDocument(
-      edvDocToInsert,
-    );
-
     // TODO use mnemonic as a seed to generate API keys
     Logger.log('createAnApp() method: generating api key', 'AppAuthService');
     const { apiSecretKey, apiSecret } =
       await this.appAuthApiKeyService.generateApiKey();
-
-    Logger.log('createAnApp() method: Preparing wallet for the app');
-    // TODO generate vault for this app.
-    const appVaultWallet = await VaultWalletManager.getWallet(mnemonic);
-    // we do not need to storing anything in the app's vault, we just create a vault for this guy
-    Logger.log('createAnApp() method: Creating vault for the app');
-    await EdvClientManagerFactoryService.createEdvClientManger(
-      appVaultWallet,
-      edvId,
-    );
-
     Logger.log(
       'createAnApp() method: before creating new app doc in db',
       'AppAuthService',
     );
-    let subdomain;
-    if (service.id !== SERVICE_TYPES.QUEST) {
-      subdomain = await this.getRandomSubdomain();
-    }
-    // AUTHZ
-    if (service.id == SERVICE_TYPES.SSI_API) {
-      // Perform AuthZ Grant
-      const authGrantTxnMsgAndFeeDID = await generateAuthzGrantTxnMessage(
-        address,
-        this.authzWalletInstance.address,
-        MSG_CREATE_DID_TYPEURL,
-      );
-      const authGrantTxnMsgAndFeeDIDUpdate = await generateAuthzGrantTxnMessage(
-        address,
-        this.authzWalletInstance.address,
-        MSG_UPDATE_DID_TYPEURL,
-      );
-      const authGrantTxnMsgAndFeeUpdateCredStatus =
-        await generateAuthzGrantTxnMessage(
-          address,
-          this.authzWalletInstance.address,
-          MSG_UPDATE_CREDENTIAL_STATUS,
-        );
-
-      const authGrantTxnMsgAndFeeSchema = await generateAuthzGrantTxnMessage(
-        address,
-        this.authzWalletInstance.address,
-        MSG_REGISTER_CREDENTIAL_SCHEMA,
-      );
-      const authGrantTxnMsgAndFeeCred = await generateAuthzGrantTxnMessage(
-        address,
-        this.authzWalletInstance.address,
-        MSG_REGISTER_CREDENTIAL_STATUS,
-      );
-      // Perform FeeGrant Allowence
-      const performFeegrantAllowence =
-        await generatePerformFeegrantAllowanceTxn(
-          address,
-          this.authzWalletInstance.address,
-          this.config.get('BASIC_ALLOWANCE') || '5000000uhid',
-        );
-      await this.granterClient.signAndBroadcast(
-        this.authzWalletInstance.address,
-        [
-          authGrantTxnMsgAndFeeDIDUpdate.txMsg,
-          authGrantTxnMsgAndFeeDID.txMsg,
-          authGrantTxnMsgAndFeeCred.txMsg,
-          authGrantTxnMsgAndFeeSchema.txMsg,
-          performFeegrantAllowence.txMsg,
-          authGrantTxnMsgAndFeeUpdateCredStatus.txMsg,
-        ],
-        authGrantTxnMsgAndFeeDID.fee,
-      );
-      await this.authzCreditService.createAuthzCredits({
-        userId,
-        appId,
-      });
-    }
 
     // Finally stroring application in db
     // const txns = {
@@ -542,6 +473,28 @@ export class AppAuthService {
 
       throw new NotFoundException([`No App found for appId ${appId}`]);
     }
+    const checkIfAppIsLinkedWithOtherApp =
+      await this.appRepository.findAppsByPipeline([
+        {
+          $match: {
+            dependentServices: appId,
+          },
+        },
+      ]);
+    if (
+      checkIfAppIsLinkedWithOtherApp &&
+      checkIfAppIsLinkedWithOtherApp.length > 0
+    ) {
+      const linkedServicesMessage = checkIfAppIsLinkedWithOtherApp
+        .map(
+          (service, index) =>
+            `${index + 1}. ${service.appName} (${service.appId})`,
+        )
+        .join('\n');
+      throw new BadRequestException([
+        `This service is linked with the following services:\n\n${linkedServicesMessage}.\n\nPlease delink or delete the linked services before deleting the SSI service.`,
+      ]);
+    }
     const { edvId, kmsId } = appDetail;
     const appDataFromVault = await globalThis.kmsVault.getDecryptedDocument(
       kmsId,
@@ -691,8 +644,7 @@ export class AppAuthService {
 
     if (accessList.length <= 0) {
       throw new UnauthorizedException(
-        'You are not authorized to access service of type ',
-        serviceType,
+        `You are not authorized to access service of type ${serviceType}`,
       );
     }
 
@@ -721,6 +673,10 @@ export class AppAuthService {
     if (appDetail.issuerDid) {
       payload['issuerDid'] = appDetail.issuerDid;
     }
+    if (appDetail.issuerVerificationMethodId) {
+      payload['issuerVerificationMethodId'] =
+        appDetail.issuerVerificationMethodId;
+    }
 
     if (
       appDetail.dependentServices &&
@@ -731,6 +687,7 @@ export class AppAuthService {
     }
 
     const secret = this.config.get('JWT_SECRET');
+
     const token = await this.jwt.signAsync(payload, {
       expiresIn: expiresin.toString() + 'h',
       secret,
@@ -838,11 +795,9 @@ export class AppAuthService {
         throw new BadRequestException('Invalid service ' + appId);
       }
     }
-
     if (accessList.length <= 0) {
       throw new UnauthorizedException(
-        'You are not authorized to access service of type ',
-        serviceType,
+        `You are not authorized to access service of type ${serviceType}`,
       );
     }
 

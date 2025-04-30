@@ -1,4 +1,10 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import {
+  forwardRef,
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthZCredits, AuthZCreditsSchema } from './schemas/authz.schema';
 import { AuthZCreditsRepository } from './repositories/authz.repository';
@@ -13,6 +19,9 @@ import {
   AdminPeopleSchema,
 } from 'src/people/schema/people.schema';
 import { JwtModule } from '@nestjs/jwt';
+import { HidWalletModule } from 'src/hid-wallet/hid-wallet.module';
+import { AppAuthModule } from 'src/app-auth/app-auth.module';
+import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
 
 @Module({
   imports: [
@@ -24,6 +33,9 @@ import { JwtModule } from '@nestjs/jwt';
       { name: AdminPeople.name, schema: AdminPeopleSchema },
     ]),
     JwtModule.register({}),
+    HidWalletModule,
+    forwardRef(() => AppAuthModule),
+    HidWalletModule,
   ],
   controllers: [CreditsController],
   providers: [
@@ -36,7 +48,14 @@ import { JwtModule } from '@nestjs/jwt';
 })
 export class CreditModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(JWTAuthorizeMiddleware).forRoutes(CreditsController);
+    consumer
+      .apply(JWTAuthorizeMiddleware)
+      .exclude({
+        path: '/api/v1/credits/authz/:appId',
+        method: RequestMethod.GET,
+      })
+      .forRoutes(CreditsController);
     consumer.apply(JWTAccessAccountMiddleware).forRoutes(CreditsController);
+    consumer.apply(RateLimitMiddleware).forRoutes(CreditsController);
   }
 }

@@ -115,6 +115,14 @@ export class CreateAppDto {
   issuerDid: string;
 
   @ApiProperty({
+    description: 'issuerVerificationMethodId',
+    example: 'did:hid:123123123123#key-x',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  issuerVerificationMethodId: string;
+  @ApiProperty({
     description: 'domain',
     example: 'hypersign.id',
     required: false,

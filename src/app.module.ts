@@ -1,4 +1,9 @@
-import { Module } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { AppAuthModule } from './app-auth/app-auth.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
@@ -15,13 +20,14 @@ import { HypersignauthLoginModule } from './hypersignauth-login/hypersignauth-lo
 import { CreditModule } from './credits/credits.module';
 import { TeamModule } from './roles/role.module';
 import { PeopleModule } from './people/people.module';
+import { MailNotificationModule } from './mail-notification/mail-notification.module';
+import { AllowedOriginMiddleware } from './utils/middleware/allowedOrigin.middleware';
 
 @Module({
   imports: [
     AppAuthModule,
     CreditModule,
     ConfigModule.forRoot({
-      envFilePath: '',
       isGlobal: true,
     }),
     MongooseModule.forRoot(process.env.DATABASE_CONNECTION_PATH),
@@ -33,6 +39,7 @@ import { PeopleModule } from './people/people.module';
     HypersignauthLoginModule,
     TeamModule,
     PeopleModule,
+    MailNotificationModule,
   ],
   controllers: [],
   providers: [
@@ -40,4 +47,14 @@ import { PeopleModule } from './people/people.module';
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(AllowedOriginMiddleware)
+      .exclude({
+        path: '/api/v1/login/callback',
+        method: RequestMethod.GET,
+      })
+      .forRoutes('*');
+  }
+}

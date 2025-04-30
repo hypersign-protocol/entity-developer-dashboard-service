@@ -27,6 +27,7 @@ export class AppRepository {
       dependentServices: 1,
       domain: 1,
       issuerDid: 1,
+      issuerVerificationMethodId: 1,
       env: 1,
       hasDomainVerified: 1,
       domainLinkageCredentialString: 1,

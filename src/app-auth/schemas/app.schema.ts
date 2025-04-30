@@ -133,6 +133,15 @@ export class App {
   @IsOptional()
   @IsString()
   @ApiProperty({
+    description: 'issuerVerificationMethodId',
+    required: false,
+  })
+  @Prop({ required: false })
+  issuerVerificationMethodId: string;
+
+  @IsOptional()
+  @IsString()
+  @ApiProperty({
     description: 'domain',
     required: false,
   })

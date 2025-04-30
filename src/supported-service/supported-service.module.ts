@@ -18,7 +18,7 @@ export class SupportedServiceModule implements NestModule {
     consumer
       .apply(HypersignAuthorizeMiddleware)
       .exclude({
-        path: '/api/v1/app/services',
+        path: '/api/v1/services',
         method: RequestMethod.GET,
       })
       .forRoutes(SupportedServiceController);

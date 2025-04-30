@@ -14,7 +14,7 @@ export const SSI_API_SERVICE_INFO = Object.freeze({
   type: SERVICE_TYPES.SSI_API,
   description: 'A SSI API service built on multi tenant architeacture',
   name: 'SSI API Service',
-  swaggerAPIDocPath: '/ssi',
+  swaggerAPIDocPath: '/',
   baseDomain: 'https://api.entity.hypersign.id',
 });
 

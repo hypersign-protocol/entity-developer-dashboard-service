@@ -77,7 +77,13 @@ export class SocialLoginController {
   async socialAuthCallback(@Req() req, @Res() res) {
     Logger.log('socialAuthCallback() method starts', 'SocialLoginController');
     const token = await this.socialLoginService.socialLogin(req);
-    res.redirect(`${this.config.get('REDIRECT_URL')}?token=${token}`);
+    res.cookie('authToken', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+    res.redirect(`${this.config.get('REDIRECT_URL')}`);
   }
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({

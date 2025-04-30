@@ -30,6 +30,10 @@ export class User {
   @Prop({ required: false }) // as we won't get did in google login
   did?: string;
   @Prop({ required: false })
+  name?: string;
+  @Prop({ required: false })
+  profileIcon?: string;
+  @Prop({ required: false })
   @Optional()
   accessList: Array<UserAccess>;
   @Prop({ default: [] })

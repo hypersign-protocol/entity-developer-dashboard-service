@@ -18,9 +18,14 @@ spec:
         image: __GOOGLE_ARTIFACT_URL__/__GOOGLE_PROJECT_ID__/__GOOGLE_ARTIFACT_REPO__/entity-developer-dashbord-service:__LATEST_RELEASE_TAG__
         imagePullPolicy: Always
         resources:
-          limits:
+          requests:
             memory: "2Gi"
+            cpu: "250m"
+            ephemeral-storage: "200Mi"
+          limits:
+            memory: "3Gi"
             cpu: "500m"
+            ephemeral-storage: "200Mi"
         ports:
         - containerPort: __PORT__
         # livenessProbe:
@@ -76,6 +81,12 @@ spec:
           value: __GOOGLE_CLIENT_SECRET__
         - name: REDIRECT_URL
           value: __REDIRECT_URL__
+        - name: INVITATIONURL
+          value: __INVITATIONURL__
+        - name: MAIL_QUEUE
+          value: __MAIL_QUEUE__
+        - name: SERVER_NAME
+          value: __SERVER_NAME__
         volumeMounts:
         - name: mongo
           mountPath: "/data"
@@ -83,7 +94,6 @@ spec:
       - name: mongo
         secret:
           secretName: mongo
-
 ---
 apiVersion: v1
 kind: Service
@@ -100,5 +110,6 @@ spec:
   - port: __PORT__
     targetPort: __PORT__
     protocol: TCP
-
 ---
+
+

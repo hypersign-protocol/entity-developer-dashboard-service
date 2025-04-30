@@ -13,12 +13,12 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
   constructor(private readonly userRepository: UserRepository) {}
   async use(req: Request, res: Response, next: NextFunction) {
     Logger.log('Inside JWTAuthorizeMiddleware', 'JWTAuthorizeMiddleware');
-    let authToken: string = req?.cookies?.authToken;
+    const authToken: string = req?.cookies?.authToken;
     if (!authToken) {
       throw new UnauthorizedException([
         'Please pass authorization token in cookie',
       ]);
-   }
+    }
     let decoded;
     try {
       const publicEp = sanitizeUrl(

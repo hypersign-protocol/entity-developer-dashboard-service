@@ -14,7 +14,9 @@ export class AllowedOriginMiddleware implements NestMiddleware {
       'Inside AllowedOriginMiddleware to validate origin',
       'AllowedOriginMiddleware',
     );
-    const allowedOrigin = (process.env.ALLOWED_ORIGIN || '')
+    const allowedOrigin = (
+      process.env.ALLOWED_ORIGIN || 'https://entity.dashboard.hypersign.id'
+    )
       .split(',')
       .map((origin) => sanitizeUrl(origin.trim(), false));
     const requestOrigin = req.headers.origin;

@@ -37,6 +37,7 @@
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^9.0.0",
     "@nestjs/swagger": "^6.1.4",
+    "@nestjs/throttler": "^6.4.0",
     "@stablelib/ed25519": "^1.0.3",
     "argon2": "^0.30.3",
     "bull": "^4.16.0",

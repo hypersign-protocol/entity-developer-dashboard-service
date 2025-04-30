@@ -21,6 +21,7 @@ import {
 import { JwtModule } from '@nestjs/jwt';
 import { HidWalletModule } from 'src/hid-wallet/hid-wallet.module';
 import { AppAuthModule } from 'src/app-auth/app-auth.module';
+import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
 
 @Module({
   imports: [
@@ -55,5 +56,6 @@ export class CreditModule implements NestModule {
       })
       .forRoutes(CreditsController);
     consumer.apply(JWTAccessAccountMiddleware).forRoutes(CreditsController);
+    consumer.apply(RateLimitMiddleware).forRoutes(CreditsController);
   }
 }

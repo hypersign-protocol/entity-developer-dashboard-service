@@ -15,6 +15,7 @@ import {
   AdminPeople,
   AdminPeopleSchema,
 } from 'src/people/schema/people.schema';
+import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
 @Module({
   imports: [
     AppAuthModule,
@@ -35,6 +36,13 @@ export class AppOauthModule implements NestModule {
     consumer
       .apply(JWTAccessAccountMiddleware)
       .exclude({ path: 'api/v1/app/oauth', method: RequestMethod.POST })
+      .forRoutes(AppOauthController);
+    consumer
+      .apply(RateLimitMiddleware)
+      .exclude({
+        path: '/api/v1/app/access-control/token',
+        method: RequestMethod.GET,
+      })
       .forRoutes(AppOauthController);
   }
 }

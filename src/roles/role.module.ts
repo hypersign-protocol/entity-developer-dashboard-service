@@ -8,6 +8,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Role, RoleSchema } from './schemas/role.schema';
 import { User, UserSchema } from 'src/user/schema/user.schema';
 import { RoleRepository } from './repository/role.repository';
+import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
 
 @Module({
   imports: [
@@ -23,5 +24,6 @@ import { RoleRepository } from './repository/role.repository';
 export class TeamModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(JWTAuthorizeMiddleware).forRoutes(TeamController);
+    consumer.apply(RateLimitMiddleware).forRoutes(TeamController);
   }
 }

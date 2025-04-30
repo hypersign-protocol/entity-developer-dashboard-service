@@ -16,6 +16,7 @@ import { AppAuthService } from 'src/app-auth/services/app-auth.service';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiExcludeEndpoint,
   ApiHeader,
   ApiQuery,
   ApiResponse,
@@ -99,6 +100,7 @@ export class AppOauthController {
     type: AppError,
   })
   @ApiBearerAuth('Authorization')
+  @ApiExcludeEndpoint()
   @Get('access-control/token')
   @HttpCode(200)
   @ApiResponse({

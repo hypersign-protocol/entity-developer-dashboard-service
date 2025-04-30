@@ -85,7 +85,7 @@ export class SocialLoginController {
       sameSite: 'None',
       path: '/',
     });
-    });
+
     res.redirect(`${this.config.get('REDIRECT_URL')}`);
   }
   @ApiBearerAuth('Authorization')

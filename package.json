@@ -44,6 +44,7 @@
     "bullmq": "^5.10.4",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
+    "cookie-parser": "^1.4.7",
     "express-session": "^1.17.3",
     "fs": "^0.0.1-security",
     "hid-hd-wallet": "git+https://github.com/hypersign-protocol/hid-hd-wallet.git#main",

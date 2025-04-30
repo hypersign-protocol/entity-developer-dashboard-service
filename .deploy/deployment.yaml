@@ -87,6 +87,8 @@ spec:
           value: __MAIL_QUEUE__
         - name: SERVER_NAME
           value: __SERVER_NAME__
+        - name: ALLOWED_ORIGIN
+          value: __ALLOWED_ORIGIN__
         volumeMounts:
         - name: mongo
           mountPath: "/data"

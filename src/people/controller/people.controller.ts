@@ -10,6 +10,7 @@ import {
   UsePipes,
   ValidationPipe,
   Req,
+  Res,
 } from '@nestjs/common';
 import { PeopleService } from '../services/people.service';
 import {
@@ -101,8 +102,26 @@ export class PeopleController {
 
   @Post('/admin/login')
   @UsePipes(ValidationPipe)
-  async adminLogin(@Body() body: AdminLoginDTO, @Req() req) {
+  async adminLogin(@Body() body: AdminLoginDTO, @Req() req, @Res() res) {
     const { user } = req;
-    return this.peopleService.adminLogin(body, user);
+    const data = await this.peopleService.adminLogin(body, user);
+    res.cookie('authToken', data?.authToken, {
+      httpOnly: true,
+      secure: true,
+      domain: '.dashboard.hypersign.id',
+      maxAge: 4 * 60 * 60 * 1000,
+      sameSite: 'None',
+      path: '/',
+    });
+    res.cookie('refreshToken', data?.refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      domain: '.dashboard.hypersign.id',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+    return res.json({
+      message: `Successfully siwtched to the ${user.email} account`,
+    });
   }
 }

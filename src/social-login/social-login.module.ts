@@ -48,6 +48,10 @@ export class SocialLoginModule implements NestModule {
           path: '/api/v1/login/callback',
           method: RequestMethod.GET,
         },
+        {
+          path: '/api/v1/auth/refresh',
+          method: RequestMethod.POST,
+        },
       )
       .forRoutes(SocialLoginController);
     consumer
@@ -73,6 +77,10 @@ export class SocialLoginModule implements NestModule {
           path: '/api/v1/auth',
           method: RequestMethod.POST,
         }, // either do this or send the user data in auth api with a message 2FA is required
+        {
+          path: '/api/v1/auth/refresh',
+          method: RequestMethod.POST,
+        },
       )
       .forRoutes(SocialLoginController);
     consumer

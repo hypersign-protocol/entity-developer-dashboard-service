@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { UserRepository } from 'src/user/repository/user.repository';
 import { ConfigService } from '@nestjs/config';
@@ -117,12 +118,9 @@ export class SocialLoginService {
       authenticatorType: authenticator?.type,
       aud: domain,
     };
-    const secret = this.config.get('JWT_SECRET');
-    const token = await this.jwt.signAsync(payload, {
-      expiresIn: '24h',
-      secret,
-    });
-    return token;
+    const authToken = await this.generateAuthToken(payload);
+    const refreshToken = await this.generateRefreshToken(payload);
+    return { authToken, refreshToken };
   }
 
   async generate2FA(genrate2FADto: Generate2FA, user) {
@@ -203,9 +201,11 @@ export class SocialLoginService {
       expiresIn: '24h',
       secret: this.config.get('JWT_SECRET'),
     });
+    const refreshToken = await this.generateRefreshToken(payload);
     return {
       isVerified,
       authToken: accessToken,
+      refreshToken,
     };
   }
 
@@ -241,5 +241,56 @@ export class SocialLoginService {
       { authenticators: user.authenticators },
     );
     return { message: 'Removed authenticator successfully' };
+  }
+  async verifyAndGenerateRefreshToken(token: string) {
+    try {
+      const tokenSecret = this.config.get('JWT_REFRESH_SECRET');
+      if (!tokenSecret) {
+        throw new BadRequestException(
+          'JWT_REFRESH_SECRET is not set. Please contact the admin',
+        );
+      }
+      const payload = await this.jwt.verify(token, { secret: tokenSecret });
+      delete payload?.exp;
+      delete payload?.iat;
+      const user = await this.userRepository.findOne({
+        userId: payload.appUserID,
+      });
+      if (!user) throw new UnauthorizedException('User not found');
+      const newRefreshToken = await this.generateRefreshToken(payload); // make refresh token small
+      const authToken = await this.generateAuthToken(payload);
+      return { authToken, refreshToken: newRefreshToken };
+    } catch (e) {
+      Logger.error(
+        `Error whaile generating refreshToken ${e}`,
+        'SocialLoginService',
+      );
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+  }
+  async generateRefreshToken(payload: any): Promise<string> {
+    const tokenSecret = this.config.get('JWT_REFRESH_SECRET');
+    if (!tokenSecret) {
+      throw new BadRequestException(
+        'JWT_REFRESH_SECRET is not set. Please contact the admin',
+      );
+    }
+    return this.jwt.signAsync(payload, {
+      expiresIn: '7d',
+      secret: tokenSecret,
+    });
+  }
+
+  async generateAuthToken(payload: any): Promise<string> {
+    const secret = this.config.get('JWT_SECRET');
+    if (!secret) {
+      throw new BadRequestException(
+        'JWT_SECRET is not set. Please contact the admin',
+      );
+    }
+    return this.jwt.signAsync(payload, {
+      expiresIn: '4h',
+      secret,
+    });
   }
 }

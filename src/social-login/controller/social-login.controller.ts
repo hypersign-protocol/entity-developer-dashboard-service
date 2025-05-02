@@ -10,6 +10,7 @@ import {
   Query,
   Body,
   Delete,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { SocialLoginService } from '../services/social-login.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -30,6 +31,7 @@ import {
   DeleteMFARespDto,
   Generate2FARespDto,
   LoginResponse,
+  LogoutRespDto,
   UnauthorizedError,
   Verify2FARespDto,
 } from '../dto/response.dto';
@@ -76,16 +78,23 @@ export class SocialLoginController {
   @UseGuards(AuthGuard('google'))
   async socialAuthCallback(@Req() req, @Res() res) {
     Logger.log('socialAuthCallback() method starts', 'SocialLoginController');
-    const token = await this.socialLoginService.socialLogin(req);
-    res.cookie('authToken', token, {
+    const tokens = await this.socialLoginService.socialLogin(req);
+    res.cookie('authToken', tokens?.authToken, {
       httpOnly: true,
       secure: true,
       domain: '.dashboard.hypersign.id',
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: 4 * 60 * 60 * 1000,
       sameSite: 'None',
       path: '/',
     });
-
+    res.cookie('refreshToken', tokens?.refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      domain: '.dashboard.hypersign.id',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
     res.redirect(`${this.config.get('REDIRECT_URL')}`);
   }
   @ApiBearerAuth('Authorization')
@@ -125,6 +134,34 @@ export class SocialLoginController {
       authToken: await this.socialLoginService.socialLogin(req),
     };
   }
+  @ApiBearerAuth('Authorization')
+  @Post('/api/v1/auth/refresh')
+  async refreshTokenGeneration(@Req() req, @Res() res) {
+    const refreshToken = req.cookies['refreshToken'];
+    if (!refreshToken) {
+      throw new UnauthorizedException('Missing refresh token');
+    }
+    const tokens = await this.socialLoginService.verifyAndGenerateRefreshToken(
+      refreshToken,
+    );
+    res.cookie('authToken', tokens.authToken, {
+      httpOnly: true,
+      secure: true,
+      domain: '.dashboard.hypersign.id',
+      maxAge: 4 * 60 * 60 * 1000,
+      sameSite: 'None',
+      path: '/',
+    });
+    res.cookie('refreshToken', tokens.refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      domain: '.dashboard.hypersign.id',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+    res.json({ message: 'Tokens refreshed' });
+  }
 
   @ApiOkResponse({
     description: 'Generated QR successfully',
@@ -154,17 +191,29 @@ export class SocialLoginController {
   async verifyMFA(
     @Req() req,
     @Body() mfaVerificationDto: MFACodeVerificationDto,
-    @Res() res
+    @Res() res,
   ) {
-    const data = await this.socialLoginService.verifyMFACode(req.user, mfaVerificationDto);
+    const data = await this.socialLoginService.verifyMFACode(
+      req.user,
+      mfaVerificationDto,
+    );
     res.cookie('authToken', data?.authToken, {
       httpOnly: true,
       secure: true,
       domain: '.dashboard.hypersign.id',
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: 4 * 60 * 60 * 1000,
       sameSite: 'None',
+      path: '/',
     });
-    res.json({ isVerified: data.isVerified })
+    res.cookie('refreshToken', data?.refreshToken, {
+      httpOnly: true,
+      secure: true,
+      domain: '.dashboard.hypersign.id',
+      maxAge: 7 * 60 * 60 * 1000,
+      sameSite: 'None',
+      path: '/',
+    });
+    res.json({ isVerified: data.isVerified });
   }
   @ApiOkResponse({
     description: 'Removed MFA successfully',
@@ -183,6 +232,10 @@ export class SocialLoginController {
   async removeMFA(@Req() req, @Body() mfaremoveDto: DeleteMFADto) {
     return this.socialLoginService.removeMFA(req.user, mfaremoveDto);
   }
+  @ApiOkResponse({
+    description: 'User is Logged out successfully',
+    type: LogoutRespDto,
+  })
   @ApiBadRequestResponse({
     status: 400,
     type: AppError,

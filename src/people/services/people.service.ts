@@ -165,12 +165,6 @@ export class PeopleService {
     const userDetails = await this.userService.findOne({
       email: emailId,
     });
-    // if (userDetails == null) {
-    //   throw new NotFoundException(
-    //     `Cannot invite an non existing user with email: ${emailId}`,
-    //     `User not found`,
-    //   );
-    // }
     const adminPeople = await this.adminPeopleService.findOne({
       userId: userDetails?.userId || emailId,
       adminId: adminUserData.userId,
@@ -178,7 +172,6 @@ export class PeopleService {
     if (adminPeople == null) {
       throw new ConflictException('User doesnot exists', 'Already Deleted');
     }
-
     return this.adminPeopleService.findOneAndDelete({
       userId: userDetails?.userId || emailId,
       adminId: adminUserData.userId,
@@ -281,14 +274,13 @@ export class PeopleService {
 
     payload.accessAccount = accessAccount;
 
-    const secret = this.configService.get('JWT_SECRET');
-    const token = await this.jwt.signAsync(payload, {
-      expiresIn: '24h',
-      secret,
-    });
-
+    const token = await this.socialLoginService.generateAuthToken(payload);
+    const refreshToken = await this.socialLoginService.generateRefreshToken(
+      payload,
+    );
     return {
       authToken: token,
+      refreshToken,
     };
   }
 }

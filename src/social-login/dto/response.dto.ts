@@ -104,3 +104,10 @@ export enum AuthneticatorType {
   google = 'google',
   okta = 'okta',
 }
+
+export class LogoutRespDto {
+  @ApiProperty({
+    example: 'Logged out successfully',
+  })
+  message: string;
+}

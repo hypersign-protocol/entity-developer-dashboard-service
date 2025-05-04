@@ -30,7 +30,7 @@ export class PeopleService {
     private readonly jwt: JwtService,
     private readonly configService: ConfigService,
     private readonly mailNotificationService: MailNotificationService,
-  ) {}
+  ) { }
   async createInvitation(createPersonDto: CreateInviteDto, adminUserData) {
     const { emailId } = createPersonDto;
     if (emailId === adminUserData?.email) {
@@ -281,6 +281,7 @@ export class PeopleService {
     return {
       authToken: token,
       refreshToken,
+      adminEmail: adminData.email
     };
   }
 }

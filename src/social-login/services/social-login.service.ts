@@ -30,22 +30,20 @@ export class SocialLoginService {
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
     private readonly supportedServiceList: SupportedServiceList,
-  ) {}
+  ) { }
   async generateAuthUrlByProvider(provider: string) {
     let authUrl;
     switch (provider) {
       case Providers.google: {
-        authUrl = `${
-          this.config.get('GOOGLE_AUTH_BASE_URL') ||
+        authUrl = `${this.config.get('GOOGLE_AUTH_BASE_URL') ||
           'https://accounts.google.com/o/oauth2/v2/auth'
-        }?response_type=code&redirect_uri=${
-          this.config.get('GOOGLE_CALLBACK_URL') ||
+          }?response_type=code&redirect_uri=${this.config.get('GOOGLE_CALLBACK_URL') ||
           sanitizeUrl(
             this.config.get('DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP'),
           ) + '/api/v1/login/callback'
-        }&scope=email%20profile&client_id=${this.config.get(
-          'GOOGLE_CLIENT_ID',
-        )}`;
+          }&scope=email%20profile&client_id=${this.config.get(
+            'GOOGLE_CLIENT_ID',
+          )}`;
         break;
       }
       default: {

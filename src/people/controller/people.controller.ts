@@ -29,7 +29,7 @@ import { AllExceptionsFilter } from 'src/utils/utils';
 @ApiBearerAuth('Authorization')
 @Controller('/api/v1/people')
 export class PeopleController {
-  constructor(private readonly peopleService: PeopleService) {}
+  constructor(private readonly peopleService: PeopleService) { }
 
   @ApiResponse({
     status: 200,
@@ -117,11 +117,12 @@ export class PeopleController {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
+      path: '/',
       domain: '.dashboard.hypersign.id',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     return res.json({
-      message: `Successfully siwtched to the ${user.email} account`,
+      message: `Successfully switched to the ${data.adminEmail} account`,
     });
   }
 }

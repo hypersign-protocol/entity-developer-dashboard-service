@@ -127,5 +127,7 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__SERVER_NAME__#${{ secrets.SERVER_NAME }}#" {} \;
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i "s#__ALLOWED_ORIGIN__#${{ secrets.ALLOWED_ORIGIN }}#" {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__JWT_REFRESH_SECRET__/${{ secrets.JWT_REFRESH_SECRET }}/g'' {} \;
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

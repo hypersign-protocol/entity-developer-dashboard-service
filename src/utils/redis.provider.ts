@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
 export const redisClient = new Redis({
-  host: 'localhost',
+  host: 'redis-stack-service.hypermine-development.svc.cluster.local',
   port: 6379,
 });

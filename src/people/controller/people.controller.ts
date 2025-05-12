@@ -24,12 +24,16 @@ import {
 import { DeletePersonDto } from '../dto/update-person.dto';
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AllExceptionsFilter } from 'src/utils/utils';
+import { ConfigService } from '@nestjs/config';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('People')
 @ApiBearerAuth('Authorization')
 @Controller('/api/v1/people')
 export class PeopleController {
-  constructor(private readonly peopleService: PeopleService) { }
+  constructor(
+    private readonly peopleService: PeopleService,
+    private readonly config: ConfigService,
+  ) {}
 
   @ApiResponse({
     status: 200,
@@ -105,10 +109,11 @@ export class PeopleController {
   async adminLogin(@Body() body: AdminLoginDTO, @Req() req, @Res() res) {
     const { user } = req;
     const data = await this.peopleService.adminLogin(body, user);
+    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
     res.cookie('authToken', data?.authToken, {
       httpOnly: true,
       secure: true,
-      domain: '.dashboard.hypersign.id',
+      domain: cookieDomain,
       maxAge: 4 * 60 * 60 * 1000,
       sameSite: 'None',
       path: '/',
@@ -118,7 +123,7 @@ export class PeopleController {
       secure: true,
       sameSite: 'None',
       path: '/',
-      domain: '.dashboard.hypersign.id',
+      domain: cookieDomain,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     return res.json({

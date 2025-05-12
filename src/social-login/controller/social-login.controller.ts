@@ -78,11 +78,16 @@ export class SocialLoginController {
   @UseGuards(AuthGuard('google'))
   async socialAuthCallback(@Req() req, @Res() res) {
     Logger.log('socialAuthCallback() method starts', 'SocialLoginController');
+    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
     const tokens = await this.socialLoginService.socialLogin(req);
+    Logger.debug(
+      `Cookied domain set is ${cookieDomain}`,
+      'SocialLoginController',
+    );
     res.cookie('authToken', tokens?.authToken, {
       httpOnly: true,
       secure: true,
-      domain: '.dashboard.hypersign.id',
+      domain: cookieDomain,
       maxAge: 4 * 60 * 60 * 1000,
       sameSite: 'None',
       path: '/',
@@ -91,7 +96,7 @@ export class SocialLoginController {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
-      domain: '.dashboard.hypersign.id',
+      domain: cookieDomain,
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
     });
@@ -144,10 +149,11 @@ export class SocialLoginController {
     const tokens = await this.socialLoginService.verifyAndGenerateRefreshToken(
       refreshToken,
     );
+    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
     res.cookie('authToken', tokens.authToken, {
       httpOnly: true,
       secure: true,
-      domain: '.dashboard.hypersign.id',
+      domain: cookieDomain,
       maxAge: 4 * 60 * 60 * 1000,
       sameSite: 'None',
       path: '/',
@@ -156,7 +162,7 @@ export class SocialLoginController {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
-      domain: '.dashboard.hypersign.id',
+      domain: cookieDomain,
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
     });
@@ -197,10 +203,11 @@ export class SocialLoginController {
       req.user,
       mfaVerificationDto,
     );
+    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
     res.cookie('authToken', data?.authToken, {
       httpOnly: true,
       secure: true,
-      domain: '.dashboard.hypersign.id',
+      domain: cookieDomain,
       maxAge: 4 * 60 * 60 * 1000,
       sameSite: 'None',
       path: '/',
@@ -208,7 +215,7 @@ export class SocialLoginController {
     res.cookie('refreshToken', data?.refreshToken, {
       httpOnly: true,
       secure: true,
-      domain: '.dashboard.hypersign.id',
+      domain: cookieDomain,
       maxAge: 7 * 60 * 60 * 1000,
       sameSite: 'None',
       path: '/',
@@ -247,16 +254,17 @@ export class SocialLoginController {
   @ApiBearerAuth('Authorization')
   @Post('/api/v1/auth/logout')
   async logout(@Req() req, @Res() res) {
+    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
     res.clearCookie('authToken', {
       path: '/',
-      domain: '.dashboard.hypersign.id',
+      domain: cookieDomain,
       sameSite: 'None',
       secure: true,
       httpOnly: true,
     });
     res.clearCookie('refreshToken', {
       path: '/',
-      domain: '.dashboard.hypersign.id',
+      domain: cookieDomain,
       sameSite: 'None',
       secure: true,
       httpOnly: true,

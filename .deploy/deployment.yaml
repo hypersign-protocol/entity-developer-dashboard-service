@@ -91,6 +91,8 @@ spec:
           value: __ALLOWED_ORIGIN__
         - name: JWT_REFRESH_SECRET
           value: __JWT_REFRESH_SECRET__
+        - name: COOKIE_DOMAIN
+          value: __COOKIE_DOMAIN__
         volumeMounts:
         - name: mongo
           mountPath: "/data"

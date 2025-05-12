@@ -15,6 +15,7 @@ import { JWTAuthorizeMiddleware } from 'src/utils/middleware/jwt-authorization.m
 import { SupportedServiceModule } from 'src/supported-service/supported-service.module';
 import { SupportedServiceList } from 'src/supported-service/services/service-list';
 import { TwoFAAuthorizationMiddleware } from 'src/utils/middleware/2FA-jwt-authorization.middleware';
+import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
 
 @Module({
   imports: [
@@ -47,6 +48,10 @@ export class SocialLoginModule implements NestModule {
           path: '/api/v1/login/callback',
           method: RequestMethod.GET,
         },
+        {
+          path: '/api/v1/auth/refresh',
+          method: RequestMethod.POST,
+        },
       )
       .forRoutes(SocialLoginController);
     consumer
@@ -72,6 +77,23 @@ export class SocialLoginModule implements NestModule {
           path: '/api/v1/auth',
           method: RequestMethod.POST,
         }, // either do this or send the user data in auth api with a message 2FA is required
+        {
+          path: '/api/v1/auth/refresh',
+          method: RequestMethod.POST,
+        },
+      )
+      .forRoutes(SocialLoginController);
+    consumer
+      .apply(RateLimitMiddleware)
+      .exclude(
+        {
+          path: '/api/v1/login/callback',
+          method: RequestMethod.GET,
+        },
+        {
+          path: '/api/v1/auth',
+          method: RequestMethod.POST,
+        },
       )
       .forRoutes(SocialLoginController);
   }

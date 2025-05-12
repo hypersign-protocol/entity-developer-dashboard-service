@@ -24,6 +24,7 @@ import { SocialLoginModule } from './social-login/social-login.module';
 import { CreditModule } from './credits/credits.module';
 import { TeamModule } from './roles/role.module';
 import { PeopleModule } from './people/people.module';
+import * as cookieParser from 'cookie-parser';
 
 // eslint-disable-next-line
 const HypersignAuth = require('hypersign-auth-node-sdk');
@@ -40,6 +41,8 @@ async function bootstrap() {
   app.use(json({ limit: '10mb' }));
   app.use(urlencoded({ extended: true, limit: '10mb' }));
   app.use(express.static(path.join(__dirname, '../public')));
+  app.use(cookieParser());
+
   // Adding prefix to our api
 
   const walletOptions = {
@@ -131,16 +134,7 @@ async function bootstrap() {
       .build();
 
     const orgDocuments = SwaggerModule.createDocument(app, orgDocConfig, {
-      include: [
-        AppAuthModule,
-        CreditModule,
-        AppOauthModule,
-        UserModule,
-        SupportedServiceModule,
-        SocialLoginModule,
-        TeamModule,
-        PeopleModule,
-      ], // don't include, say, BearsModule
+      include: [AppOauthModule],
     });
     const tenantOptions = {
       swaggerOptions: {

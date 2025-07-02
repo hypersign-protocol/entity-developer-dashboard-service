@@ -52,7 +52,8 @@ export class AppOauthController {
   })
   @ApiHeader({
     name: 'ExpiresIn',
-    description: 'Specifie when this token should expire, default 4h',
+    description:
+      'Specifie when this token should expire (in hours). Only whole numbers (≥ 1) are allowed. Default is 4h.',
     required: false,
   })
   @ApiBadRequestResponse({

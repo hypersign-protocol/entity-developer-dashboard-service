@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   createParamDecorator,
   ExecutionContext,
   UnauthorizedException,
@@ -20,13 +21,22 @@ export const AppSecretHeader = createParamDecorator(
 export const OauthTokenExpiryHeader = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext) => {
     const request = ctx.switchToHttp().getRequest();
-    if (
-      !request.headers['expiresin'] ||
-      request.headers['expiresin'] == undefined
-    ) {
+    const rawExpiresIn = request.headers['expiresin'];
+    if (!rawExpiresIn) {
       return 4;
     }
-    return parseInt(request.headers['expiresin']);
+    const expiresIn = parseInt(rawExpiresIn, 10);
+    if (
+      isNaN(expiresIn) ||
+      expiresIn < 1 ||
+      expiresIn.toString() !== rawExpiresIn.trim()
+    ) {
+      throw new BadRequestException([
+        '`expiresIn` must be a whole number greater than or equal to 1.',
+      ]);
+    }
+
+    return expiresIn;
   },
 );
 

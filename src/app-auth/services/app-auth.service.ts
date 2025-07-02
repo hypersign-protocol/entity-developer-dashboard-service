@@ -692,7 +692,7 @@ export class AppAuthService {
       expiresIn: expiresin.toString() + 'h',
       secret,
     });
-    const expiresIn = (4 * 1 * 60 * 60 * 1000) / 1000;
+    const expiresIn = (expiresin * 1 * 60 * 60 * 1000) / 1000;
     Logger.log('generateAccessToken() method: ends....', 'AppAuthService');
 
     return { access_token: token, expiresIn, tokenType: 'Bearer' };

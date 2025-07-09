@@ -325,8 +325,8 @@ export class AppAuthService {
     });
 
     const json = await res.json();
-    const txtRecords = json.Answer.filter((record: any) => record.type === 16);
-    const txtRecord = txtRecords.find((record: any) =>
+    const txtRecords = json.Answer?.filter((record: any) => record.type === 16);
+    const txtRecord = txtRecords?.find((record: any) =>
       record.data.includes(txt),
     );
     if (!txtRecord) {
@@ -416,6 +416,7 @@ export class AppAuthService {
     // this should not happen everytime we update a record, only once.
     // so better to issue verifiable credential
     if (
+      env === 'prod' &&
       hasDomainVerified &&
       domain &&
       domain != '' &&
@@ -456,7 +457,6 @@ export class AppAuthService {
         );
       }
     }
-
     const app: App = await this.appRepository.findOneAndUpdate(
       { appId, userId },
       updataAppDto,

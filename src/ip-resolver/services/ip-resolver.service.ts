@@ -32,8 +32,11 @@ export class IpResolverService {
     let newlyResolved = [];
     if (missingIps.length > 0) {
       const resolveData = await this.resolveBulkIp(missingIps);
-      this.ipResolverRepository.insertMany(resolveData);
-      newlyResolved = resolveData;
+      const validIps = resolveData.filter((res) => !res['error']);
+      if (validIps.length > 0) {
+        await this.ipResolverRepository.insertMany(validIps);
+      }
+      newlyResolved = validIps;
     }
     return [...cachedIpRecords, ...newlyResolved];
   }

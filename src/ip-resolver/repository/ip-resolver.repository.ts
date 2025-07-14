@@ -31,4 +31,11 @@ export class IpResolverRepository {
     );
     return this.ipResolverModel.insertMany(data);
   }
+  async findBasedOnAggregation(pipeline) {
+    Logger.log(
+      'findBasedOnAggregation() method: starts, finding ip based userCount',
+      'IpResolverReposiotry',
+    );
+    return this.ipResolverModel.aggregate(pipeline);
+  }
 }

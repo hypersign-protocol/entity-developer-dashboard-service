@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { CreateIpResolverDto } from '../dto/create-ip-resolver.dto';
+import {
+  CreateIpResolverDto,
+  IpGeolocationQueryDto,
+} from '../dto/create-ip-resolver.dto';
 import { IpResolverRepository } from '../repository/ip-resolver.repository';
 import { ConfigService } from '@nestjs/config';
 import { sanitizeUrl } from 'src/utils/utils';
@@ -84,5 +87,96 @@ export class IpResolverService {
       city: rawData?.city || null,
       timeZone: rawData?.timezones || null,
     };
+  }
+
+  async generateIpBasedLocationAnalytics(ipsList: IpGeolocationQueryDto) {
+    let ips: string[] = [];
+    if (typeof ipsList.ips === 'string') {
+      ips = ipsList.ips.split(',').map((ip) => ip.trim());
+    } else if (Array.isArray(ipsList.ips)) {
+      ips = ipsList.ips;
+    }
+    const matchStage = ips && ips.length > 0 ? { ip: { $in: ips } } : {};
+    const pipeline = [
+      {
+        $match: matchStage,
+      },
+      {
+        $group: {
+          _id: {
+            continent: '$continentName',
+            countryCode: '$countryCode',
+            region: '$region',
+            city: '$city',
+          },
+          count: {
+            $sum: 1,
+          },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            continent: '$_id.continent',
+            countryCode: '$_id.countryCode',
+            region: '$_id.region',
+          },
+          cities: {
+            $push: {
+              name: '$_id.city',
+              count: '$count',
+            },
+          },
+          count: {
+            $sum: '$count',
+          },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            continent: '$_id.continent',
+            countryCode: '$_id.countryCode',
+          },
+          regions: {
+            $push: {
+              name: '$_id.region',
+              count: '$count',
+              cities: '$cities',
+            },
+          },
+          count: {
+            $sum: '$count',
+          },
+        },
+      },
+      {
+        $group: {
+          _id: '$_id.continent',
+          countries: {
+            $push: {
+              name: '$_id.countryCode',
+              count: '$count',
+              regions: '$regions',
+            },
+          },
+          count: {
+            $sum: '$count',
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          name: '$_id',
+          count: 1,
+          countries: 1,
+        },
+      },
+    ];
+    const data = await this.ipResolverRepository.findBasedOnAggregation(
+      pipeline,
+    );
+    return data;
   }
 }

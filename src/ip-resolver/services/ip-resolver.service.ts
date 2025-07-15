@@ -106,9 +106,8 @@ export class IpResolverService {
       acc[ip] = (acc[ip] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
-    // Fetch records for unique IPs
-    const ipRecords = await this.ipResolverRepository.find({
-      ip: { $in: Object.keys(ipFrequencyMap) },
+    const ipRecords = await this.resolveIps({
+      ips: Object.keys(ipFrequencyMap),
     });
     // Enrich each record with frequency from input list
     const enrichedRecords = ipRecords.flatMap((rec) => {

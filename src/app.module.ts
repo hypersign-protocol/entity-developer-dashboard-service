@@ -22,6 +22,7 @@ import { TeamModule } from './roles/role.module';
 import { PeopleModule } from './people/people.module';
 import { MailNotificationModule } from './mail-notification/mail-notification.module';
 import { AllowedOriginMiddleware } from './utils/middleware/allowedOrigin.middleware';
+import { IpResolverModule } from './ip-resolver/ip-resolver.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { AllowedOriginMiddleware } from './utils/middleware/allowedOrigin.middle
     TeamModule,
     PeopleModule,
     MailNotificationModule,
+    IpResolverModule,
   ],
   controllers: [],
   providers: [
@@ -56,7 +58,9 @@ export class AppModule implements NestModule {
           path: '/api/v1/login/callback',
           method: RequestMethod.GET,
         },
-        { path: 'api/v1/app/oauth', method: RequestMethod.POST },
+        { path: '/api/v1/app/oauth', method: RequestMethod.POST },
+        { path: '/api/v1/ip-resolver', method: RequestMethod.POST },
+        { path: '/api/v1/ip-resolver/stats', method: RequestMethod.POST },
       )
       .forRoutes('*');
   }

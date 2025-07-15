@@ -131,5 +131,9 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__JWT_REFRESH_SECRET__/${{ secrets.JWT_REFRESH_SECRET }}/g'' {} \;
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__COOKIE_DOMAIN__/${{ secrets.COOKIE_DOMAIN }}/g'' {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__IP_RESOLVER_API_URL__/${{ secrets.IP_RESOLVER_API_URL }}/g'' {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__IP_RESOLVER_API_KEY__/${{ secrets.IP_RESOLVER_API_KEY }}/g'' {} \;
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

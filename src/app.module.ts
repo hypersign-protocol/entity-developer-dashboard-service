@@ -60,6 +60,7 @@ export class AppModule implements NestModule {
         },
         { path: '/api/v1/app/oauth', method: RequestMethod.POST },
         { path: '/api/v1/ip-resolver', method: RequestMethod.POST },
+        { path: '/api/v1/ip-resolver/stats', method: RequestMethod.POST },
       )
       .forRoutes('*');
   }

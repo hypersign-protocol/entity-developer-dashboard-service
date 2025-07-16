@@ -93,10 +93,8 @@ spec:
           value: __JWT_REFRESH_SECRET__
         - name: COOKIE_DOMAIN
           value: __COOKIE_DOMAIN__
-        - name: IP_RESOLVER_API_URL
-          value: __IP_RESOLVER_API_URL__
-        - name: IP_RESOLVER_API_KEY
-          value: __IP_RESOLVER_API_KEY__
+        - name: GEOLOCATION_DB_PATH
+          value: __GEOLOCATION_DB_PATH__
         volumeMounts:
         - name: mongo
           mountPath: "/data"

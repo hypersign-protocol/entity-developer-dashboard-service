@@ -39,7 +39,7 @@ export class IpResolverService {
       const resolveData = await this.resolveBulkIp(missingIps);
       const validIps = resolveData.filter((res) => !res['error']);
       if (validIps.length > 0) {
-        await this.ipResolverRepository.insertMany(validIps);
+        this.ipResolverRepository.insertMany(validIps);
       }
       newlyResolved = validIps;
     }
@@ -98,115 +98,67 @@ export class IpResolverService {
     } else if (Array.isArray(ipsList.ips)) {
       ips = ipsList.ips;
     }
-    if (ips.length > 100) {
-      throw new BadRequestException('You can resolve upto 100 ips at a time');
-    }
-    // Build frequency map for duplicate ips
-    const ipFrequencyMap = ips.reduce((acc, ip) => {
-      acc[ip] = (acc[ip] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    const ipRecords = await this.resolveIps({
-      ips: Object.keys(ipFrequencyMap),
-    });
-    // Enrich each record with frequency from input list
-    const enrichedRecords = ipRecords.flatMap((rec) => {
-      const raw = rec;
-      const ipCount = ipFrequencyMap[raw.ip] || 0;
-      return Array(ipCount).fill({
-        continentName: rec.continentName,
-        countryCode: rec.countryCode,
-        countryName: rec.countryName,
-        region: rec.region,
-        city: rec.city,
-        count: 1,
+    let enrichedRecords;
+    if (ips.length === 0) {
+      const pipeline = [
+        {
+          $group: {
+            _id: {
+              continentName: '$continentName',
+              countryCode: '$countryCode',
+            },
+            count: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            continentName: '$_id.continentName',
+            countryCode: '$_id.countryCode',
+            count: 1,
+          },
+        },
+      ];
+      enrichedRecords = await this.ipResolverRepository.findBasedOnAggregation(
+        pipeline,
+      );
+    } else {
+      const ipFrequencyMap = ips.reduce((acc, ip) => {
+        acc[ip] = (acc[ip] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      const ipRecords = await this.resolveIps({
+        ips: Object.keys(ipFrequencyMap),
       });
-    });
-    // Aggregate by continent > country > region > city
-    const continents: Record<string, any> = {};
+      enrichedRecords = ipRecords.flatMap((rec) => {
+        const ipCount = ipFrequencyMap[rec.ip] || 0;
+        return Array(ipCount).fill({
+          continentName: rec.continentName,
+          countryCode: rec.countryCode,
+          count: 1,
+        });
+      });
+    }
+    const continentCountMap: Record<string, number> = {};
+    const countryCountMap: Record<string, number> = {};
 
     for (const record of enrichedRecords) {
-      const { continentName, countryCode, region, city, count } = record;
+      const { continentName, countryCode, count } = record;
 
-      if (!continents[continentName]) {
-        continents[continentName] = {
-          name: continentName,
-          count: 0,
-          countries: {},
-        };
+      if (!continentCountMap[continentName]) {
+        continentCountMap[continentName] = 0;
       }
-      const continent = continents[continentName];
-      continent.count += count;
+      continentCountMap[continentName] += count;
 
-      if (!continent.countries[countryCode]) {
-        continent.countries[countryCode] = {
-          name: countryCode,
-          count: 0,
-          regions: {},
-        };
+      if (!countryCountMap[countryCode]) {
+        countryCountMap[countryCode] = 0;
       }
-      const country = continent.countries[countryCode];
-      country.count += count;
-
-      if (!country.regions[region]) {
-        country.regions[region] = {
-          name: region,
-          count: 0,
-          cities: {},
-        };
-      }
-      const regionObj = country.regions[region];
-      regionObj.count += count;
-
-      if (!regionObj.cities[city]) {
-        regionObj.cities[city] = {
-          name: city,
-          count: 0,
-        };
-      }
-      regionObj.cities[city].count += count;
+      countryCountMap[countryCode] += count;
     }
 
-    // Transform nested map to array structure
-    const result = Object.values(continents).map((continent) => {
-      const cont = continent as {
-        name: string;
-        count: number;
-        countries: Record<
-          string,
-          {
-            name: string;
-            code: string;
-            count: number;
-            regions: Record<
-              string,
-              {
-                name: string;
-                count: number;
-                cities: Record<string, { name: string; count: number }>;
-              }
-            >;
-          }
-        >;
-      };
-      return {
-        name: cont.name,
-        count: cont.count,
-        countries: Object.values(cont.countries).map((country) => ({
-          name: country.name,
-          code: country.code,
-          count: country.count,
-          regions: Object.values(country.regions).map((region) => ({
-            name: region.name,
-            count: region.count,
-            cities: Object.values(region.cities).map((city) => ({
-              name: city.name,
-              count: city.count,
-            })),
-          })),
-        })),
-      };
-    });
-    return result;
+    return {
+      continents: continentCountMap,
+      countries: countryCountMap,
+    };
   }
 }

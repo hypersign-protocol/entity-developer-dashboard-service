@@ -132,6 +132,6 @@ jobs:
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__COOKIE_DOMAIN__/${{ secrets.COOKIE_DOMAIN }}/g'' {} \;
     - name: "Replace Secrets"
-      run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__GEOLOCATION_DB_PATH__/${{ secrets.GEOLOCATION_DB_PATH }}/g'' {} \;
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__GEOLOCATION_DB_PATH__#${{ secrets.GEOLOCATION_DB_PATH }}#" {} \;
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

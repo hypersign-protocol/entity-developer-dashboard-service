@@ -15,11 +15,11 @@ export class IpResolver {
   countryCode: string;
   @Prop({ required: true, type: String })
   countryName: string;
-  @Prop({ required: true, type: String })
-  region: string;
-  @Prop({ required: true, type: String })
-  city: string;
-  @Prop({ required: true, type: Array<string> })
-  timeZone: Array<string>;
+  @Prop({ required: false, type: String })
+  region?: string;
+  @Prop({ required: false, type: String })
+  city?: string;
+  @Prop({ required: false, type: Array<string> })
+  timeZone?: Array<string>;
 }
 export const IpResolverSchema = SchemaFactory.createForClass(IpResolver);

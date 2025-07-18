@@ -3,7 +3,7 @@ import { Document } from 'mongoose';
 
 export type IpDocument = IpResolver & Document;
 
-@Schema()
+@Schema({ timestamps: true })
 export class IpResolver {
   @Prop({ required: true, type: String })
   ip: string;

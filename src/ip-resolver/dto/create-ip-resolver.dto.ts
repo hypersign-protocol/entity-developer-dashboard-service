@@ -89,100 +89,32 @@ export class IpGeolocationQueryDto {
   @IsArray({ message: 'ips must be an array' })
   ips: string | string[] | [];
 }
-export class CityStats {
-  @ApiProperty({
-    name: 'name',
-    description: 'Name of the cities',
-    example: 'Gurgaon',
-  })
-  @IsString()
-  name: string;
-  @ApiProperty({
-    name: 'count',
-    description: 'Count of the user participated from specific region',
-    example: 100,
-  })
-  @IsNumber()
-  count: number;
-}
-
-export class RegionStats {
-  @ApiProperty({
-    name: 'name',
-    description: 'Name of the region',
-    example: 'Haryana',
-  })
-  @IsString()
-  name: string;
-  @ApiProperty({
-    name: 'count',
-    description: 'Count of the user participated from specific region',
-    example: 100,
-  })
-  @IsNumber()
-  count: number;
-  @ApiProperty({
-    name: 'cities',
-    description:
-      'List of cities from where user have participanted and their detail',
-    type: CityStats,
-    isArray: true,
-  })
-  @Type(() => CityStats)
-  @ValidateNested({ each: true })
-  cities: CityStats[];
-}
-
-export class CountryStats {
-  @ApiProperty({
-    name: 'name',
-    description: 'Country code',
-    example: 'IN',
-  })
-  @IsString()
-  name: string;
-  @ApiProperty({
-    name: 'count',
-    description: 'Count of the user participated from specific country',
-    example: 100,
-  })
-  @IsNumber()
-  count: number;
-  @ApiProperty({
-    name: 'regions',
-    description:
-      'List of regions from where user have participanted and their detail',
-    type: RegionStats,
-    isArray: true,
-  })
-  @Type(() => RegionStats)
-  @ValidateNested({ each: true })
-  regions: RegionStats[];
-}
 
 export class IpGeolocationQueryResponse {
   @ApiProperty({
-    name: 'name',
-    description: 'Name of the continent',
-    example: 'Asia',
+    description: 'Map of continent name to user count',
+    type: 'object',
+    example: {
+      Asia: 23,
+      'North America': 10,
+      Europe: 5,
+    },
+    additionalProperties: {
+      type: 'number',
+    },
   })
-  @IsString()
-  name: string;
+  continents: Record<string, number>;
   @ApiProperty({
-    name: 'count',
-    description: 'Count of the user perticipated from continent mentioned',
-    example: 100,
+    description: 'Map of country code to user count',
+    type: 'object',
+    example: {
+      IN: 12,
+      US: 5,
+      NL: 3,
+    },
+    additionalProperties: {
+      type: 'number',
+    },
   })
-  @IsNumber()
-  count: number;
-  @ApiProperty({
-    name: 'countries',
-    description:
-      'List of countries from where user have participanted and their detail',
-    type: CountryStats,
-    isArray: true,
-  })
-  @Type(() => CountryStats)
-  @ValidateNested({ each: true })
-  countries: CountryStats[];
+  countries: Record<string, number>;
 }

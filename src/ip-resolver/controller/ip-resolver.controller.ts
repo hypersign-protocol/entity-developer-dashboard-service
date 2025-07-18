@@ -36,7 +36,6 @@ export class IpResolverController {
   @ApiOkResponse({
     description: 'Successfully respond with count detial',
     type: IpGeolocationQueryResponse,
-    isArray: true,
   })
   generateIpBasedLocationAnalytics(@Body() ipsList: IpGeolocationQueryDto) {
     return this.ipResolverService.generateIpBasedLocationAnalytics(ipsList);

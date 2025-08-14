@@ -29,7 +29,7 @@ import { AuthzCreditService } from 'src/credits/services/credits.service';
 import { AuthZCreditsRepository } from 'src/credits/repositories/authz.repository';
 import { EdvClientKeysManager } from 'src/edv/services/edv.singleton';
 
-enum GRANT_TYPES {
+export enum GRANT_TYPES {
   access_service_kyc = 'access_service_kyc',
   access_service_ssi = 'access_service_ssi',
   access_service_quest = 'access_service_quest',
@@ -531,7 +531,7 @@ export class AppAuthService {
     return { appId: appDetail.appId };
   }
 
-  private checkIfDateExpired(expiryDate: Date | null) {
+  public checkIfDateExpired(expiryDate: Date | null) {
     if (!expiryDate) {
       // if expiryDate null, then its never expired
       return false;
@@ -651,7 +651,7 @@ export class AppAuthService {
     return this.getAccessToken(grant_type, appDetail, expiresin, accessList);
   }
 
-  private async getAccessToken(
+  public async getAccessToken(
     grantType,
     appDetail,
     expiresin = 4,

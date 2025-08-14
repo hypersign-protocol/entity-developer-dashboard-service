@@ -20,7 +20,7 @@ export enum PageType {
   KYC = 'kyc',
   KYB = 'kyb',
 }
-export class CreateBaseWebpageConfigDto {
+export class CreateWebpageConfigDto {
   @ApiProperty({
     name: 'pageTitle',
     description: 'title of the page',
@@ -34,7 +34,9 @@ export class CreateBaseWebpageConfigDto {
     name: 'pageDescription',
     description: 'Description of the page',
     example: 'Complete your KYC verification process.',
+    required: false,
   })
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
   pageDescription: string;
@@ -84,23 +86,4 @@ export class CreateBaseWebpageConfigDto {
   @IsString()
   @IsNotEmpty()
   contactEmail?: string;
-  @ApiProperty({
-    name: 'generatedUrl',
-    description: 'Generated unique URL for the page',
-    example: 'https://kyc.example.com/kyc_12345678',
-  })
-  @IsString()
-  @IsNotEmpty()
-  generatedUrl: string;
-}
-
-export class CreateWebpageConfigDto extends CreateBaseWebpageConfigDto {
-  @ApiProperty({
-    name: 'serviceId',
-    description: 'Id of the service',
-    example: '74838083d8a590f37bc3b049e6f95777f412',
-  })
-  @IsString()
-  @IsNotEmpty()
-  serviceId: string;
 }

@@ -95,6 +95,8 @@ spec:
           value: __COOKIE_DOMAIN__
         - name: GEOLOCATION_DB_PATH
           value: "__GEOLOCATION_DB_PATH__"
+        - name: REDIS_HOST
+          value: "__REDIS_HOST__"
         volumeMounts:
         - name: mongo
           mountPath: "/data"

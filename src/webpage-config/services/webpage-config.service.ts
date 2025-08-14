@@ -14,7 +14,6 @@ import {
 } from 'src/app-auth/services/app-auth.service';
 import { WebPageConfigRepository } from '../repositories/webpage-config.repository';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
-import { Mongoose } from 'mongoose';
 
 @Injectable()
 export class WebpageConfigService {
@@ -25,6 +24,7 @@ export class WebpageConfigService {
     private readonly webPageConfigRepo: WebPageConfigRepository,
   ) {}
   async storeWebPageConfigDetial(
+    serviceId: string,
     createWebpageConfigDto: CreateWebpageConfigDto,
     userDetail,
   ) {
@@ -34,13 +34,11 @@ export class WebpageConfigService {
     );
 
     const {
-      serviceId,
       expiryType,
       customExpiryDate,
       themeColor,
       pageDescription,
       pageTitle,
-      generatedUrl,
       pageType = 'kyc',
     } = createWebpageConfigDto;
     const serviceDetail = await this.appRepository.findOne({
@@ -71,13 +69,15 @@ export class WebpageConfigService {
       pageDescription,
       pageTitle,
       pageType,
-      generatedUrl,
       tenantUrl,
     };
 
     const webpageConfigData = await this.webPageConfigRepo.createwebPageConfig(
       payload,
     );
+    const id = webpageConfigData['_id'].toString();
+    const generatedUrl = `https://kyc.hypersign.id/${id}`;
+    this.webPageConfigRepo.findOneAndUpdate({ _id: id }, { generatedUrl });
     const webpageConfigObject = webpageConfigData;
     const { ssiAccessToken, kycAccessToken, ...responseData } =
       webpageConfigObject;
@@ -85,6 +85,7 @@ export class WebpageConfigService {
       ...responseData,
       serviceName: appName,
       logoUrl,
+      generatedUrl,
     };
   }
 
@@ -92,9 +93,10 @@ export class WebpageConfigService {
     return this.webPageConfigRepo.findListOfWebpageConfig({ serviceId });
   }
 
-  fetchAWebPageConfigurationDetail(id: string) {
+  fetchAWebPageConfigurationDetail(id: string, serviceId: string) {
     return this.webPageConfigRepo.findAWebpageConfig({
       _id: id,
+      serviceId,
     });
   }
 
@@ -102,13 +104,14 @@ export class WebpageConfigService {
     id: string,
     updateWebpageConfigDto: UpdateWebpageConfigDto,
     userDetail,
+    serviceId,
   ) {
     const serviceDetail = await this.appRepository.findOne({
-      appId: updateWebpageConfigDto.serviceId,
+      appId: serviceId,
     });
     if (!serviceDetail) {
       throw new BadRequestException([
-        `No service found with serviceId: ${updateWebpageConfigDto.serviceId}`,
+        `No service found with serviceId: ${serviceId}`,
       ]);
     }
     let tokenDetail;
@@ -127,8 +130,8 @@ export class WebpageConfigService {
     return this.webPageConfigRepo.findOneAndUpdate({ _id: id }, dataToUpdate);
   }
 
-  removeWebPageConfiguration(id: string) {
-    return this.webPageConfigRepo.findOneAndDelete({ _id: id });
+  removeWebPageConfiguration(id: string, serviceId: string) {
+    return this.webPageConfigRepo.findOneAndDelete({ _id: id, serviceId });
   }
   private async generateTokenBasedOnExpiry(
     serviceDetail,

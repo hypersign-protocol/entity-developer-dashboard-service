@@ -22,40 +22,44 @@ import { AllExceptionsFilter } from 'src/utils/utils';
 @ApiTags('Webpage-config')
 @UseFilters(AllExceptionsFilter)
 @UsePipes(new ValidationPipe())
-@Controller('api/v1/verification/webpage-config')
+  @Controller('api/v1/app')
 export class WebpageConfigController {
   constructor(private readonly webpageConfigService: WebpageConfigService) {}
 
-  @Post()
+  @Post(':appId/kyc-webpage-config')
   configureWebPageDetail(
+    @Param('appId') serviceId: string,
     @Body() createWebpageConfigDto: CreateWebpageConfigDto,
     @Req() req,
   ) {
-    const user = req.user;
-    console.log(user, 'user');
     Logger.log('inside configureWebPageDetail(): to configure webpage detail');
     return this.webpageConfigService.storeWebPageConfigDetial(
+      serviceId,
       createWebpageConfigDto,
       req.user,
     );
   }
 
-  @ApiQuery({
-    name: 'serviceId',
-    description: 'Id of the service',
-  })
-  @Get()
-  fetchWebPageConfigurationDetail(@Query('serviceId') serviceId) {
-    return this.webpageConfigService.fetchWebPageConfigurationList(serviceId);
+  @Get(':appId/kyc-webpage-config')
+  fetchWebPageConfigurationDetail(@Param('appId') appId: string) {
+    return this.webpageConfigService.fetchWebPageConfigurationList(appId);
   }
 
-  @Get(':id')
-  fetchAWebPageConfigurationDetail(@Param('id') id: string) {
-    return this.webpageConfigService.fetchAWebPageConfigurationDetail(id);
+  @Get(':appId/kyc-webpage-config/:id')
+  fetchAWebPageConfigurationDetail(
+    @Param('appId') appId: string,
+    @Param('id') id: string,
+  ) {
+    console.log(id, appId);
+    return this.webpageConfigService.fetchAWebPageConfigurationDetail(
+      id,
+      appId,
+    );
   }
 
-  @Patch(':id')
+  @Patch(':appId/kyc-webpage-config/:id')
   updateWebPageConfiguration(
+    @Param('appId') appId: string,
     @Param('id') id: string,
     @Body() updateWebpageConfigDto: UpdateWebpageConfigDto,
     @Req() req,
@@ -64,11 +68,15 @@ export class WebpageConfigController {
       id,
       updateWebpageConfigDto,
       req.user,
+      appId,
     );
   }
 
-  @Delete(':id')
-  removeWebPageConfiguration(@Param('id') id: string) {
-    return this.webpageConfigService.removeWebPageConfiguration(id);
+  @Delete(':appId/kyc-webpage-config/:id')
+  removeWebPageConfiguration(
+    @Param('appId') appId: string,
+    @Param('id') id: string,
+  ) {
+    return this.webpageConfigService.removeWebPageConfiguration(id, appId);
   }
 }

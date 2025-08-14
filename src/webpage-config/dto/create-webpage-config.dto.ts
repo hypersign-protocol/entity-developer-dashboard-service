@@ -38,8 +38,7 @@ export class CreateWebpageConfigDto {
   })
   @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  pageDescription: string;
+  pageDescription?: string;
 
   @ApiProperty({
     description: "Type of expiry — either a predefined duration or 'custom'",
@@ -62,10 +61,11 @@ export class CreateWebpageConfigDto {
     example: 'kyc',
     enum: PageType,
     default: 'kyc',
+    required: false
   })
-  @Optional()
+  @IsOptional()
   @IsEnum(PageType)
-  pageType?: 'kyc' | 'kyb';
+  pageType?: string;
 
   @ApiProperty({
     name: 'themeColor',
@@ -84,7 +84,6 @@ export class CreateWebpageConfigDto {
   })
   @IsOptional()
   @IsString()
-  @IsNotEmpty()
   contactEmail?: string;
 }
 

@@ -61,7 +61,7 @@ export class CreateWebpageConfigDto {
     example: 'kyc',
     enum: PageType,
     default: 'kyc',
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsEnum(PageType)

@@ -95,6 +95,10 @@ spec:
           value: __COOKIE_DOMAIN__
         - name: GEOLOCATION_DB_PATH
           value: "__GEOLOCATION_DB_PATH__"
+        - name: REDIS_HOST
+          value: "__REDIS_HOST__"
+        - name: KYC_VERIFIER_APP_BASE_URL
+          value: "__KYC_VERIFIER_APP_BASE_URL__"        
         volumeMounts:
         - name: mongo
           mountPath: "/data"

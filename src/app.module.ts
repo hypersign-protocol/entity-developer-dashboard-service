@@ -23,6 +23,7 @@ import { PeopleModule } from './people/people.module';
 import { MailNotificationModule } from './mail-notification/mail-notification.module';
 import { AllowedOriginMiddleware } from './utils/middleware/allowedOrigin.middleware';
 import { IpResolverModule } from './ip-resolver/ip-resolver.module';
+import { WebpageConfigModule } from './webpage-config/webpage-config.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { IpResolverModule } from './ip-resolver/ip-resolver.module';
     PeopleModule,
     MailNotificationModule,
     IpResolverModule,
+    WebpageConfigModule,
   ],
   controllers: [],
   providers: [

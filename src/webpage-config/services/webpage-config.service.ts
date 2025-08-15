@@ -14,6 +14,8 @@ import {
 } from 'src/app-auth/services/app-auth.service';
 import { WebPageConfigRepository } from '../repositories/webpage-config.repository';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
+import { ConfigService } from '@nestjs/config';
+import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 
 @Injectable()
 export class WebpageConfigService {
@@ -22,6 +24,7 @@ export class WebpageConfigService {
     private readonly appAuthService: AppAuthService,
     private readonly appAuthKeyService: AppAuthApiKeyService,
     private readonly webPageConfigRepo: WebPageConfigRepository,
+    private readonly config: ConfigService,
   ) {}
   async storeWebPageConfigDetial(
     serviceId: string,
@@ -76,7 +79,8 @@ export class WebpageConfigService {
       payload,
     );
     const id = webpageConfigData['_id'].toString();
-    const generatedUrl = `https://kyc.hypersign.id/${id}`;
+    const veriferAppBaseUrl = this.config.get('KYC_VERIFIER_APP_BASE_URL');
+    const generatedUrl = `${urlSanitizer(veriferAppBaseUrl, true)}${id}`;
     this.webPageConfigRepo.findOneAndUpdate({ _id: id }, { generatedUrl });
     const webpageConfigObject = webpageConfigData;
     const { ssiAccessToken, kycAccessToken, ...responseData } =

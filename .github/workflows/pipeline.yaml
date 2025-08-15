@@ -123,6 +123,8 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__INVITATIONURL__#${{ secrets.INVITATIONURL }}#" {} \;
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__REDIS_HOST__#${{ secrets.REDIS_HOST }}#" {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYC_VERIFIER_APP_BASE_URL__#${{ secrets.KYC_VERIFIER_APP_BASE_URL }}#" {} \;     
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MAIL_QUEUE__#${{ secrets.MAIL_QUEUE }}#" {} \;
     - name: "Replace secrets"

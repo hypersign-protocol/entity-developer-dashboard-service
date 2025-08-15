@@ -90,7 +90,7 @@ export class WebpageConfigService {
   }
 
   fetchWebPageConfigurationList(serviceId: string) {
-    return this.webPageConfigRepo.findListOfWebpageConfig({ serviceId });
+    return this.webPageConfigRepo.findAWebpageConfig({ serviceId });
   }
 
   fetchAWebPageConfigurationDetail(id: string, serviceId: string) {
@@ -179,6 +179,13 @@ export class WebpageConfigService {
 
       if (isNaN(expiryDate.getTime())) {
         throw new BadRequestException('Invalid custom expiry date format.');
+      }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (expiryDate < today) {
+        throw new BadRequestException(
+          'Custom expiry date cannot be earlier than today.',
+        );
       }
       expiresIn = Math.floor(
         (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60),

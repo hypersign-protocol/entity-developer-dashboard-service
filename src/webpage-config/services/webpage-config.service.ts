@@ -87,16 +87,32 @@ export class WebpageConfigService {
       ...responseData,
       serviceName: appName,
       logoUrl,
-      generatedUrl,
     };
   }
 
-  fetchWebPageConfigurationList(serviceId: string) {
+  async fetchWebPageConfigurationList(serviceId: string) {
     Logger.log(
       'Inside fetchWebPageConfigurationList(): to fetch webpage configuration of a service',
       'WebpageConfigService',
     );
-    return this.webPageConfigRepo.findAWebpageConfig({ serviceId });
+    const serviceDetail = await this.appRepository.findOne({
+      appId: serviceId,
+    });
+
+    if (!serviceDetail) {
+      throw new BadRequestException([
+        `No service found with serviceId: ${serviceId}`,
+      ]);
+    }
+    const { appName, logoUrl } = serviceDetail;
+    const webPAgeConfigData = await this.webPageConfigRepo.findAWebpageConfig({
+      serviceId,
+    });
+    return {
+      ...webPAgeConfigData,
+      serviceName: appName,
+      logoUrl,
+    };
   }
 
   fetchAWebPageConfigurationDetail(id: string, serviceId: string) {

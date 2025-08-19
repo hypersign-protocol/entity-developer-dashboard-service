@@ -88,7 +88,7 @@ spec:
         - name: SERVER_NAME
           value: __SERVER_NAME__
         - name: ALLOWED_ORIGIN
-          value: __ALLOWED_ORIGIN__
+          value: "__ALLOWED_ORIGIN__"
         - name: JWT_REFRESH_SECRET
           value: __JWT_REFRESH_SECRET__
         - name: COOKIE_DOMAIN

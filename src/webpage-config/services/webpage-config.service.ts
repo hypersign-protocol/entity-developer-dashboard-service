@@ -25,7 +25,7 @@ export class WebpageConfigService {
     private readonly appAuthKeyService: AppAuthApiKeyService,
     private readonly webPageConfigRepo: WebPageConfigRepository,
     private readonly config: ConfigService,
-  ) {}
+  ) { }
   async storeWebPageConfigDetial(
     serviceId: string,
     createWebpageConfigDto: CreateWebpageConfigDto,
@@ -42,7 +42,7 @@ export class WebpageConfigService {
       pageDescription,
       pageTitle,
       pageType = 'kyc',
-      contactEmail,
+      contactEmail
     } = createWebpageConfigDto;
     const serviceDetail = await this.appRepository.findOne({
       appId: serviceId,

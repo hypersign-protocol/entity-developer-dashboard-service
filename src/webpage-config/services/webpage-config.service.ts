@@ -35,7 +35,6 @@ export class WebpageConfigService {
       'Inside storeWebPageConfigDetial to store webpage configuration',
       'WebpageConfigService',
     );
-
     const {
       expiryType,
       customExpiryDate,
@@ -62,6 +61,8 @@ export class WebpageConfigService {
       expiryType,
       customExpiryDate,
     );
+    const veriferAppBaseUrl = this.config.get('KYC_VERIFIER_APP_BASE_URL');
+    const generatedUrl = `${urlSanitizer(veriferAppBaseUrl, true)}${serviceId}`;
     const payload = {
       serviceId,
       themeColor,
@@ -73,15 +74,12 @@ export class WebpageConfigService {
       pageTitle,
       pageType,
       tenantUrl,
+      generatedUrl,
     };
 
     const webpageConfigData = await this.webPageConfigRepo.createwebPageConfig(
       payload,
     );
-    const id = webpageConfigData['_id'].toString();
-    const veriferAppBaseUrl = this.config.get('KYC_VERIFIER_APP_BASE_URL');
-    const generatedUrl = `${urlSanitizer(veriferAppBaseUrl, true)}${id}`;
-    this.webPageConfigRepo.findOneAndUpdate({ _id: id }, { generatedUrl });
     const webpageConfigObject = webpageConfigData;
     const { ssiAccessToken, kycAccessToken, ...responseData } =
       webpageConfigObject;
@@ -94,6 +92,10 @@ export class WebpageConfigService {
   }
 
   fetchWebPageConfigurationList(serviceId: string) {
+    Logger.log(
+      'Inside fetchWebPageConfigurationList(): to fetch webpage configuration of a service',
+      'WebpageConfigService',
+    );
     return this.webPageConfigRepo.findAWebpageConfig({ serviceId });
   }
 

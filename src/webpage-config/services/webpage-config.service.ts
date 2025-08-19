@@ -42,6 +42,7 @@ export class WebpageConfigService {
       pageDescription,
       pageTitle,
       pageType = 'kyc',
+      contactEmail,
     } = createWebpageConfigDto;
     const serviceDetail = await this.appRepository.findOne({
       appId: serviceId,
@@ -75,6 +76,7 @@ export class WebpageConfigService {
       pageType,
       tenantUrl,
       generatedUrl,
+      contactEmail,
     };
 
     const webpageConfigData = await this.webPageConfigRepo.createwebPageConfig(

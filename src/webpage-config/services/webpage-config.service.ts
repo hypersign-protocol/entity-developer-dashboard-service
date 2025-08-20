@@ -25,7 +25,7 @@ export class WebpageConfigService {
     private readonly appAuthKeyService: AppAuthApiKeyService,
     private readonly webPageConfigRepo: WebPageConfigRepository,
     private readonly config: ConfigService,
-  ) { }
+  ) {}
   async storeWebPageConfigDetial(
     serviceId: string,
     createWebpageConfigDto: CreateWebpageConfigDto,
@@ -42,7 +42,7 @@ export class WebpageConfigService {
       pageDescription,
       pageTitle,
       pageType = 'kyc',
-      contactEmail
+      contactEmail,
     } = createWebpageConfigDto;
     const serviceDetail = await this.appRepository.findOne({
       appId: serviceId,
@@ -53,7 +53,7 @@ export class WebpageConfigService {
         `No service found with serviceId: ${serviceId}`,
       ]);
     }
-    const { appName, logoUrl } = serviceDetail;
+    const { appName, logoUrl, env = 'dev' } = serviceDetail;
     const tenantUrl: string = serviceDetail['tenantUrl'];
 
     const tokenAndExpiryDetail = await this.generateTokenBasedOnExpiry(
@@ -88,6 +88,7 @@ export class WebpageConfigService {
     return {
       ...responseData,
       serviceName: appName,
+      developmentStage: env,
       logoUrl,
     };
   }
@@ -106,13 +107,14 @@ export class WebpageConfigService {
         `No service found with serviceId: ${serviceId}`,
       ]);
     }
-    const { appName, logoUrl } = serviceDetail;
+    const { appName, logoUrl, env = 'dev' } = serviceDetail;
     const webPAgeConfigData = await this.webPageConfigRepo.findAWebpageConfig({
       serviceId,
     });
     return {
       ...webPAgeConfigData,
       serviceName: appName,
+      developmentStage: env,
       logoUrl,
     };
   }

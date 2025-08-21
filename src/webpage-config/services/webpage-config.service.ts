@@ -75,7 +75,9 @@ export class WebpageConfigService {
       customExpiryDate,
       serviceDetail.dependentServices[0],
     );
-    const veriferAppBaseUrl = this.config.get('KYC_VERIFIER_APP_BASE_URL');
+    const veriferAppBaseUrl =
+      this.config.get('KYC_VERIFIER_APP_BASE_URL') ||
+      'https://verifier.hypersign.id';
     const generatedUrl = `${urlSanitizer(veriferAppBaseUrl, true)}${serviceId}`;
     const payload = {
       serviceId,

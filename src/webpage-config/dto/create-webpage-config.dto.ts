@@ -119,7 +119,6 @@ export class CreateWebpageConfigResponseDto extends CreateWebpageConfigDto {
     example: 'dev',
   })
   logoUrl: string;
-
 }
 export class CreateWebpageConfigResponseWithDetailDto extends CreateWebpageConfigDto {
   @ApiProperty({

@@ -33,7 +33,7 @@ import { AllExceptionsFilter } from 'src/utils/utils';
 @UsePipes(new ValidationPipe())
 @Controller('api/v1/app')
 export class WebpageConfigController {
-  constructor(private readonly webpageConfigService: WebpageConfigService) { }
+  constructor(private readonly webpageConfigService: WebpageConfigService) {}
 
   @ApiCreatedResponse({
     description: 'Webpage configuration saved successfully',

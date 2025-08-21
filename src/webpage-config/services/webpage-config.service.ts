@@ -53,6 +53,14 @@ export class WebpageConfigService {
         `No service found with serviceId: ${serviceId}`,
       ]);
     }
+    if (
+      !serviceDetail?.dependentServices ||
+      serviceDetail.dependentServices.length === 0
+    ) {
+      throw new BadRequestException(
+        'KYC service must have a dependent SSI service linked to it.',
+      );
+    }
     const { appName, logoUrl, env = 'dev' } = serviceDetail;
     const tenantUrl: string = serviceDetail['tenantUrl'];
 
@@ -61,6 +69,7 @@ export class WebpageConfigService {
       userDetail.accessList,
       expiryType,
       customExpiryDate,
+      serviceDetail.dependentServices[0],
     );
     const veriferAppBaseUrl = this.config.get('KYC_VERIFIER_APP_BASE_URL');
     const generatedUrl = `${urlSanitizer(veriferAppBaseUrl, true)}${serviceId}`;
@@ -140,6 +149,14 @@ export class WebpageConfigService {
         `No service found with serviceId: ${serviceId}`,
       ]);
     }
+    if (
+      !serviceDetail?.dependentServices ||
+      serviceDetail.dependentServices.length === 0
+    ) {
+      throw new BadRequestException(
+        'KYC service must have a dependent SSI service linked to it.',
+      );
+    }
     let tokenDetail;
     const dataToUpdate = { ...updateWebpageConfigDto };
     if (updateWebpageConfigDto.expiryType) {
@@ -148,6 +165,7 @@ export class WebpageConfigService {
         userDetail.accessList,
         updateWebpageConfigDto.expiryType,
         updateWebpageConfigDto.customExpiryDate,
+        serviceDetail.dependentServices[0],
       );
       dataToUpdate['expiryDate'] = tokenDetail.expiryDate;
       dataToUpdate['ssiAccessToken'] = tokenDetail.ssiAccessToken;
@@ -164,6 +182,7 @@ export class WebpageConfigService {
     userAccessList,
     expiryType,
     customExpiryDate,
+    ssiServiceId,
   ) {
     // Get both SSI & KYC access lists
     Logger.log(
@@ -226,11 +245,18 @@ export class WebpageConfigService {
       expiresIn = days * 24;
       expiryDate = new Date(Date.now() + expiresIn * 60 * 60 * 1000);
     }
-
+    const ssiServiceDetail = await this.appRepository.findOne({
+      appId: ssiServiceId,
+    });
+    if (!ssiServiceDetail) {
+      throw new BadRequestException([
+        `No service found with dependentServiceId: ${ssiServiceId}`,
+      ]);
+    }
     // Get access tokens
     const ssiAccessTokenDetail = await this.appAuthService.getAccessToken(
       GRANT_TYPES.access_service_ssi,
-      serviceDetail,
+      ssiServiceDetail,
       expiresIn,
     );
     const kycAccessTokenDetail = await this.appAuthService.getAccessToken(

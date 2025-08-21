@@ -16,6 +16,7 @@ import { WebpageConfigService } from '../services/webpage-config.service';
 import {
   CreateWebpageConfigDto,
   CreateWebpageConfigResponseDto,
+  CreateWebpageConfigResponseWithDetailDto,
   FetchWebpageConfigResponseDto,
 } from '../dto/create-webpage-config.dto';
 import { UpdateWebpageConfigDto } from '../dto/update-webpage-config.dto';
@@ -32,11 +33,11 @@ import { AllExceptionsFilter } from 'src/utils/utils';
 @UsePipes(new ValidationPipe())
 @Controller('api/v1/app')
 export class WebpageConfigController {
-  constructor(private readonly webpageConfigService: WebpageConfigService) {}
+  constructor(private readonly webpageConfigService: WebpageConfigService) { }
 
   @ApiCreatedResponse({
     description: 'Webpage configuration saved successfully',
-    type: CreateWebpageConfigResponseDto,
+    type: CreateWebpageConfigResponseWithDetailDto,
   })
   @Post(':appId/kyc-webpage-config')
   configureWebPageDetail(
@@ -55,7 +56,6 @@ export class WebpageConfigController {
   @ApiOkResponse({
     description: 'Webpage configuration list',
     type: FetchWebpageConfigResponseDto,
-    isArray: true,
   })
   @Get(':appId/kyc-webpage-config')
   async fetchWebPageConfigurationDetail(@Param('appId') appId: string) {

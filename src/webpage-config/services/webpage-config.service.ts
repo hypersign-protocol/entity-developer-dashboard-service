@@ -2,9 +2,13 @@ import {
   BadRequestException,
   Injectable,
   Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { CreateWebpageConfigDto } from '../dto/create-webpage-config.dto';
+import {
+  CreateWebpageConfigDto,
+  CreateWebpageConfigResponseDto,
+} from '../dto/create-webpage-config.dto';
 import { UpdateWebpageConfigDto } from '../dto/update-webpage-config.dto';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
 import { AppAuthApiKeyService } from 'src/app-auth/services/app-auth-apikey.service';
@@ -30,7 +34,7 @@ export class WebpageConfigService {
     serviceId: string,
     createWebpageConfigDto: CreateWebpageConfigDto,
     userDetail,
-  ) {
+  ): Promise<CreateWebpageConfigResponseDto> {
     Logger.log(
       'Inside storeWebPageConfigDetial to store webpage configuration',
       'WebpageConfigService',
@@ -102,7 +106,9 @@ export class WebpageConfigService {
     };
   }
 
-  async fetchWebPageConfigurationList(serviceId: string) {
+  async fetchWebPageConfigurationList(
+    serviceId: string,
+  ): Promise<CreateWebpageConfigResponseDto> {
     Logger.log(
       'Inside fetchWebPageConfigurationList(): to fetch webpage configuration of a service',
       'WebpageConfigService',
@@ -120,6 +126,11 @@ export class WebpageConfigService {
     const webPAgeConfigData = await this.webPageConfigRepo.findAWebpageConfig({
       serviceId,
     });
+    if (!webPAgeConfigData) {
+      throw new NotFoundException(
+        `No webpage configuration found for serviceId: ${serviceId}`,
+      );
+    }
     return {
       ...webPAgeConfigData,
       serviceName: appName,
@@ -128,11 +139,21 @@ export class WebpageConfigService {
     };
   }
 
-  fetchAWebPageConfigurationDetail(id: string, serviceId: string) {
-    return this.webPageConfigRepo.findAWebpageConfig({
-      _id: id,
-      serviceId,
-    });
+  async fetchAWebPageConfigurationDetail(
+    id: string,
+    serviceId: string,
+  ): Promise<CreateWebpageConfigDto> {
+    const webpageConfiguration =
+      await this.webPageConfigRepo.findAWebpageConfig({
+        _id: id,
+        serviceId,
+      });
+    if (!webpageConfiguration || webpageConfiguration == null) {
+      throw new NotFoundException(
+        `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
+      );
+    }
+    return webpageConfiguration;
   }
 
   async updateWebPageConfiguration(
@@ -140,7 +161,7 @@ export class WebpageConfigService {
     updateWebpageConfigDto: UpdateWebpageConfigDto,
     userDetail,
     serviceId,
-  ) {
+  ): Promise<CreateWebpageConfigResponseDto> {
     const serviceDetail = await this.appRepository.findOne({
       appId: serviceId,
     });
@@ -171,11 +192,37 @@ export class WebpageConfigService {
       dataToUpdate['ssiAccessToken'] = tokenDetail.ssiAccessToken;
       dataToUpdate['kycAccessToken'] = tokenDetail.kycAccessToken;
     }
-    return this.webPageConfigRepo.findOneAndUpdate({ _id: id }, dataToUpdate);
+    const webpageConfiguration = await this.webPageConfigRepo.findOneAndUpdate(
+      { _id: id },
+      dataToUpdate,
+    );
+    if (!webpageConfiguration || webpageConfiguration == null) {
+      throw new NotFoundException(
+        `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
+      );
+    }
+    const { appName, logoUrl, env = 'dev' } = serviceDetail;
+
+    return {
+      ...webpageConfiguration,
+      serviceName: appName,
+      developmentStage: env,
+      logoUrl,
+    };
   }
 
-  removeWebPageConfiguration(id: string, serviceId: string) {
-    return this.webPageConfigRepo.findOneAndDelete({ _id: id, serviceId });
+  async removeWebPageConfiguration(id: string, serviceId: string) {
+    const deletedConfig = await this.webPageConfigRepo.findOneAndDelete({
+      _id: id,
+      serviceId,
+    });
+    if (!deletedConfig) {
+      throw new NotFoundException(
+        `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
+      );
+    }
+
+    return deletedConfig;
   }
   private async generateTokenBasedOnExpiry(
     serviceDetail,

@@ -39,7 +39,7 @@ export class WebPageConfigRepository {
       'findListOfWebpageConfig() method: starts, fetch list of webpageConfiguration data from db',
       'WebPageConfigRepository',
     );
-    return this.webPageConfigModel.findOne(webpageCofigFilterQuery);
+    return this.webPageConfigModel.findOne(webpageCofigFilterQuery).lean();
   }
   async findOneAndUpdate(
     webpageCofigFilterQuery: FilterQuery<WebPageConfig>,

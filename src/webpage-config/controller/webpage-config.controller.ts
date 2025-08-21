@@ -58,7 +58,11 @@ export class WebpageConfigController {
     isArray: true,
   })
   @Get(':appId/kyc-webpage-config')
-  fetchWebPageConfigurationDetail(@Param('appId') appId: string) {
+  async fetchWebPageConfigurationDetail(@Param('appId') appId: string) {
+    Logger.log(
+      'Inside fetchWebPageConfigurationDetail() to fetch webpageData',
+      'WebpageConfigController',
+    );
     return this.webpageConfigService.fetchWebPageConfigurationList(appId);
   }
 

@@ -35,7 +35,6 @@ export class WebpageConfigService {
       'Inside storeWebPageConfigDetial to store webpage configuration',
       'WebpageConfigService',
     );
-
     const {
       expiryType,
       customExpiryDate,
@@ -43,6 +42,7 @@ export class WebpageConfigService {
       pageDescription,
       pageTitle,
       pageType = 'kyc',
+      contactEmail,
     } = createWebpageConfigDto;
     const serviceDetail = await this.appRepository.findOne({
       appId: serviceId,
@@ -53,7 +53,7 @@ export class WebpageConfigService {
         `No service found with serviceId: ${serviceId}`,
       ]);
     }
-    const { appName, logoUrl } = serviceDetail;
+    const { appName, logoUrl, env = 'dev' } = serviceDetail;
     const tenantUrl: string = serviceDetail['tenantUrl'];
 
     const tokenAndExpiryDetail = await this.generateTokenBasedOnExpiry(
@@ -62,6 +62,8 @@ export class WebpageConfigService {
       expiryType,
       customExpiryDate,
     );
+    const veriferAppBaseUrl = this.config.get('KYC_VERIFIER_APP_BASE_URL');
+    const generatedUrl = `${urlSanitizer(veriferAppBaseUrl, true)}${serviceId}`;
     const payload = {
       serviceId,
       themeColor,
@@ -73,28 +75,48 @@ export class WebpageConfigService {
       pageTitle,
       pageType,
       tenantUrl,
+      generatedUrl,
+      contactEmail,
     };
 
     const webpageConfigData = await this.webPageConfigRepo.createwebPageConfig(
       payload,
     );
-    const id = webpageConfigData['_id'].toString();
-    const veriferAppBaseUrl = this.config.get('KYC_VERIFIER_APP_BASE_URL');
-    const generatedUrl = `${urlSanitizer(veriferAppBaseUrl, true)}${id}`;
-    this.webPageConfigRepo.findOneAndUpdate({ _id: id }, { generatedUrl });
     const webpageConfigObject = webpageConfigData;
     const { ssiAccessToken, kycAccessToken, ...responseData } =
       webpageConfigObject;
     return {
       ...responseData,
       serviceName: appName,
+      developmentStage: env,
       logoUrl,
-      generatedUrl,
     };
   }
 
-  fetchWebPageConfigurationList(serviceId: string) {
-    return this.webPageConfigRepo.findAWebpageConfig({ serviceId });
+  async fetchWebPageConfigurationList(serviceId: string) {
+    Logger.log(
+      'Inside fetchWebPageConfigurationList(): to fetch webpage configuration of a service',
+      'WebpageConfigService',
+    );
+    const serviceDetail = await this.appRepository.findOne({
+      appId: serviceId,
+    });
+
+    if (!serviceDetail) {
+      throw new BadRequestException([
+        `No service found with serviceId: ${serviceId}`,
+      ]);
+    }
+    const { appName, logoUrl, env = 'dev' } = serviceDetail;
+    const webPAgeConfigData = await this.webPageConfigRepo.findAWebpageConfig({
+      serviceId,
+    });
+    return {
+      ...webPAgeConfigData,
+      serviceName: appName,
+      developmentStage: env,
+      logoUrl,
+    };
   }
 
   fetchAWebPageConfigurationDetail(id: string, serviceId: string) {

@@ -105,7 +105,7 @@ export class AppRepository {
               then: {
                 $concat: [
                   '$serviceDomainProtocol',
-                  '//:',
+                  '://',
                   '$subdomain',
                   '.',
                   '$serviceDomainHostname',
@@ -114,7 +114,7 @@ export class AppRepository {
               else: {
                 $concat: [
                   '$serviceDomainProtocol',
-                  '//:',
+                  '://',
                   '$serviceDomainHostname',
                 ],
               },

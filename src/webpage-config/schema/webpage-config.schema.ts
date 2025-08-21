@@ -26,6 +26,8 @@ export class WebPageConfig {
   generatedUrl?: string;
   @Prop({ type: String })
   tenantUrl: string;
+  @Prop({ type: String, required: false })
+  contactEmail?: string;
 }
 
 export const WebPageConfigSchema = SchemaFactory.createForClass(WebPageConfig);

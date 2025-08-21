@@ -1,4 +1,3 @@
-import { Optional } from '@nestjs/common';
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsDateString,
@@ -89,19 +88,11 @@ export class CreateWebpageConfigDto {
 
 export class CreateWebpageConfigResponseDto extends CreateWebpageConfigDto {
   @ApiProperty({
-    name: '_id',
-    description: 'unique identifier',
-    example: '689dcd156110dbbcd91a472d',
-  })
-  @IsString()
-  @IsNotEmpty()
-  _id: string;
-  @ApiProperty({
     name: 'expiryDate',
     description: 'Date after which url will be invalid',
     example: '2025-11-12T11:48:37.380Z',
   })
-  expiryDate: string;
+  expiryDate: Date;
   @ApiProperty({
     name: 'generatedUrl',
     description: 'Generated unique URL for the page',
@@ -109,26 +100,52 @@ export class CreateWebpageConfigResponseDto extends CreateWebpageConfigDto {
   })
   @IsString()
   @IsNotEmpty()
-  generatedUrl: string;
+  generatedUrl?: string;
   @ApiProperty({
-    name: 'generatedUrl',
-    description: 'Generated unique URL for the page',
+    name: 'serviceName',
+    description: 'Name of the kyc service',
+    example: 'Kyc service',
+  })
+  serviceName: string;
+  @ApiProperty({
+    name: 'developmentStage',
+    description: 'Development stage of kyc service',
+    example: 'dev',
+  })
+  developmentStage: string;
+  @ApiProperty({
+    name: 'logoUrl',
+    description: 'Logo url of the kyc service',
+    example: 'dev',
+  })
+  logoUrl: string;
+}
+export class CreateWebpageConfigResponseWithDetailDto extends CreateWebpageConfigResponseDto {
+  @ApiProperty({
+    name: 'createdAt',
+    description: 'Time at which document is created',
     example: '2025-08-14T11:48:37.389Z',
   })
   @IsString()
-  @IsNotEmpty()
   createdAt: string;
   @ApiProperty({
-    name: 'generatedUrl',
-    description: 'Generated unique URL for the page',
-    example: '2025-08-14T11:48:37.389Z',
+    name: 'updatedAt',
+    description: 'Document updation time',
+    example: '2025-08-14T12:48:37.389Z',
+  })
+  @IsString()
+  updatedAt: string;
+  @ApiProperty({
+    name: '_id',
+    description: 'unique identifier',
+    example: '689dcd156110dbbcd91a472d',
   })
   @IsString()
   @IsNotEmpty()
-  updatedAt: string;
+  _id: string;
 }
 
-export class FetchWebpageConfigResponseDto extends CreateWebpageConfigResponseDto {
+export class FetchWebpageConfigResponseDto extends CreateWebpageConfigResponseWithDetailDto {
   @ApiProperty({
     name: 'ssiAccessToken',
     description: 'ssiToken',
@@ -146,17 +163,17 @@ export class FetchWebpageConfigResponseDto extends CreateWebpageConfigResponseDt
   @IsNotEmpty()
   kycAccessToken: string;
   @ApiProperty({
-    name: 'generatedUrl',
-    description: 'Generated unique URL for the page',
+    name: 'createdAt',
+    description: 'Document creation date',
     example: '2025-08-14T11:48:37.389Z',
   })
   @IsString()
   @IsNotEmpty()
   createdAt: string;
   @ApiProperty({
-    name: 'generatedUrl',
-    description: 'Generated unique URL for the page',
-    example: '2025-08-14T11:48:37.389Z',
+    name: 'updatedAt',
+    description: 'DOcument updation date',
+    example: '2025-08-14T12:48:37.389Z',
   })
   @IsString()
   @IsNotEmpty()

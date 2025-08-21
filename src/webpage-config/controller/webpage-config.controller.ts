@@ -16,6 +16,7 @@ import { WebpageConfigService } from '../services/webpage-config.service';
 import {
   CreateWebpageConfigDto,
   CreateWebpageConfigResponseDto,
+  CreateWebpageConfigResponseWithDetailDto,
   FetchWebpageConfigResponseDto,
 } from '../dto/create-webpage-config.dto';
 import { UpdateWebpageConfigDto } from '../dto/update-webpage-config.dto';
@@ -36,7 +37,7 @@ export class WebpageConfigController {
 
   @ApiCreatedResponse({
     description: 'Webpage configuration saved successfully',
-    type: CreateWebpageConfigResponseDto,
+    type: CreateWebpageConfigResponseWithDetailDto,
   })
   @Post(':appId/kyc-webpage-config')
   configureWebPageDetail(
@@ -55,7 +56,6 @@ export class WebpageConfigController {
   @ApiOkResponse({
     description: 'Webpage configuration list',
     type: FetchWebpageConfigResponseDto,
-    isArray: true,
   })
   @Get(':appId/kyc-webpage-config')
   async fetchWebPageConfigurationDetail(@Param('appId') appId: string) {
@@ -83,7 +83,7 @@ export class WebpageConfigController {
 
   @ApiOkResponse({
     description: 'Webpage configuration updated successfully',
-    type: CreateWebpageConfigResponseDto,
+    type: FetchWebpageConfigResponseDto,
   })
   @Patch(':appId/kyc-webpage-config/:id')
   updateWebPageConfiguration(

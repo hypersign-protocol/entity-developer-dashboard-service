@@ -83,7 +83,7 @@ export class WebpageConfigController {
 
   @ApiOkResponse({
     description: 'Webpage configuration updated successfully',
-    type: CreateWebpageConfigResponseDto,
+    type: FetchWebpageConfigResponseDto,
   })
   @Patch(':appId/kyc-webpage-config/:id')
   updateWebPageConfiguration(

@@ -120,7 +120,7 @@ export class CreateWebpageConfigResponseDto extends CreateWebpageConfigDto {
   })
   logoUrl: string;
 }
-export class CreateWebpageConfigResponseWithDetailDto extends CreateWebpageConfigDto {
+export class CreateWebpageConfigResponseWithDetailDto extends CreateWebpageConfigResponseDto {
   @ApiProperty({
     name: 'createdAt',
     description: 'Time at which document is created',
@@ -163,17 +163,17 @@ export class FetchWebpageConfigResponseDto extends CreateWebpageConfigResponseWi
   @IsNotEmpty()
   kycAccessToken: string;
   @ApiProperty({
-    name: 'generatedUrl',
-    description: 'Generated unique URL for the page',
+    name: 'createdAt',
+    description: 'Document creation date',
     example: '2025-08-14T11:48:37.389Z',
   })
   @IsString()
   @IsNotEmpty()
   createdAt: string;
   @ApiProperty({
-    name: 'generatedUrl',
-    description: 'Generated unique URL for the page',
-    example: '2025-08-14T11:48:37.389Z',
+    name: 'updatedAt',
+    description: 'DOcument updation date',
+    example: '2025-08-14T12:48:37.389Z',
   })
   @IsString()
   @IsNotEmpty()

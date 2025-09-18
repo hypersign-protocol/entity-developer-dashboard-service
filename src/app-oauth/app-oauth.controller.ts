@@ -77,7 +77,7 @@ export class AppOauthController {
   })
   @ApiQuery({
     name: 'grant_type',
-    description: 'Grant type for this token',
+    description: 'Grant type for access token',
     required: false,
     enum: GRANT_TYPES,
   })

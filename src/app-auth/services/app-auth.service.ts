@@ -616,7 +616,7 @@ export class AppAuthService {
           grantType !== GRANT_TYPES.access_service_kyb
         ) {
           throw new BadRequestException([
-            'You can only choose access_service_kyc or access_service_kyb for Cavach service',
+            'Choose access_service_kyc or access_service_kyb for Cavach service',
           ]);
         }
         grant_type = grantType || GRANT_TYPES.access_service_kyc;
@@ -772,7 +772,7 @@ export class AppAuthService {
       }
       case SERVICE_TYPES.CAVACH_API: {
         if (
-          grantType != 'access_service_kyc' &&
+          grantType != GRANT_TYPES.access_service_kyc &&
           grantType != GRANT_TYPES.access_service_kyb
         ) {
           throw new BadRequestException(

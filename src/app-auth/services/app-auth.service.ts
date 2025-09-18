@@ -33,6 +33,7 @@ export enum GRANT_TYPES {
   access_service_kyc = 'access_service_kyc',
   access_service_ssi = 'access_service_ssi',
   access_service_quest = 'access_service_quest',
+  access_service_kyb = 'access_service_kyb',
 }
 
 @Injectable()
@@ -549,6 +550,7 @@ export class AppAuthService {
   async generateAccessToken(
     appSecreatKey: string,
     expiresin = 4,
+    grantType,
   ): Promise<{ access_token; expiresIn; tokenType }> {
     Logger.log('generateAccessToken() method: starts....', 'AppAuthService');
 
@@ -608,7 +610,16 @@ export class AppAuthService {
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
-        grant_type = GRANT_TYPES.access_service_kyc;
+        if (
+          grantType &&
+          grantType !== GRANT_TYPES.access_service_kyc &&
+          grantType !== GRANT_TYPES.access_service_kyb
+        ) {
+          throw new BadRequestException([
+            'You can only choose access_service_kyc or access_service_kyb for Cavach service',
+          ]);
+        }
+        grant_type = grantType || GRANT_TYPES.access_service_kyc;
         if (userDetails.accessList && userDetails.accessList.length > 0) {
           accessList = userDetails.accessList
             .map((x) => {
@@ -711,6 +722,8 @@ export class AppAuthService {
         break;
       case GRANT_TYPES.access_service_kyc:
         break;
+      case GRANT_TYPES.access_service_kyb:
+        break;
       case GRANT_TYPES.access_service_quest:
         break;
       default: {
@@ -758,7 +771,10 @@ export class AppAuthService {
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
-        if (grantType != 'access_service_kyc') {
+        if (
+          grantType != 'access_service_kyc' &&
+          grantType != GRANT_TYPES.access_service_kyb
+        ) {
           throw new BadRequestException(
             'Invalid grant type for this service ' + appId,
           );

@@ -12,7 +12,10 @@ import {
   Req,
 } from '@nestjs/common';
 
-import { AppAuthService } from 'src/app-auth/services/app-auth.service';
+import {
+  AppAuthService,
+  GRANT_TYPES,
+} from 'src/app-auth/services/app-auth.service';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -72,15 +75,26 @@ export class AppOauthController {
     description: 'Unauthorized',
     type: GenerateTokenError,
   })
+  @ApiQuery({
+    name: 'grant_type',
+    description: 'The type of grant used to request an access token.',
+    required: false,
+    enum: GRANT_TYPES,
+  })
   @UsePipes(ValidationPipe)
   generateAccessToken(
     @Headers('X-Api-Secret-Key') apiSectretKey: string,
     @AppSecretHeader() appSecreatKey,
     @Headers('ExpiresIn') oauthexpiresin: string,
     @OauthTokenExpiryHeader() expiresin,
+    @Query('grant_type') grantType,
   ): Promise<{ access_token; expiresIn; tokenType }> {
     Logger.log('reGenerateAppSecretKey() method: starts', 'AppOAuthController');
-    return this.appAuthService.generateAccessToken(appSecreatKey, expiresin);
+    return this.appAuthService.generateAccessToken(
+      appSecreatKey,
+      expiresin,
+      grantType,
+    );
   }
 
   // grant type: [access_service], ?grant_type=access_service&serviceId=

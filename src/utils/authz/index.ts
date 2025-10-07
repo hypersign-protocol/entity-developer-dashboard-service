@@ -66,7 +66,7 @@ export async function generateAuthzGrantTxnMessage(
     amount: [
       {
         denom: 'uhid',
-        amount: '500',
+        amount: '20000',
       },
     ],
     gas: '500000',

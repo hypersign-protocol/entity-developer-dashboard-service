@@ -1,4 +1,4 @@
-FROM node:16
+FROM node:20.19
 WORKDIR /usr/src/app
 
 RUN mkdir -p /geoipdb
@@ -7,11 +7,11 @@ RUN curl -o /geoipdb/GeoLite2-City.mmdb https://storage.googleapis.com/geoliteci
 
 COPY ./package.json .
 COPY ./tsconfig.json .
-RUN npm cache clean --force
-RUN npm install
+COPY ./yarn.lock .
 COPY . .
-RUN npm run build
-CMD ["npm","run", "start"]
+RUN yarn install --frozen-lockfile
+RUN yarn build
+CMD ["yarn", "start:prod"]
 
 
 

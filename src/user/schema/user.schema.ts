@@ -12,6 +12,11 @@ export interface UserAccess {
   expiryDate: Date;
 }
 
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  SUPER_ADMIN = 'SUPER_ADMIN',
+}
+
 export type UserDocument = User & Document;
 class Authenticator {
   @Prop({ required: true, enum: AuthneticatorType })
@@ -38,6 +43,13 @@ export class User {
   accessList: Array<UserAccess>;
   @Prop({ default: [] })
   authenticators?: Authenticator[];
+  @Prop({
+    required: false,
+    type: String,
+    enum: UserRole,
+    default: UserRole.ADMIN,
+  })
+  role?: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

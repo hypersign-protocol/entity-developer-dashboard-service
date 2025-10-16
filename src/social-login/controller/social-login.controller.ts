@@ -41,6 +41,7 @@ import {
   MFACodeVerificationDto,
 } from '../dto/request.dto';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
+import { UserRole } from 'src/user/schema/user.schema';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller()
@@ -124,6 +125,8 @@ export class SocialLoginController {
         ({ secret, ...rest }) => rest,
       );
       userDetail.authenticators = authenticator;
+      userDetail.role = userDetail.role || UserRole.ADMIN;
+      userDetail;
     }
     return {
       status: 200,

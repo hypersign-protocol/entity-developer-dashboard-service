@@ -21,7 +21,7 @@ import {
   Generate2FA,
   MFACodeVerificationDto,
 } from '../dto/request.dto';
-import { UserDocument } from 'src/user/schema/user.schema';
+import { UserDocument, UserRole } from 'src/user/schema/user.schema';
 
 @Injectable()
 export class SocialLoginService {
@@ -82,6 +82,7 @@ export class SocialLoginService {
         name: name,
         profileIcon,
         accessList: [...ssiAccessList, ...kycAccessList, ...questAccessList],
+        role: UserRole.ADMIN,
       });
     } else {
       const updates: Partial<UserDocument> = {};
@@ -117,6 +118,7 @@ export class SocialLoginService {
         : false,
       authenticatorType: authenticator?.type,
       aud: domain,
+      role: userInfo?.role || UserRole.ADMIN,
     };
     const authToken = await this.generateAuthToken(payload);
     const refreshToken = await this.generateRefreshToken(payload);
@@ -196,6 +198,7 @@ export class SocialLoginService {
       authenticatorType,
       accessAccount: user.accessAccount,
       aud: domain,
+      role: user?.role || UserRole.ADMIN,
     };
     const accessToken = await this.jwt.signAsync(payload, {
       expiresIn: '24h',

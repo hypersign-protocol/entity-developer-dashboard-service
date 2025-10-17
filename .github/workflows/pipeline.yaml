@@ -121,6 +121,10 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__REDIRECT_URL__#${{ secrets.REDIRECT_URL }}#" {} \; 
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__INVITATIONURL__#${{ secrets.INVITATIONURL }}#" {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__REDIS_HOST__#${{ secrets.REDIS_HOST }}#" {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYC_VERIFIER_APP_BASE_URL__#${{ secrets.KYC_VERIFIER_APP_BASE_URL }}#" {} \;     
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MAIL_QUEUE__#${{ secrets.MAIL_QUEUE }}#" {} \;
     - name: "Replace secrets"
@@ -131,5 +135,7 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__JWT_REFRESH_SECRET__/${{ secrets.JWT_REFRESH_SECRET }}/g'' {} \;
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__COOKIE_DOMAIN__/${{ secrets.COOKIE_DOMAIN }}/g'' {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__GEOLOCATION_DB_PATH__#${{ secrets.GEOLOCATION_DB_PATH }}#" {} \;
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

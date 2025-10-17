@@ -6,10 +6,7 @@ export class CreateInviteDto {
     name: 'emailId',
     type: String,
   })
-  @IsEmail()
-  @Matches(/^.+@gmail\.com$/, {
-    message: 'Email must be a valid Gmail address',
-  })
+  @IsEmail({}, { message: 'Email must be a valid email address' })
   emailId: string;
 }
 

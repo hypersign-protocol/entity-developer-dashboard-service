@@ -29,10 +29,11 @@ import { AuthzCreditService } from 'src/credits/services/credits.service';
 import { AuthZCreditsRepository } from 'src/credits/repositories/authz.repository';
 import { EdvClientKeysManager } from 'src/edv/services/edv.singleton';
 
-enum GRANT_TYPES {
+export enum GRANT_TYPES {
   access_service_kyc = 'access_service_kyc',
   access_service_ssi = 'access_service_ssi',
   access_service_quest = 'access_service_quest',
+  access_service_kyb = 'access_service_kyb',
 }
 
 @Injectable()
@@ -325,8 +326,8 @@ export class AppAuthService {
     });
 
     const json = await res.json();
-    const txtRecords = json.Answer.filter((record: any) => record.type === 16);
-    const txtRecord = txtRecords.find((record: any) =>
+    const txtRecords = json.Answer?.filter((record: any) => record.type === 16);
+    const txtRecord = txtRecords?.find((record: any) =>
       record.data.includes(txt),
     );
     if (!txtRecord) {
@@ -416,6 +417,7 @@ export class AppAuthService {
     // this should not happen everytime we update a record, only once.
     // so better to issue verifiable credential
     if (
+      env === 'prod' &&
       hasDomainVerified &&
       domain &&
       domain != '' &&
@@ -456,7 +458,6 @@ export class AppAuthService {
         );
       }
     }
-
     const app: App = await this.appRepository.findOneAndUpdate(
       { appId, userId },
       updataAppDto,
@@ -531,7 +532,7 @@ export class AppAuthService {
     return { appId: appDetail.appId };
   }
 
-  private checkIfDateExpired(expiryDate: Date | null) {
+  public checkIfDateExpired(expiryDate: Date | null) {
     if (!expiryDate) {
       // if expiryDate null, then its never expired
       return false;
@@ -549,6 +550,7 @@ export class AppAuthService {
   async generateAccessToken(
     appSecreatKey: string,
     expiresin = 4,
+    grantType,
   ): Promise<{ access_token; expiresIn; tokenType }> {
     Logger.log('generateAccessToken() method: starts....', 'AppAuthService');
 
@@ -608,7 +610,16 @@ export class AppAuthService {
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
-        grant_type = GRANT_TYPES.access_service_kyc;
+        if (
+          grantType &&
+          grantType !== GRANT_TYPES.access_service_kyc &&
+          grantType !== GRANT_TYPES.access_service_kyb
+        ) {
+          throw new BadRequestException([
+            'Choose access_service_kyc or access_service_kyb for Cavach service',
+          ]);
+        }
+        grant_type = grantType || GRANT_TYPES.access_service_kyc;
         if (userDetails.accessList && userDetails.accessList.length > 0) {
           accessList = userDetails.accessList
             .map((x) => {
@@ -651,7 +662,7 @@ export class AppAuthService {
     return this.getAccessToken(grant_type, appDetail, expiresin, accessList);
   }
 
-  private async getAccessToken(
+  public async getAccessToken(
     grantType,
     appDetail,
     expiresin = 4,
@@ -692,7 +703,7 @@ export class AppAuthService {
       expiresIn: expiresin.toString() + 'h',
       secret,
     });
-    const expiresIn = (4 * 1 * 60 * 60 * 1000) / 1000;
+    const expiresIn = (expiresin * 1 * 60 * 60 * 1000) / 1000;
     Logger.log('generateAccessToken() method: ends....', 'AppAuthService');
 
     return { access_token: token, expiresIn, tokenType: 'Bearer' };
@@ -710,6 +721,8 @@ export class AppAuthService {
       case GRANT_TYPES.access_service_ssi:
         break;
       case GRANT_TYPES.access_service_kyc:
+        break;
+      case GRANT_TYPES.access_service_kyb:
         break;
       case GRANT_TYPES.access_service_quest:
         break;
@@ -758,7 +771,10 @@ export class AppAuthService {
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
-        if (grantType != 'access_service_kyc') {
+        if (
+          grantType != GRANT_TYPES.access_service_kyc &&
+          grantType != GRANT_TYPES.access_service_kyb
+        ) {
           throw new BadRequestException(
             'Invalid grant type for this service ' + appId,
           );

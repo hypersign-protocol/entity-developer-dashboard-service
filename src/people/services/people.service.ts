@@ -19,6 +19,7 @@ import { SocialLoginService } from 'src/social-login/services/social-login.servi
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
+import { UserRole } from 'src/user/schema/user.schema';
 
 @Injectable()
 export class PeopleService {
@@ -273,7 +274,7 @@ export class PeopleService {
     delete payload.userId;
 
     payload.accessAccount = accessAccount;
-
+    payload.role = adminData?.role || UserRole.ADMIN;
     const token = await this.socialLoginService.generateAuthToken(payload);
     const refreshToken = await this.socialLoginService.generateRefreshToken(
       payload,

@@ -16,6 +16,9 @@ import { SupportedServiceModule } from 'src/supported-service/supported-service.
 import { SupportedServiceList } from 'src/supported-service/services/service-list';
 import { TwoFAAuthorizationMiddleware } from 'src/utils/middleware/2FA-jwt-authorization.middleware';
 import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
+import { EmailOtpLoginController } from './controller/email-otp-login.controller';
+import { EmailOtpLoginService } from './services/email-otp-login.service';
+import { MailNotificationModule } from 'src/mail-notification/mail-notification.module';
 
 @Module({
   imports: [
@@ -23,9 +26,15 @@ import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware'
     AppAuthModule,
     JwtModule.register({}),
     SupportedServiceModule,
+    MailNotificationModule,
   ],
-  controllers: [SocialLoginController],
-  providers: [SocialLoginService, GoogleStrategy, SupportedServiceList],
+  controllers: [SocialLoginController, EmailOtpLoginController],
+  providers: [
+    SocialLoginService,
+    GoogleStrategy,
+    SupportedServiceList,
+    EmailOtpLoginService,
+  ],
   exports: [SocialLoginService],
 })
 export class SocialLoginModule implements NestModule {
@@ -36,7 +45,7 @@ export class SocialLoginModule implements NestModule {
         path: '/api/v1/login/callback',
         method: RequestMethod.GET,
       })
-      .forRoutes(SocialLoginController);
+      .forRoutes(SocialLoginController, EmailOtpLoginController);
     consumer
       .apply(JWTAuthorizeMiddleware)
       .exclude(

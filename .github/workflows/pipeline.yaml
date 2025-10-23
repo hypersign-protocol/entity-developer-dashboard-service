@@ -118,13 +118,13 @@ jobs:
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__GOOGLE_CLIENT_SECRET__/${{ secrets.GOOGLE_CLIENT_SECRET }}/g'' {} \;
     - name: "Replace secrets"
-      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__REDIRECT_URL__#${{ secrets.REDIRECT_URL }}#" {} \; 
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__REDIRECT_URL__#${{ secrets.REDIRECT_URL }}#" {} \;
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__INVITATIONURL__#${{ secrets.INVITATIONURL }}#" {} \;
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__REDIS_HOST__#${{ secrets.REDIS_HOST }}#" {} \;
     - name: "Replace Secrets"
-      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYC_VERIFIER_APP_BASE_URL__#${{ secrets.KYC_VERIFIER_APP_BASE_URL }}#" {} \;     
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYC_VERIFIER_APP_BASE_URL__#${{ secrets.KYC_VERIFIER_APP_BASE_URL }}#" {} \;
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MAIL_QUEUE__#${{ secrets.MAIL_QUEUE }}#" {} \;
     - name: "Replace secrets"
@@ -137,5 +137,7 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__COOKIE_DOMAIN__/${{ secrets.COOKIE_DOMAIN }}/g'' {} \;
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__GEOLOCATION_DB_PATH__#${{ secrets.GEOLOCATION_DB_PATH }}#" {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__NODE_ENV__#${{ secrets.NODE_ENV }}#" {} \;
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

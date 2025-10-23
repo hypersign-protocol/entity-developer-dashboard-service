@@ -1,0 +1,75 @@
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { randomBytes, createHash } from 'crypto';
+import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
+import { redisClient } from 'src/utils/redis.provider';
+import { GenerateEmailOtpDto } from '../dto/generate-email-otp.dto';
+import getEmailOtpMail from 'src/mail-notification/constants/templates/email-otp.template';
+import { ConfigService } from '@nestjs/config';
+@Injectable()
+export class EmailOtpLoginService {
+  constructor(
+    private readonly mailNotificationService: MailNotificationService,
+    private readonly config: ConfigService,
+  ) {}
+
+  async generateEmailOtp(generateEmailOtpDto: GenerateEmailOtpDto) {
+    const { email } = generateEmailOtpDto;
+    Logger.log(
+      `generateEmailOtp(): Generating OTP for ${email}`,
+      'EmailOtpLoginService',
+    );
+    const otpCoolDownMinute = this.config.get<number>(
+      'OTP_COOLDOWN_MINUTES',
+      1,
+    );
+    const OtpExpiryMinute = this.config.get<number>('OTP_EXPIRY_MINUTES', 5);
+    const cooldownKey = `otp:cooldown:${email}`;
+    const cooldownExists = await redisClient.exists(cooldownKey);
+    if (cooldownExists) {
+      throw new BadRequestException(
+        'Please wait a minute before requesting another OTP',
+      );
+    }
+    // Set cooldown key for 60 seconds
+    await redisClient.set(cooldownKey, '1', 'EX', 60 * otpCoolDownMinute);
+    //Check hourly request limit (max 10 per hour)
+    const otpHourlyLimit = this.config.get<number>('OTP_HOURLY_LIMIT', 10);
+    const countKey = `otp:count:${email}`;
+    const count = await redisClient.incr(countKey);
+    if (count === 1) {
+      await redisClient.expire(countKey, 60 * 60);
+    }
+    if (count > otpHourlyLimit) {
+      throw new BadRequestException(
+        'Too many OTP requests. Try again after 1 hour',
+      );
+    }
+
+    // Generate secure 6-character alphanumeric OTP
+    const otp = randomBytes(3).toString('hex').toUpperCase();
+    // Hash OTP using SHA-256
+    const otpHash = createHash('sha256').update(otp).digest('hex');
+    const otpKey = `otp:${email}`;
+    await redisClient.set(otpKey, otpHash, 'EX', 60 * OtpExpiryMinute);
+    Logger.log(`OTP for ${email} is ${otp}`);
+    const message = getEmailOtpMail(
+      otp,
+      OtpExpiryMinute,
+      'Your One-Time Password (OTP) for Login',
+    );
+    const subject = 'Your One-Time Password (OTP) for Login';
+    await this.sendEmail(email, subject, message);
+    return { message: 'OTP sent successfully' };
+  }
+
+  private sendEmail(email: string, subject: string, message: any): void {
+    this.mailNotificationService.addAJob(
+      {
+        to: email,
+        subject,
+        message,
+      },
+      'send-email-login-otp',
+    );
+  }
+}

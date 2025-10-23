@@ -12,3 +12,11 @@ export class GenerateEmailOtpDto {
   @IsString()
   email: string;
 }
+
+export class GenerateEmailOtpResponse {
+  @ApiProperty({
+    description: 'message',
+    example: 'Otp sent successfully',
+  })
+  message: string;
+}

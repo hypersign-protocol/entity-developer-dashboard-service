@@ -110,20 +110,21 @@ export class PeopleController {
     const { user } = req;
     const data = await this.peopleService.adminLogin(body, user);
     const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
+    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
     res.cookie('authToken', data?.authToken, {
       httpOnly: true,
-      secure: true,
-      domain: cookieDomain,
+      secure: isProduction,
+      domain: isProduction ? cookieDomain : undefined,
       maxAge: 4 * 60 * 60 * 1000,
-      sameSite: 'None',
+      sameSite: isProduction ? 'None' : 'Lax',
       path: '/',
     });
     res.cookie('refreshToken', data?.refreshToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: 'None',
+      secure: isProduction,
+      sameSite: isProduction ? 'None' : 'Lax',
       path: '/',
-      domain: cookieDomain,
+      domain: isProduction ? cookieDomain : undefined,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     return res.json({

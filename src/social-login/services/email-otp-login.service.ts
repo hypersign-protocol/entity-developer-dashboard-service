@@ -13,6 +13,7 @@ import {
 } from '../dto/generate-email-otp.dto';
 import getEmailOtpMail from 'src/mail-notification/constants/templates/email-otp.template';
 import { ConfigService } from '@nestjs/config';
+import { TIME } from 'src/utils/time-constant';
 @Injectable()
 export class EmailOtpLoginService {
   constructor(
@@ -20,6 +21,15 @@ export class EmailOtpLoginService {
     private readonly config: ConfigService,
   ) {}
 
+  /**
+   * Generates and sends a one-time email OTP.
+   * Checks cooldown and hourly request limits, stores the OTP in Redis,
+   * and sends it to the user's email.
+   *
+   * @param generateEmailOtpDto - Object containing the user's email
+   * @returns Confirmation message that OTP was sent
+   * @throws BadRequestException if cooldown or hourly limit is exceeded
+   */
   async generateEmailOtp(generateEmailOtpDto: GenerateEmailOtpDto) {
     const { email } = generateEmailOtpDto;
     Logger.log(
@@ -39,13 +49,18 @@ export class EmailOtpLoginService {
       );
     }
     // Set cooldown key for 60 seconds
-    await redisClient.set(cooldownKey, '1', 'EX', 60 * otpCoolDownMinute);
+    await redisClient.set(
+      cooldownKey,
+      '1',
+      'EX',
+      otpCoolDownMinute * TIME.MINUTE,
+    );
     //Check hourly request limit (max 10 per hour)
     const otpHourlyLimit = this.config.get<number>('OTP_HOURLY_LIMIT', 10);
     const countKey = `otp:count:${email}`;
     const count = await redisClient.incr(countKey);
     if (count === 1) {
-      await redisClient.expire(countKey, 60 * 60);
+      await redisClient.expire(countKey, TIME.HOUR);
     }
     if (count > otpHourlyLimit) {
       throw new BadRequestException(
@@ -58,7 +73,7 @@ export class EmailOtpLoginService {
     // Hash OTP using SHA-256
     const otpHash = createHash('sha256').update(otp).digest('hex');
     const otpKey = `otp:${email}`;
-    await redisClient.set(otpKey, otpHash, 'EX', 60 * OtpExpiryMinute);
+    await redisClient.set(otpKey, otpHash, 'EX', TIME.MINUTE * OtpExpiryMinute);
     Logger.log(`OTP for ${email} is ${otp}`);
     const message = getEmailOtpMail(
       otp,
@@ -69,7 +84,14 @@ export class EmailOtpLoginService {
     await this.sendEmail(email, subject, message);
     return { message: 'OTP sent successfully' };
   }
-
+  /**
+   * Adds an email sending job to the mail queue.
+   *
+   * @param email - Recipient's email address
+   * @param subject - Subject of the email
+   * @param message - Email body/content
+   *
+   */
   private sendEmail(email: string, subject: string, message: any): void {
     this.mailNotificationService.addAJob(
       {
@@ -80,6 +102,16 @@ export class EmailOtpLoginService {
       'send-email-login-otp',
     );
   }
+  /**
+   * Verifies the email OTP for the given email.
+   * Checks the OTP against Redis, tracks invalid attempts,
+   * and deletes the OTP after successful verification.
+   *
+   * @param verifyOtpDto - Object containing `email` and `otp`
+   * @returns The verified email if OTP is valid
+   * @throws BadRequestException if OTP is expired or missing
+   * @throws UnauthorizedException if OTP is invalid
+   */
   async verifyEmailOtp(verifyOtpDto: VerifyEmailOtpDto) {
     Logger.log(
       'Inside verifyEmailOtp() to verify email otp',
@@ -92,6 +124,7 @@ export class EmailOtpLoginService {
     if (!storedHash) {
       throw new BadRequestException('OTP expired');
     }
+    const OtpExpiryMinute = this.config.get<number>('OTP_EXPIRY_MINUTES', 5);
     const maxAttempts = this.config.get<number>('MAX_RETRIE_ATTEMPT', 3);
     const providedHash = createHash('sha256').update(otp).digest('hex');
     const isValid = timingSafeEqual(
@@ -109,7 +142,7 @@ export class EmailOtpLoginService {
           attemptsKey,
           attemptsCount.toString(),
           'EX',
-          5 * 60,
+          OtpExpiryMinute * TIME.MINUTE,
         );
       }
       throw new UnauthorizedException('Invalid OTP');

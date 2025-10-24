@@ -42,6 +42,7 @@ import {
 } from '../dto/request.dto';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { UserRole } from 'src/user/schema/user.schema';
+import { TOKEN_MAX_AGE } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller()
@@ -49,7 +50,7 @@ export class SocialLoginController {
   constructor(
     private readonly socialLoginService: SocialLoginService,
     private readonly config: ConfigService,
-  ) {}
+  ) { }
   @ApiResponse({
     status: 200,
     description: 'Auth url',
@@ -89,7 +90,7 @@ export class SocialLoginController {
       httpOnly: true,
       secure: true,
       domain: cookieDomain,
-      maxAge: 4 * 60 * 60 * 1000,
+      maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
       sameSite: 'None',
       path: '/',
     });
@@ -98,7 +99,7 @@ export class SocialLoginController {
       secure: true,
       sameSite: 'None',
       domain: cookieDomain,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
       path: '/',
     });
     res.redirect(`${this.config.get('REDIRECT_URL')}`);
@@ -157,7 +158,7 @@ export class SocialLoginController {
       httpOnly: true,
       secure: true,
       domain: cookieDomain,
-      maxAge: 4 * 60 * 60 * 1000,
+      maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
       sameSite: 'None',
       path: '/',
     });
@@ -166,7 +167,7 @@ export class SocialLoginController {
       secure: true,
       sameSite: 'None',
       domain: cookieDomain,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
       path: '/',
     });
     res.json({ message: 'Tokens refreshed' });
@@ -211,7 +212,7 @@ export class SocialLoginController {
       httpOnly: true,
       secure: true,
       domain: cookieDomain,
-      maxAge: 4 * 60 * 60 * 1000,
+      maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
       sameSite: 'None',
       path: '/',
     });
@@ -219,7 +220,7 @@ export class SocialLoginController {
       httpOnly: true,
       secure: true,
       domain: cookieDomain,
-      maxAge: 7 * 60 * 60 * 1000,
+      maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
       sameSite: 'None',
       path: '/',
     });

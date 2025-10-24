@@ -25,6 +25,7 @@ import { DeletePersonDto } from '../dto/update-person.dto';
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AllExceptionsFilter } from 'src/utils/utils';
 import { ConfigService } from '@nestjs/config';
+import { TOKEN_MAX_AGE } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('People')
 @ApiBearerAuth('Authorization')
@@ -114,7 +115,7 @@ export class PeopleController {
       httpOnly: true,
       secure: true,
       domain: cookieDomain,
-      maxAge: 4 * 60 * 60 * 1000,
+      maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
       sameSite: 'None',
       path: '/',
     });
@@ -124,7 +125,7 @@ export class PeopleController {
       sameSite: 'None',
       path: '/',
       domain: cookieDomain,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
     });
     return res.json({
       message: `Successfully switched to the ${data.adminEmail} account`,

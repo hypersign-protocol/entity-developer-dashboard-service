@@ -26,6 +26,7 @@ import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { Request } from 'express';
 import { SocialLoginService } from '../services/social-login.service';
 import { UnauthorizedError } from '../dto/response.dto';
+import { TOKEN_MAX_AGE } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller('/api/v1/auth/otp')
@@ -78,7 +79,7 @@ export class EmailOtpLoginController {
         httpOnly: true,
         secure: true,
         domain: cookieDomain,
-        maxAge: 4 * 60 * 60 * 1000,
+        maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
         sameSite: 'None',
         path: '/',
       });
@@ -87,7 +88,7 @@ export class EmailOtpLoginController {
         secure: true,
         sameSite: 'None',
         domain: cookieDomain,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
         path: '/',
       });
       res.redirect(`${this.config.get('REDIRECT_URL')}`);

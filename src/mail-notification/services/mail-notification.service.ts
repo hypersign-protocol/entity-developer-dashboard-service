@@ -43,4 +43,18 @@ export class MailNotificationService {
     };
     await this.mailQueue.add(mailStructure.name, mailStructure.data);
   }
+
+  async addAJob(
+    job: { to: string; subject: string; message: any },
+    name: string,
+  ) {
+    try {
+      Logger.debug('Inside addAJob function.....');
+      job['serverName'] = this.config.get('SERVER_NAME');
+      await this.mailQueue.add(name, job);
+      Logger.debug('a jobs is added in the queue');
+    } catch (e) {
+      Logger.log(e);
+    }
+  }
 }

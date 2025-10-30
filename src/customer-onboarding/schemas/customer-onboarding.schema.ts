@@ -36,9 +36,9 @@ export class CustomerOnboarding {
   @Prop({ required: true, type: String, enum: CountryCode })
   country: string;
   @Prop({ type: String, required: false })
-  billing_address?: string;
+  billingAddress?: string;
   @Prop({ type: String, required: false })
-  linkdinUrl?: string;
+  linkedinUrl?: string;
   @Prop({ type: String, required: false })
   twitterUrl?: string;
   @Prop({ type: String, required: false })

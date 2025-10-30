@@ -86,14 +86,14 @@ export class CreateCustomerOnboardingDto {
   @IsString()
   registrationNumber: string;
   @ApiProperty({
-    name: 'billing_address',
-    description: 'billing_address of the company',
+    name: 'billingAddress',
+    description: 'billing address of the company',
     example: ' ',
     required: false,
   })
   @IsOptional()
   @IsString()
-  billing_address: string;
+  billingAddress: string;
   @ApiProperty({
     name: 'twitterUrl',
     description: 'twitter profile url of the company',
@@ -103,14 +103,14 @@ export class CreateCustomerOnboardingDto {
   @IsString()
   twitterUrl: string;
   @ApiProperty({
-    name: 'linkdinUrl',
+    name: 'linkedinUrl',
     description: 'linkdin profile url of the company',
     example: 'https://www.linkedin.com/company/hypermine',
     required: false,
   })
   @IsNotEmpty()
   @IsString()
-  linkdinUrl?: string;
+  linkedinUrl?: string;
   @ApiProperty({
     name: 'phoneNumber',
     description: 'Contact phone number of the company',

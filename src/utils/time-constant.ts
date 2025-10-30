@@ -10,3 +10,8 @@ export const TOKEN_MAX_AGE = {
   AUTH_TOKEN: 4 * TIME.HOUR * 1000, // 4 hours
   REFRESH_TOKEN: 7 * TIME.DAY * 1000, // 7 days
 };
+
+export enum JobNames {
+  SEND_EMAIL_LOGIN_OTP = 'send-email-login-otp',
+  SEND_TEAM_MATE_INVITATION_MAIL = 'sendTeamMatemail'
+}

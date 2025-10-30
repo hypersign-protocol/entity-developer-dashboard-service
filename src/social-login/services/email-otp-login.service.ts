@@ -13,13 +13,13 @@ import {
 } from '../dto/generate-email-otp.dto';
 import getEmailOtpMail from 'src/mail-notification/constants/templates/email-otp.template';
 import { ConfigService } from '@nestjs/config';
-import { TIME } from 'src/utils/time-constant';
+import { JobNames, TIME } from 'src/utils/time-constant';
 @Injectable()
 export class EmailOtpLoginService {
   constructor(
     private readonly mailNotificationService: MailNotificationService,
     private readonly config: ConfigService,
-  ) {}
+  ) { }
 
   /**
    * Generates and sends a one-time email OTP.
@@ -74,7 +74,6 @@ export class EmailOtpLoginService {
     const otpHash = createHash('sha256').update(otp).digest('hex');
     const otpKey = `otp:${email}`;
     await redisClient.set(otpKey, otpHash, 'EX', TIME.MINUTE * OtpExpiryMinute);
-    Logger.log(`OTP for ${email} is ${otp}`);
     const message = getEmailOtpMail(
       otp,
       OtpExpiryMinute,
@@ -99,7 +98,7 @@ export class EmailOtpLoginService {
         subject,
         message,
       },
-      'send-email-login-otp',
+      JobNames.SEND_EMAIL_LOGIN_OTP,
     );
   }
   /**

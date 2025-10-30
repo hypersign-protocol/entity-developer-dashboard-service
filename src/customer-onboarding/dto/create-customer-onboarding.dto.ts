@@ -1,68 +1,27 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  ArrayNotEmpty,
+  IsArray,
   IsBoolean,
   IsEmail,
-  IsEmpty,
   IsEnum,
   IsIn,
   IsNotEmpty,
+  IsOptional,
   IsString,
-  Matches,
-  MinLength,
-  ValidateNested,
 } from 'class-validator';
-import { CountryCode, CustomerType } from '../constants/enum';
-import { Type } from 'class-transformer';
-
-export class AddressDto {
-  @ApiProperty({
-    example: '123 Baker Street',
-    description: 'Street address of the company',
-  })
-  @IsNotEmpty()
-  @IsString()
-  @MinLength(5, { message: 'Street must be at least 3 characters long' })
-  @Matches(/^(?=.*[a-zA-Z0-9])[a-zA-Z0-9\s,'\-\/#\.]+$/, {
-    message:
-      'Street must contain at least one letter or number, and can include spaces and symbols like , . - / #',
-  })
-  street: string;
-  @ApiProperty({
-    name: 'province',
-    example: 'California',
-    description: 'Province or state where the company is located',
-  })
-  @IsNotEmpty()
-  @IsString()
-  province: string;
-  @ApiProperty({
-    name: 'postalCode',
-    example: '94016',
-    description: 'Postal or ZIP code of the company',
-  })
-  @IsNotEmpty()
-  @IsString()
-  postalCode: string;
-  @ApiProperty({
-    name: 'city',
-    example: 'San Francisco',
-    description: 'City where the company is located',
-  })
-  @IsNotEmpty()
-  @IsString()
-  city: string;
-  @ApiProperty({
-    name: 'country',
-    example: 'US',
-    description:
-      'Country where the company is located (ISO Alpha-2 code preferred)',
-    enum: CountryCode,
-  })
-  @IsNotEmpty()
-  @IsString()
-  @IsIn(CountryCode)
-  country: string;
-}
+import {
+  BusinessField,
+  CountryCode,
+  CustomerType,
+  InterestedService,
+  YearlyVolume,
+} from '../constants/enum';
+import { ExactlyOneTrue } from 'src/utils/customDecorator/kyc-kyb-selection.validator';
+import { IsPhoneNumberByCountry } from 'src/utils/customDecorator/validate-phone-no-country.decorator';
+@ExactlyOneTrue({
+  message: 'Exactly one of isKyc, isKyb, or both must be true',
+})
 export class CreateCustomerOnboardingDto {
   @ApiProperty({
     name: 'companyName',
@@ -73,14 +32,7 @@ export class CreateCustomerOnboardingDto {
   @IsNotEmpty()
   @IsString()
   companyName: string;
-  @ApiProperty({
-    name: 'customerEmail',
-    example: 'xyz@gmail.com',
-    description: 'Email of the customer',
-  })
-  @IsNotEmpty()
-  @IsEmail()
-  customerEmail: string;
+
   @ApiProperty({
     name: 'companyLogo',
     description: 'logo url og company',
@@ -90,11 +42,19 @@ export class CreateCustomerOnboardingDto {
   @IsString()
   companyLogo: string;
   @ApiProperty({
+    name: 'customerEmail',
+    example: 'xyz@gmail.com',
+    description: 'Email of the customer',
+  })
+  @IsNotEmpty()
+  @IsEmail()
+  customerEmail: string;
+  @ApiProperty({
     name: 'domain',
     description: 'domain of the company',
     example: 'hypermine.in',
   })
-  @IsEmpty()
+  @IsNotEmpty()
   @IsString()
   domain: string;
   @ApiProperty({
@@ -107,29 +67,41 @@ export class CreateCustomerOnboardingDto {
   @IsString()
   type: CustomerType;
   @ApiProperty({
-    name: 'taxId',
-    description: 'tax identification number of the company',
-    example: 'TAX123456',
+    name: 'country',
+    example: 'IN',
+    description:
+      'Country where the company is located (ISO Alpha-2 code preferred)',
+    enum: CountryCode,
   })
   @IsNotEmpty()
   @IsString()
-  taxId: string;
+  @IsIn(CountryCode)
+  country: string;
   @ApiProperty({
-    name: 'address',
-    description: 'address of the company',
-    example: AddressDto,
-  })
-  @Type(() => AddressDto)
-  @ValidateNested()
-  address: AddressDto;
-  @ApiProperty({
-    name: 'businessLegalName',
-    description: 'legal name of the business',
-    example: 'Hypermine Solutions Pvt Ltd',
+    name: 'registrationNumber',
+    description: 'registration number of the company',
+    example: '1234567890',
   })
   @IsNotEmpty()
   @IsString()
-  businessLegalName: string;
+  registrationNumber: string;
+  @ApiProperty({
+    name: 'billing_address',
+    description: 'billing_address of the company',
+    example: ' ',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  billing_address: string;
+  @ApiProperty({
+    name: 'twitterUrl',
+    description: 'twitter profile url of the company',
+    example: 'https://www.twitter.com/hypermine',
+  })
+  @IsNotEmpty()
+  @IsString()
+  twitterUrl: string;
   @ApiProperty({
     name: 'linkdinUrl',
     description: 'linkdin profile url of the company',
@@ -139,6 +111,46 @@ export class CreateCustomerOnboardingDto {
   @IsNotEmpty()
   @IsString()
   linkdinUrl?: string;
+  @ApiProperty({
+    name: 'phoneNumber',
+    description: 'Contact phone number of the company',
+    example: '6234572090',
+  })
+  @IsNotEmpty()
+  @IsString()
+  @IsPhoneNumberByCountry()
+  phoneNumber: string;
+  @ApiProperty({
+    name: 'interestedService',
+    description: 'Services interested by customer',
+    example: [InterestedService.ID_VERIFICATION],
+    enum: InterestedService,
+    isArray: true,
+  })
+  @ArrayNotEmpty()
+  @IsEnum(InterestedService, { each: true })
+  interestedService: InterestedService[];
+  @ApiProperty({
+    name: 'yearlyVolume',
+    description: 'Yearly verification volume',
+    example: YearlyVolume.ZERO_ONEK,
+    enum: YearlyVolume,
+  })
+  @IsNotEmpty()
+  @IsEnum(YearlyVolume)
+  yearlyVolume: YearlyVolume;
+  @ApiProperty({
+    name: 'businessField',
+    description: 'Industry fields the company operates in',
+    example: [BusinessField.FINTECH],
+    isArray: true,
+    enum: BusinessField,
+  })
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsEnum(BusinessField, { each: true })
+  businessField: BusinessField[];
+
   @ApiProperty({
     name: 'isKyc',
     description: 'Is kyc service is to be created for customer',

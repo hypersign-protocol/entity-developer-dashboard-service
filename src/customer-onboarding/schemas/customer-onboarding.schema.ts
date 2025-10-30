@@ -1,23 +1,14 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import {
+  BusinessField,
   CountryCode,
   CreditStatus,
   CustomerType,
+  InterestedService,
   StepStatus,
+  YearlyVolume,
 } from '../constants/enum';
 export type CustomerOnboardingDocument = CustomerOnboarding & Document;
-export class CompanyAddressDetail {
-  @Prop({ required: true, type: String })
-  street: string;
-  @Prop({ required: true, type: String })
-  province: string;
-  @Prop({ required: true, type: String })
-  postalCode: string;
-  @Prop({ required: true, type: String })
-  city: string;
-  @Prop({ required: true, type: String, enum: CountryCode })
-  country: string;
-}
 
 export class LogDetail {
   @Prop({ Type: String, required: true })
@@ -42,14 +33,24 @@ export class CustomerOnboarding {
   domain: string;
   @Prop({ type: String, enum: CustomerType, required: true })
   type: CustomerType;
-  @Prop({ type: String })
-  taxId: string;
-  @Prop({ type: CompanyAddressDetail })
-  address: CompanyAddressDetail;
-  @Prop({ type: String })
-  businessLegalName: string;
+  @Prop({ required: true, type: String, enum: CountryCode })
+  country: string;
+  @Prop({ type: String, required: false })
+  billing_address?: string;
   @Prop({ type: String, required: false })
   linkdinUrl?: string;
+  @Prop({ type: String, required: false })
+  twitterUrl?: string;
+  @Prop({ type: String, required: false })
+  phoneNumber?: string;
+  @Prop({ type: String, required: true })
+  registrationNumber: string;
+  @Prop({ type: [String], required: true, enum: InterestedService })
+  interestedService: InterestedService[];
+  @Prop({ type: String, enum: YearlyVolume, required: true })
+  yearlyVolume: string;
+  @Prop({ type: [String], required: true, enum: BusinessField })
+  businessField: BusinessField[];
   @Prop({ type: Boolean, required: false })
   isKyc?: boolean;
   @Prop({ type: Boolean, required: false })
@@ -63,7 +64,7 @@ export class CustomerOnboarding {
   creditStatus?: CreditStatus;
   @Prop({ type: LogDetail, required: false })
   logs?: LogDetail[];
-  @Prop({ type: String, required: false })
+  @Prop({ type: String, required: false }) // didDocumet id for business
   businessId?: string;
   @Prop({ type: String, required: false })
   businessIdName?: string;

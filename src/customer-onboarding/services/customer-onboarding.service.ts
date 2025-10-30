@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { CreateCustomerOnboardingDto } from '../dto/create-customer-onboarding.dto';
 import { UpdateCustomerOnboardingDto } from '../dto/update-customer-onboarding.dto';
 import { CustomerOnboardingRepository } from '../repositories/customer-onboarding.repositories';
@@ -18,40 +23,52 @@ export class CustomerOnboardingService {
     createCustomerOnboardingDto: CreateCustomerOnboardingDto,
     userId: string,
   ) {
-    const onboardingData =
-      await this.customerOnboardingRepository.createCustomerOnboarding({
-        ...createCustomerOnboardingDto,
+    try {
+      const onboardingData =
+        await this.customerOnboardingRepository.createCustomerOnboarding({
+          ...createCustomerOnboardingDto,
+          userId,
+        });
+
+      const requestedServices = createCustomerOnboardingDto?.both
+        ? 'KYC and KYB Service'
+        : createCustomerOnboardingDto?.isKyc
+        ? 'KYC Service'
+        : createCustomerOnboardingDto?.isKyb
+        ? 'KYB Service'
+        : 'No service requested';
+
+      const { customerEmail } = createCustomerOnboardingDto;
+
+      const message = getCreditRequestNotificationMail(
         userId,
+        customerEmail,
+        requestedServices,
+        onboardingData['_id'].toString(),
+      );
+      const superAdminDetails = await this.userRepository.find({
+        role: UserRole.SUPER_ADMIN,
       });
+      const superAdminEmails = superAdminDetails.map((admin) => admin.email);
+      const subject = 'New Customer Onboarding Request Received';
+      await this.sendOnboardingRequestMailToSuperAdmin(
+        message,
+        superAdminEmails,
+        subject,
+      );
 
-    const requestedServices = createCustomerOnboardingDto?.both
-      ? 'KYC and KYB Service'
-      : createCustomerOnboardingDto?.isKyc
-      ? 'KYC Service'
-      : createCustomerOnboardingDto?.isKyb
-      ? 'KYB Service'
-      : 'No service requested';
+      return { message: 'Customer Onboarding detail created successfully' };
+    } catch (e) {
+      if (e.code === 11000) {
+        // Duplicate key error (E11000)
+        const field = Object.keys(e.keyValue || {})[0];
+        const value = e.keyValue ? e.keyValue[field] : '';
+        throw new ConflictException([`${field} '${value}' already exists`]);
+      }
+      throw new BadRequestException([e.message]);
+    }
+  }
 
-    const { customerEmail } = createCustomerOnboardingDto;
-
-    const message = getCreditRequestNotificationMail(
-      userId,
-      customerEmail,
-      requestedServices,
-      onboardingData['_id'].toString(),
-    );
-    const superAdminDetails = await this.userRepository.find({
-      role: UserRole.SUPER_ADMIN,
-    });
-    const superAdminEmails = superAdminDetails.map((admin) => admin.email);
-    const subject = 'New Customer Onboarding Request Received';
-    await this.sendOnboardingRequestMailToSuperAdmin(
-      message,
-      superAdminEmails,
-      subject,
-    );
-
-    return { message: 'Customer Onboarding detail created successfully' };
   }
 
   private async sendOnboardingRequestMailToSuperAdmin(

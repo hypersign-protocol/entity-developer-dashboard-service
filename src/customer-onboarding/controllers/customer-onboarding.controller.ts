@@ -7,6 +7,8 @@ import {
   Param,
   Logger,
   Req,
+  ValidationPipe,
+  UsePipes,
 } from '@nestjs/common';
 import {
   CreateCustomerOnboardingDto,
@@ -27,7 +29,7 @@ import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 export class CustomerOnboardingController {
   constructor(
     private readonly customerOnboardingService: CustomerOnboardingService,
-  ) { }
+  ) {}
   @ApiBearerAuth('Authorization')
   @ApiCreatedResponse({
     description: 'Customer Onboarding detail created successfully',
@@ -37,6 +39,7 @@ export class CustomerOnboardingController {
     description: 'Erorr occured while storing onboarding detail',
     type: AppError,
   })
+  @UsePipes(new ValidationPipe())
   @Post()
   create(
     @Body() createCustomerOnboardingDto: CreateCustomerOnboardingDto,

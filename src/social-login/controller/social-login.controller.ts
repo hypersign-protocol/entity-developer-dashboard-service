@@ -81,6 +81,7 @@ export class SocialLoginController {
   async socialAuthCallback(@Req() req, @Res() res) {
     Logger.log('socialAuthCallback() method starts', 'SocialLoginController');
     const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
+    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
     const tokens = await this.socialLoginService.socialLogin(req);
     Logger.debug(
       `Cookied domain set is ${cookieDomain}`,
@@ -88,18 +89,18 @@ export class SocialLoginController {
     );
     res.cookie('authToken', tokens?.authToken, {
       httpOnly: true,
-      secure: true,
-      domain: cookieDomain,
       maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
-      sameSite: 'None',
+      secure: isProduction,
+      domain: isProduction ? cookieDomain : undefined,
+      sameSite: isProduction ? 'None' : 'Lax',
       path: '/',
     });
     res.cookie('refreshToken', tokens?.refreshToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: 'None',
-      domain: cookieDomain,
       maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
+      secure: isProduction,
+      sameSite: isProduction ? 'None' : 'Lax',
+      domain: isProduction ? cookieDomain : undefined,
       path: '/',
     });
     res.redirect(`${this.config.get('REDIRECT_URL')}`);
@@ -154,20 +155,21 @@ export class SocialLoginController {
       refreshToken,
     );
     const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
+    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
     res.cookie('authToken', tokens.authToken, {
       httpOnly: true,
-      secure: true,
-      domain: cookieDomain,
       maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
-      sameSite: 'None',
+      secure: isProduction,
+      domain: isProduction ? cookieDomain : undefined,
+      sameSite: isProduction ? 'None' : 'Lax',
       path: '/',
     });
     res.cookie('refreshToken', tokens.refreshToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: 'None',
-      domain: cookieDomain,
       maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
+      secure: isProduction,
+      sameSite: isProduction ? 'None' : 'Lax',
+      domain: isProduction ? cookieDomain : undefined,
       path: '/',
     });
     res.json({ message: 'Tokens refreshed' });
@@ -208,20 +210,21 @@ export class SocialLoginController {
       mfaVerificationDto,
     );
     const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
+    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
     res.cookie('authToken', data?.authToken, {
       httpOnly: true,
-      secure: true,
-      domain: cookieDomain,
       maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
-      sameSite: 'None',
+      secure: isProduction,
+      domain: isProduction ? cookieDomain : undefined,
+      sameSite: isProduction ? 'None' : 'Lax',
       path: '/',
     });
     res.cookie('refreshToken', data?.refreshToken, {
       httpOnly: true,
-      secure: true,
-      domain: cookieDomain,
       maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
-      sameSite: 'None',
+      secure: isProduction,
+      domain: isProduction ? cookieDomain : undefined,
+      sameSite: isProduction ? 'None' : 'Lax',
       path: '/',
     });
     res.json({ isVerified: data.isVerified });
@@ -259,18 +262,19 @@ export class SocialLoginController {
   @Post('/api/v1/auth/logout')
   async logout(@Req() req, @Res() res) {
     const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
+    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
     res.clearCookie('authToken', {
-      path: '/',
-      domain: cookieDomain,
-      sameSite: 'None',
-      secure: true,
       httpOnly: true,
+      secure: isProduction,
+      domain: isProduction ? cookieDomain : undefined,
+      sameSite: isProduction ? 'None' : 'Lax',
+      path: '/',
     });
     res.clearCookie('refreshToken', {
       path: '/',
-      domain: cookieDomain,
-      sameSite: 'None',
-      secure: true,
+      domain: isProduction ? cookieDomain : undefined,
+      sameSite: isProduction ? 'None' : 'Lax',
+      secure: isProduction,
       httpOnly: true,
     });
     return res.status(200).json({ message: 'Logged out successfully' });

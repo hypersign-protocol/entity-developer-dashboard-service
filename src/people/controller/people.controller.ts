@@ -111,21 +111,22 @@ export class PeopleController {
     const { user } = req;
     const data = await this.peopleService.adminLogin(body, user);
     const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
+    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
     res.cookie('authToken', data?.authToken, {
       httpOnly: true,
-      secure: true,
-      domain: cookieDomain,
+      secure: isProduction,
+      sameSite: isProduction ? 'None' : 'Lax',
       maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
-      sameSite: 'None',
+      domain: isProduction ? cookieDomain : undefined,
       path: '/',
     });
     res.cookie('refreshToken', data?.refreshToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: 'None',
-      path: '/',
-      domain: cookieDomain,
+      secure: isProduction,
+      sameSite: isProduction ? 'None' : 'Lax',
       maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
+      domain: isProduction ? cookieDomain : undefined,
+      path: '/',
     });
     return res.json({
       message: `Successfully switched to the ${data.adminEmail} account`,

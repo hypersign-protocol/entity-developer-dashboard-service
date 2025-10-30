@@ -13,12 +13,14 @@ import {
 import {
   CreateCustomerOnboardingDto,
   CreateCustomerOnboardingRespDto,
+  FetchCustomerOnboardingRespDto,
 } from '../dto/create-customer-onboarding.dto';
 import { UpdateCustomerOnboardingDto } from '../dto/update-customer-onboarding.dto';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiOkResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { CustomerOnboardingService } from '../services/customer-onboarding.service';
@@ -53,6 +55,19 @@ export class CustomerOnboardingController {
       createCustomerOnboardingDto,
       req.user['userId'],
     );
+  }
+  @ApiBearerAuth('Authorization')
+  @ApiOkResponse({
+    description: 'Customer Onboarding detail fetched successfully',
+    type: FetchCustomerOnboardingRespDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Erorr occured while storing onboarding detail',
+    type: AppError,
+  })
+  @Get(':id')
+  findOne(@Param('id') id: string, @Req() req: Request) {
+    return this.customerOnboardingService.findOne(id, req.user);
   }
 
 }

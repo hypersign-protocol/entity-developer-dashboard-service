@@ -13,6 +13,7 @@ import {
 import {
   BusinessField,
   CountryCode,
+  CreditStatus,
   CustomerType,
   InterestedService,
   YearlyVolume,
@@ -22,7 +23,7 @@ import { IsPhoneNumberByCountry } from 'src/utils/customDecorator/validate-phone
 @ExactlyOneTrue({
   message: 'Exactly one of isKyc, isKyb, or both must be true',
 })
-export class CreateCustomerOnboardingDto {
+export class CustomerOnboardingBasicDto {
   @ApiProperty({
     name: 'companyName',
     example: 'hypermine',
@@ -164,6 +165,8 @@ export class CreateCustomerOnboardingDto {
     example: false,
   })
   isKyb?: boolean;
+}
+export class CreateCustomerOnboardingDto extends CustomerOnboardingBasicDto {
   @ApiProperty({
     name: 'both',
     description: ' Is both kyc and kyb service to be created for customer',
@@ -172,6 +175,44 @@ export class CreateCustomerOnboardingDto {
   })
   @IsBoolean()
   both?: boolean;
+}
+export class FetchCustomerOnboardingRespDto extends CustomerOnboardingBasicDto {
+  @ApiProperty({
+    name: 'userId',
+    description: 'Unique identification of user',
+    example: '1751435627461-e8bdcf4f-3573-467a-841a-9263b4d0e721',
+  })
+  @IsString()
+  userId: string;
+  @ApiProperty({
+    name: 'creditStatus',
+    description: 'Credit status of the customer',
+    example: CreditStatus.REQUESTED,
+  })
+  @IsEnum(CreditStatus)
+  creditStatus: CreditStatus;
+  @ApiProperty({
+    name: '_id',
+    description: 'Unique identifier for the customer onboarding record',
+    example: '6902f58a7e4d5c055e9ab950',
+    required: true,
+  })
+  @IsString()
+  _id?: string;
+  @ApiProperty({
+    name: 'createdAt',
+    description: 'Time at which customer is onboarded',
+    example: '2025-10-30T12:50:03.984Z',
+  })
+  @IsString()
+  createdAt: string;
+  @ApiProperty({
+    name: 'updatedAt',
+    description: 'Time at which onboarded customer last updated',
+    example: '2025-11-01T12:50:03.984Z',
+  })
+  @IsString()
+  updatedAt: string;
 }
 export class CreateCustomerOnboardingRespDto {
   @ApiProperty({

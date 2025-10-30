@@ -20,6 +20,7 @@ import { TwoFAAuthorizationMiddleware } from 'src/utils/middleware/2FA-jwt-autho
 import { UserModule } from 'src/user/user.module';
 import { PeopleModule } from 'src/people/people.module';
 import { MailNotificationModule } from 'src/mail-notification/mail-notification.module';
+import { SuperAdminMiddleware } from 'src/utils/middleware/super-admin.middleware';
 
 @Module({
   imports: [
@@ -39,6 +40,13 @@ export class CustomerOnboardingModule implements NestModule {
     consumer.apply(TrimMiddleware).forRoutes(CustomerOnboardingController);
     consumer
       .apply(JWTAuthorizeMiddleware)
+      .forRoutes(CustomerOnboardingController);
+    consumer
+      .apply(SuperAdminMiddleware)
+      .exclude(
+        { path: 'customer-onboarding', method: RequestMethod.POST },
+        { path: 'customer-onboarding/:id', method: RequestMethod.PATCH },
+      )
       .forRoutes(CustomerOnboardingController);
     consumer
       .apply(JWTAccessAccountMiddleware)

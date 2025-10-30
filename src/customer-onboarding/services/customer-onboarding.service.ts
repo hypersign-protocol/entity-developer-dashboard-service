@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
+  HttpException,
   Injectable,
   Logger,
 } from '@nestjs/common';
@@ -66,6 +68,34 @@ export class CustomerOnboardingService {
         throw new ConflictException([`${field} '${value}' already exists`]);
       }
       throw new BadRequestException([e.message]);
+    }
+  }
+
+  async findOne(id: string, user) {
+    try {
+      Logger.log(
+        'Inside customer onboardig service findOne method',
+        'CustomerOnboardingService',
+      );
+      const customerOnboardingData =
+        await this.customerOnboardingRepository.findCustomerOnboardingById({
+          _id: id,
+        });
+      if (!customerOnboardingData) {
+        throw new BadRequestException(['Customer Onboarding detail not found']);
+      }
+      if (
+        user.role !== UserRole.SUPER_ADMIN &&
+        customerOnboardingData.userId !== user.userId
+      ) {
+        throw new ForbiddenException([
+          'You are not authorized to access this resource',
+        ]);
+      }
+      return customerOnboardingData;
+    } catch (e) {
+      if (e instanceof HttpException) throw e;
+      else throw new BadRequestException([`${e.message}`]);
     }
   }
 

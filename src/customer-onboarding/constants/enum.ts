@@ -1,6 +1,7 @@
 export enum CustomerType {
-  INDIVIDUAL = 'INDIVIDUAL',
-  BUSINESS = 'BUSINESS',
+  BUSINESS = 0,
+  INDIVIDUAL = 1,
+  COMMUNITY = 2,
 }
 export enum StepStatus {
   SUCCESS = 'SUCCESS',

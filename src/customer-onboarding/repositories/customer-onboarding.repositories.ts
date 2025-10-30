@@ -21,7 +21,7 @@ export class CustomerOnboardingRepository {
     const createdCustomerOnboarding = new this.customerOnboardingModel(data);
     return createdCustomerOnboarding.save();
   }
-  findCustomerOnbpardingById(
+  findCustomerOnboardingById(
     customerFilterQuery: FilterQuery<CustomerOnboarding>,
   ) {
     Logger.log(

@@ -36,4 +36,11 @@ export class UserRepository {
       new: true,
     });
   }
+  async find(userFilterQuery: FilterQuery<User>): Promise<User[]> {
+    Logger.log(
+      'find() method: starts, finding particular user from db',
+      'UserRepository',
+    );
+    return this.userModel.find(userFilterQuery).lean();
+  }
 }

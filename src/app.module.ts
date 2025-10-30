@@ -24,6 +24,7 @@ import { MailNotificationModule } from './mail-notification/mail-notification.mo
 import { AllowedOriginMiddleware } from './utils/middleware/allowedOrigin.middleware';
 import { IpResolverModule } from './ip-resolver/ip-resolver.module';
 import { WebpageConfigModule } from './webpage-config/webpage-config.module';
+import { CustomerOnboardingModule } from './customer-onboarding/customer-onboarding.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { WebpageConfigModule } from './webpage-config/webpage-config.module';
     MailNotificationModule,
     IpResolverModule,
     WebpageConfigModule,
+    CustomerOnboardingModule,
   ],
   controllers: [],
   providers: [

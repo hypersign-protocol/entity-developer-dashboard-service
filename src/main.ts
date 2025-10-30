@@ -26,6 +26,7 @@ import { TeamModule } from './roles/role.module';
 import { PeopleModule } from './people/people.module';
 import * as cookieParser from 'cookie-parser';
 import { WebpageConfigModule } from './webpage-config/webpage-config.module';
+import { CustomerOnboardingModule } from './customer-onboarding/customer-onboarding.module';
 
 // eslint-disable-next-line
 const HypersignAuth = require('hypersign-auth-node-sdk');
@@ -135,7 +136,7 @@ async function bootstrap() {
       .build();
 
     const orgDocuments = SwaggerModule.createDocument(app, orgDocConfig, {
-      include: [AppOauthModule, WebpageConfigModule],
+      include: [AppOauthModule, WebpageConfigModule, CustomerOnboardingModule],
     });
     const tenantOptions = {
       swaggerOptions: {

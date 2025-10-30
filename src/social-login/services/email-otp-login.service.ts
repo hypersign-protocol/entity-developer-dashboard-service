@@ -124,7 +124,7 @@ export class EmailOtpLoginService {
       throw new BadRequestException('OTP expired');
     }
     const OtpExpiryMinute = this.config.get<number>('OTP_EXPIRY_MINUTES', 5);
-    const maxAttempts = this.config.get<number>('MAX_RETRIE_ATTEMPT', 3);
+    const maxAttempts = this.config.get<number>('MAX_RETRY_ATTEMPT', 3);
     const providedHash = createHash('sha256').update(otp).digest('hex');
     const isValid = timingSafeEqual(
       Buffer.from(storedHash),

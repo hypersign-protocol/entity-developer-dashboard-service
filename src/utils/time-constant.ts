@@ -13,5 +13,5 @@ export const TOKEN_MAX_AGE = {
 
 export enum JobNames {
   SEND_EMAIL_LOGIN_OTP = 'send-email-login-otp',
-  SEND_TEAM_MATE_INVITATION_MAIL = 'sendTeamMatemail'
+  SEND_TEAM_MATE_INVITATION_MAIL = 'sendTeamMatemail',
 }

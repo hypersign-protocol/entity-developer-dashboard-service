@@ -10,15 +10,15 @@ import {
 export class ExactlyOneTrueConstraint implements ValidatorConstraintInterface {
   validate(_: any, args: ValidationArguments) {
     const obj = args.object as any;
-    const { isKyc, isKyb, both } = obj;
+    const { isKyc, isKyb, isKycAndKyb } = obj;
 
     // exactly one must be true
-    const trueCount = [isKyc, isKyb, both].filter(Boolean).length;
+    const trueCount = [isKyc, isKyb, isKycAndKyb].filter(Boolean).length;
     return trueCount === 1;
   }
 
   defaultMessage() {
-    return 'Exactly one of isKyc, isKyb, or both must be true';
+    return 'Exactly one of isKyc, isKyb, or isKycAndKyb must be true';
   }
 }
 

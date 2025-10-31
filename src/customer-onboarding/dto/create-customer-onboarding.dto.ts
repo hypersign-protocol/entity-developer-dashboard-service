@@ -169,12 +169,12 @@ export class CustomerOnboardingBasicDto {
 }
 export class CreateCustomerOnboardingDto extends CustomerOnboardingBasicDto {
   @ApiProperty({
-    name: 'both',
+    name: 'isKycAndKyb',
     description: ' Is both kyc and kyb service to be created for customer',
     example: false,
   })
   @IsBoolean()
-  both: boolean;
+  isKycAndKyb: boolean;
 }
 export class FetchCustomerOnboardingRespDto extends CustomerOnboardingBasicDto {
   @ApiProperty({

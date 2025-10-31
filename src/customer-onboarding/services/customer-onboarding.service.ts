@@ -27,8 +27,8 @@ export class CustomerOnboardingService {
   ) {
     try {
       let { isKyc, isKyb } = createCustomerOnboardingDto;
-      const { both } = createCustomerOnboardingDto;
-      if (both) {
+      const { isKycAndKyb } = createCustomerOnboardingDto;
+      if (isKycAndKyb) {
         isKyc = true;
         isKyb = true;
       }
@@ -40,7 +40,7 @@ export class CustomerOnboardingService {
           userId,
         });
 
-      const requestedServices = both
+      const requestedServices = isKycAndKyb
         ? 'KYC and KYB Service'
         : isKyc
         ? 'KYC Service'

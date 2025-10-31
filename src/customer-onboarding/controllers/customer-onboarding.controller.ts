@@ -35,7 +35,7 @@ export class CustomerOnboardingController {
   @ApiBearerAuth('Authorization')
   @ApiCreatedResponse({
     description: 'Customer Onboarding detail created successfully',
-    type: CreateCustomerOnboardingRespDto,
+    type: FetchCustomerOnboardingRespDto,
   })
   @ApiBadRequestResponse({
     description: 'Error occured while storing onboarding detail',

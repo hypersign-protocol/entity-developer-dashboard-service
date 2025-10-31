@@ -26,17 +26,25 @@ export class CustomerOnboardingService {
     userId: string,
   ) {
     try {
+      let { isKyc, isKyb } = createCustomerOnboardingDto;
+      const { both } = createCustomerOnboardingDto;
+      if (both) {
+        isKyc = true;
+        isKyb = true;
+      }
       const onboardingData =
         await this.customerOnboardingRepository.createCustomerOnboarding({
           ...createCustomerOnboardingDto,
+          isKyc,
+          isKyb,
           userId,
         });
 
-      const requestedServices = createCustomerOnboardingDto?.both
+      const requestedServices = both
         ? 'KYC and KYB Service'
-        : createCustomerOnboardingDto?.isKyc
+        : isKyc
         ? 'KYC Service'
-        : createCustomerOnboardingDto?.isKyb
+        : isKyb
         ? 'KYB Service'
         : 'No service requested';
 
@@ -59,7 +67,7 @@ export class CustomerOnboardingService {
         subject,
       );
 
-      return { message: 'Customer Onboarding detail created successfully' };
+      return onboardingData;
     } catch (e) {
       if (e.code === 11000) {
         const field = Object.keys(e.keyValue || {})[0];

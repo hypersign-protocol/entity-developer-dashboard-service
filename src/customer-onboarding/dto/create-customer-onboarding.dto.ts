@@ -62,7 +62,7 @@ export class CustomerOnboardingBasicDto {
     name: 'type',
     description: 'type of customer',
     enum: CustomerType,
-    example: CustomerType.BUSINESS,
+    example: 'BUSINESS',
   })
   @IsEnum(CustomerType)
   @IsString()
@@ -158,23 +158,23 @@ export class CustomerOnboardingBasicDto {
     example: true,
   })
   @IsBoolean()
-  isKyc?: boolean;
+  isKyc: boolean;
   @ApiProperty({
     name: 'isKyb',
     description: 'Is kyb service is to be created for customer',
     example: false,
   })
-  isKyb?: boolean;
+  @IsBoolean()
+  isKyb: boolean;
 }
 export class CreateCustomerOnboardingDto extends CustomerOnboardingBasicDto {
   @ApiProperty({
     name: 'both',
     description: ' Is both kyc and kyb service to be created for customer',
     example: false,
-    required: false,
   })
   @IsBoolean()
-  both?: boolean;
+  both: boolean;
 }
 export class FetchCustomerOnboardingRespDto extends CustomerOnboardingBasicDto {
   @ApiProperty({

@@ -27,7 +27,7 @@ import { CustomerOnboardingService } from '../services/customer-onboarding.servi
 import { Request } from 'express';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 @ApiTags('Customer-Onboarding')
-@Controller('customer-onboarding')
+@Controller('api/v1/customer-onboarding')
 export class CustomerOnboardingController {
   constructor(
     private readonly customerOnboardingService: CustomerOnboardingService,

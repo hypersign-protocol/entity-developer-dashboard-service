@@ -45,7 +45,13 @@ export class MailNotificationService {
   }
 
   async addAJob(
-    job: { to: string; subject: string; message: any },
+    job: {
+      to: string;
+      subject: string;
+      message: any;
+      cc?: string[];
+      bcc?: string[];
+    },
     name: string,
   ) {
     try {

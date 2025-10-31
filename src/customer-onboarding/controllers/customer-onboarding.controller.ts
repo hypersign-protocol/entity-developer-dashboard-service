@@ -12,7 +12,6 @@ import {
 } from '@nestjs/common';
 import {
   CreateCustomerOnboardingDto,
-  CreateCustomerOnboardingRespDto,
   FetchCustomerOnboardingRespDto,
 } from '../dto/create-customer-onboarding.dto';
 import { UpdateCustomerOnboardingDto } from '../dto/update-customer-onboarding.dto';

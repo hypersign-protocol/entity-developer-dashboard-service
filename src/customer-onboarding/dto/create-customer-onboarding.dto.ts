@@ -214,11 +214,3 @@ export class FetchCustomerOnboardingRespDto extends CustomerOnboardingBasicDto {
   @IsString()
   updatedAt: string;
 }
-export class CreateCustomerOnboardingRespDto {
-  @ApiProperty({
-    name: 'message',
-    example: 'Customer Onboarding detail created successfully',
-    description: 'Success message after creating customer onboarding detail',
-  })
-  message: string;
-}

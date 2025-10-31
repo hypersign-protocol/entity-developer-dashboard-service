@@ -68,25 +68,4 @@ export class CustomerOnboardingController {
   findOne(@Param('id') id: string, @Req() req: Request) {
     return this.customerOnboardingService.findOne(id, req.user);
   }
-  @ApiBearerAuth('Authorization')
-  @ApiOkResponse({
-    description: 'Customer Onboarding detail updated successfully',
-    type: FetchCustomerOnboardingRespDto,
-  })
-  @ApiBadRequestResponse({
-    description: 'Error occured while updating onboarding detail',
-    type: AppError,
-  })
-  @Patch(':id')
-  updateCustomerOnboardingDetail(
-    @Param('id') id: string,
-    @Body() updateCustomerOnboardingDto: UpdateCustomerOnboardingDto,
-    @Req() req: Request,
-  ) {
-    return this.customerOnboardingService.updateCustomerOnboardingDetail(
-      id,
-      updateCustomerOnboardingDto,
-      req.user['userId'],
-    );
-  }
 }

@@ -106,36 +106,6 @@ export class CustomerOnboardingService {
     }
   }
 
-  async updateCustomerOnboardingDetail(
-    id: string,
-    updateCustomerOnboardingDto: UpdateCustomerOnboardingDto,
-    userId: string,
-  ) {
-    try {
-      const customerOnboardingData =
-        await this.customerOnboardingRepository.findCustomerOnboardingById({
-          _id: id,
-        });
-      if (!customerOnboardingData) {
-        throw new BadRequestException([
-          `Customer Onboarding detail not found for id: ${id}`,
-        ]);
-      }
-      if (customerOnboardingData.userId !== userId) {
-        throw new ForbiddenException([
-          'You are not authorized to update this resource',
-        ]);
-      }
-      return this.customerOnboardingRepository.updateCustomerOnboardingDetails(
-        { _id: id },
-        updateCustomerOnboardingDto,
-      );
-    } catch (e) {
-      if (e instanceof HttpException) throw e;
-      else throw new BadRequestException([`${e.message}`]);
-    }
-  }
-
   private async sendOnboardingRequestMailToSuperAdmin(
     message,
     superAdminEmailList,

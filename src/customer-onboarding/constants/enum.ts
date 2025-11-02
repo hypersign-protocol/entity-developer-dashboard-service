@@ -7,6 +7,11 @@ export enum StepStatus {
   SUCCESS = 'SUCCESS',
   FAILED = 'FAILED',
 }
+export enum TimeUnit {
+  'Days' = 'Days',
+  'Month' = 'Month',
+  'Year' = 'Year',
+}
 export const CountryCode = [
   'IN',
   'SG',
@@ -107,4 +112,15 @@ export enum BusinessField {
   GAMING = 'Gaming',
   GOVENRNMENT = 'Government',
   HEALTHCARE = 'Healthcare',
+}
+
+export enum OnboardingStep {
+  CREATE_SSI_SERVICE = 'CREATE_SSI_SERVICE',
+  CREDIT_SSI_SERVICE = 'CREDIT_SSI_SERVICE',
+  CREATE_DID = 'CREATE_DID',
+  REGISTER_DID = 'REGISTER_DID',
+  CREATE_KYC_SERVICE = 'CREATE_KYC_SERVICE',
+  GIVE_KYC_DASHBOARD_ACCESS = 'GIVE_KYC_DASHBOARD_ACCESS',
+  CREDIT_KYC_SERVICE = 'CREDIT_KYC_SERVICE',
+  COMPLETED = 'COMPLETED',
 }

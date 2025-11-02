@@ -5,6 +5,7 @@ import {
   CreditStatus,
   CustomerType,
   InterestedService,
+  OnboardingStep,
   StepStatus,
   YearlyVolume,
 } from '../constants/enum';
@@ -12,11 +13,11 @@ export type CustomerOnboardingDocument = CustomerOnboarding & Document;
 
 export class LogDetail {
   @Prop({ Type: String, required: true })
-  step: string; // add list of stpes we will have as enum or constant
+  step: OnboardingStep;
   @Prop({ Type: Date, required: true })
   time: Date;
   @Prop({ Type: String, required: true, enum: StepStatus })
-  status: string;
+  status: StepStatus;
   @Prop({ Type: String, required: false })
   failureReason?: string;
 }
@@ -62,7 +63,7 @@ export class CustomerOnboarding {
     default: CreditStatus.REQUESTED,
   })
   creditStatus?: CreditStatus;
-  @Prop({ type: LogDetail, required: false })
+  @Prop({ type: Array<LogDetail>, required: false, default: [] })
   logs?: LogDetail[];
   @Prop({ type: String, required: false }) // didDocumet id for business
   businessId?: string;
@@ -72,6 +73,10 @@ export class CustomerOnboarding {
   ssiSubdomain?: string;
   @Prop({ type: String, required: false })
   kycSubdomain?: string;
+  @Prop({ type: String, required: false })
+  ssiServiceId?: string;
+  @Prop({ type: String, required: false })
+  kycServiceId?: string;
   @Prop({ type: String, required: true })
   userId: string;
 }

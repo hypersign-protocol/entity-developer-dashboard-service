@@ -30,6 +30,7 @@ import {
   LogDetail,
 } from '../schemas/customer-onboarding.schema';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
+import { sanitizeUrl } from 'src/utils/utils';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -42,6 +43,14 @@ export class CustomerOnboardingService {
     private readonly config: ConfigService,
     private readonly appAuthRepository: AppRepository,
   ) {}
+  /**
+   * Creates a new customer onboarding record and notifies super admins
+   * @param createCustomerOnboardingDto - DTO containing customer onboarding details including KYC/KYB preferences
+   * @param userId - ID of the user creating the onboarding request
+   * @returns Created customer onboarding record
+   * @throws ConflictException if a duplicate record exists
+   * @throws BadRequestException for other validation errors
+   */
   async createCustomerOnboardingDetail(
     createCustomerOnboardingDto: CreateCustomerOnboardingDto,
     userId: string,
@@ -99,6 +108,14 @@ export class CustomerOnboardingService {
     }
   }
 
+  /**
+   * Retrieves a specific customer onboarding record with access control
+   * @param id - ID of the customer onboarding record to find
+   * @param user - User object containing role and userId for access control
+   * @returns Customer onboarding record if found and authorized
+   * @throws BadRequestException if record not found
+   * @throws ForbiddenException if user is not authorized
+   */
   async findOne(id: string, user) {
     try {
       Logger.log(
@@ -127,10 +144,17 @@ export class CustomerOnboardingService {
     }
   }
 
+  /**
+   * Sends notification emails to super administrators about new onboarding requests
+   * @param message - The email body content with onboarding request details
+   * @param superAdminEmailList - List of super admin email addresses
+   * @param subject - Email subject line
+   * @remarks First email in the list is set as 'to' recipient, remaining are CC'd
+   */
   private async sendOnboardingRequestMailToSuperAdmin(
-    message,
-    superAdminEmailList,
-    subject,
+    message: string,
+    superAdminEmailList: string[],
+    subject: string,
   ) {
     const to = superAdminEmailList[0];
     const cc = superAdminEmailList.slice(1);
@@ -144,45 +168,160 @@ export class CustomerOnboardingService {
       'send-credit-request-notification-mail',
     );
   }
+  /**
+   * Makes an external HTTP request with error handling and response validation
+   * @param url - The URL to make the request to
+   * @param options - Request options including method, headers, body etc.
+   * @param errorMessage - Custom error message prefix for better error reporting
+   * @returns Promise resolving to the JSON response from the API
+   * @throws Error if request fails or response is not OK
+   */
+  private async makeExternalRequest(
+    url: string,
+    options: RequestInit,
+    errorMessage: string,
+  ) {
+    Logger.log('Inside makeExternalRequest()', 'CustomerOnboardingService');
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        throw new Error(`${errorMessage}: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      throw new Error(`${errorMessage}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Generates a JWT token for credit service authorization
+   * @param payload - The payload to be included in the JWT token
+   * @param secret - The secret key used for signing the token
+   * @returns Promise resolving to the signed JWT token
+   */
+  private async generateCreditToken(
+    payload: any,
+    secret: string,
+  ): Promise<string> {
+    Logger.log('inside generateCreditToken method', 'generateCreditToken');
+    return this.jwt.signAsync(payload, { expiresIn: '5m', secret });
+  }
+
+  /**
+   * Handles the credit service operations for both SSI and KYC services
+   * @param creditDetail - Credit details including amount and validity
+   * @param serviceInfo - Service information containing appId and subdomain
+   * @param grantType - Type of access grant (SSI or KYC)
+   * @param tenantUrl - URL of the tenant service
+   * @param secret - Secret key for token generation
+   * @param whitelistedCors - CORS whitelist array (defaults to ['*'])
+   */
+  private async handleCreditService(
+    creditDetail: any,
+    serviceInfo: { appId: string; subdomain: string },
+    grantType: string,
+    tenantUrl: string,
+    secret: string,
+    whitelistedCors: string[] = ['*'],
+  ) {
+    Logger.debug(tenantUrl);
+    Logger.log(
+      `Inside handleCreditService() to fund credit to the service with tenantUrl ${tenantUrl}`,
+      'CustomerOnboardingService',
+    );
+    const creditPayload = {
+      serviceId: serviceInfo.appId,
+      purpose: 'CreditRecharge',
+      amount: creditDetail.amount,
+      validityPeriod: creditDetail.validityPeriod,
+      validityPeriodUnit: creditDetail.validityPeriodUnit,
+      amountDenom: creditDetail.amountDenom,
+      subdomain: serviceInfo.subdomain,
+      grantType,
+      whitelistedCors,
+    };
+
+    const creditToken = await this.generateCreditToken(creditPayload, secret);
+    let headers: Record<string, string> = {
+      authorization: `Bearer ${creditToken}`,
+      'Content-Type': 'application/json',
+    };
+
+    if (grantType === GRANT_TYPES.access_service_kyc) {
+      headers = {
+        'x-kyc-access-token': creditToken,
+        'Content-Type': 'application/json',
+      };
+    }
+    await this.makeExternalRequest(
+      `${sanitizeUrl(tenantUrl, true)}api/v1/credit`,
+      {
+        method: 'POST',
+        headers,
+      },
+      'Failed to credit service',
+    );
+  }
+  /**
+   * Processes a customer onboarding request through multiple steps
+   * Steps include:
+   * 1. Creating SSI service
+   * 2. Crediting SSI service
+   * 3. Creating and registering DID
+   * 4. Creating KYC service
+   * 5. Granting KYC dashboard access
+   * 6. Crediting KYC service
+   * @param id - ID of the customer onboarding record to process
+   * @param customerOnboardingProcessDto - DTO containing process details including credit information
+   * @returns Success message upon completion
+   * @throws BadRequestException if any step fails or validation errors occur
+   */
   async processCustomerOnboarding(
     id: string,
     customerOnboardingProcessDto: CustomerOnboardingProcessDto,
   ) {
+    const onboardingLogs: LogDetail[] = [];
+    const onboardingUpdateData: Partial<CustomerOnboarding> = {};
+    let ssiService: any,
+      ssiAccessToken: any,
+      issuerDidData: any,
+      kycService: any,
+      didDocument: any;
+
     try {
       const { userEmail, ssiCreditDetail, kycCreditDetail } =
         customerOnboardingProcessDto;
 
-      // Fetch customer onboarding details
+      // Validate and fetch customer onboarding details
       const customerOnboardingData =
         await this.customerOnboardingRepository.findCustomerOnboardingById({
           _id: id,
           email: userEmail,
         });
 
-      if (!customerOnboardingData) {
+      if (
+        !customerOnboardingData ||
+        userEmail !== customerOnboardingData.customerEmail
+      ) {
         throw new BadRequestException(
-          `Customer onboarding detail not found for id: ${id}`,
+          !customerOnboardingData
+            ? `Customer onboarding detail not found for id: ${id}`
+            : "User email doesn't match with onboarding email",
         );
       }
 
-      if (userEmail !== customerOnboardingData.customerEmail) {
-        throw new BadRequestException(
-          "User email doesn't match with onboarding email",
-        );
-      }
-      const onboardingLogs: LogDetail[] = [];
-      const onboardingUpdateData: Partial<CustomerOnboarding> = {};
+      // Initialize configuration
+      const { companyName, domain, userId } = customerOnboardingData;
       const ssiBaseDomain = this.config.get<string>('SSI_API_DOMAIN');
       const cavachBaseDomain = this.config.get<string>('CAVACH_API_DOMAIN');
       const secret = this.config.get('JWT_SECRET');
+
       let ssiSubdomain = customerOnboardingData?.ssiSubdomain;
       let kycSubdomain = customerOnboardingData?.kycSubdomain;
       let ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
       let kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
 
-      let ssiService, ssiAccessToken, issuerDidData, kycService, didDocument;
-
-      // Determine last completed step
+      // Get remaining steps
       const lastStep =
         customerOnboardingData.logs
           ?.filter((log) => log.status === StepStatus.SUCCESS)
@@ -192,62 +331,71 @@ export class CustomerOnboardingService {
         ? Object.values(OnboardingStep).indexOf(lastStep) + 1
         : 0;
       const remainingSteps = Object.values(OnboardingStep).slice(startIndex);
-      const { companyName, domain, userId } = customerOnboardingData;
 
+      // Process each step
       for (const step of remainingSteps) {
         try {
           switch (step) {
             case OnboardingStep.CREATE_SSI_SERVICE: {
-              const createSSIServiceDto = {
-                appName: `${companyName}_SSI_Service`,
-                domain,
-                serviceIds: [SERVICE_TYPES.SSI_API] as [SERVICE_TYPES],
-                whitelistedCors: ['*'],
-                env: APP_ENVIRONMENT.dev,
-                hasDomainVerified: false,
-              };
+              Logger.log(
+                'CREATE_SSI_SERVICE step started',
+                'CustomerOnboardingService',
+              );
               ssiService = await this.appAuthService.createAnApp(
-                createSSIServiceDto,
+                {
+                  appName: `${companyName}_SSI_Service`,
+                  domain,
+                  serviceIds: [SERVICE_TYPES.SSI_API],
+                  whitelistedCors: ['*'],
+                  env: APP_ENVIRONMENT.dev,
+                  hasDomainVerified: false,
+                },
                 userId,
               );
+
               ssiSubdomain = ssiService.subdomain;
               onboardingUpdateData.ssiSubdomain = ssiService.subdomain;
               onboardingUpdateData.ssiServiceId = ssiService.appId;
               ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
+              Logger.log(
+                'CREATE_SSI_SERVICE step ends',
+                'CustomerOnboardingService',
+              );
               break;
             }
 
             case OnboardingStep.CREDIT_SSI_SERVICE: {
-              const ssiCreditPayload = {
-                serviceId:
-                  ssiService?.appId || customerOnboardingData.ssiServiceId,
-                purpose: 'CreditRecharge',
-                amount: ssiCreditDetail.amount,
-                validityPeriod: ssiCreditDetail.validityPeriod,
-                validityPeriodUnit: ssiCreditDetail.validityPeriodUnit,
-                amountDenom: ssiCreditDetail.amountDenom,
-                subdomain:
-                  ssiService?.subdomain || customerOnboardingData.ssiSubdomain,
-                grantType: GRANT_TYPES.access_service_ssi,
-                whitelistedCors: ssiService?.whitelistedCors || ['*'],
-              };
-
-              const creditToken = await this.jwt.signAsync(ssiCreditPayload, {
-                expiresIn: '5m',
-                secret,
-              });
-              await fetch(`${ssiTenantUrl}/api/v1/credit`, {
-                method: 'POST',
-                headers: {
-                  authorization: `Bearer ${creditToken}`,
-                  'Content-Type': 'application/json',
+              Logger.log(
+                'CREDIT_SSI_SERVICE step started',
+                'CustomerOnboardingService',
+              );
+              await this.handleCreditService(
+                ssiCreditDetail,
+                {
+                  appId:
+                    ssiService?.appId || customerOnboardingData.ssiServiceId,
+                  subdomain:
+                    ssiService?.subdomain ||
+                    customerOnboardingData.ssiSubdomain,
                 },
-              });
+                GRANT_TYPES.access_service_ssi,
+                ssiTenantUrl,
+                secret,
+                ssiService?.whitelistedCors,
+              );
+              Logger.debug(
+                'CREDIT_SSI_SERVICE step ends',
+                'CustomerOnboardingService',
+              );
               break;
             }
 
             case OnboardingStep.CREATE_DID: {
-              if (!ssiService) {
+              Logger.log(
+                'CREATE_DID step started',
+                'CustomerOnboardingService',
+              );
+              if (!ssiService && customerOnboardingData.ssiServiceId) {
                 ssiService = await this.appAuthRepository.findOne({
                   appId: customerOnboardingData.ssiServiceId,
                 });
@@ -258,8 +406,9 @@ export class CustomerOnboardingService {
                 ssiService,
                 4,
               );
-              const didResponse = await fetch(
-                `${ssiTenantUrl}/api/v1/did/create`,
+
+              const didData = await this.makeExternalRequest(
+                `${sanitizeUrl(ssiTenantUrl, true)}api/v1/did/create`,
                 {
                   method: 'POST',
                   headers: {
@@ -268,16 +417,21 @@ export class CustomerOnboardingService {
                   },
                   body: JSON.stringify({ namespace: 'testnet' }),
                 },
+                'Failed to create DID',
               );
 
-              issuerDidData = await didResponse.json();
-              didDocument = issuerDidData?.metaData.didDocument;
-              // Store DID in DB to reuse if next step fails
-              onboardingUpdateData.businessId = issuerDidData.did;
+              issuerDidData = didData;
+              didDocument = didData?.metaData.didDocument;
+              onboardingUpdateData.businessId = didData.did;
+              Logger.debug('CREATE_DID step ends', 'CustomerOnboardingService');
               break;
             }
-            // resolve the did if already created
+
             case OnboardingStep.REGISTER_DID: {
+              Logger.log(
+                'REGISTER_DID step started',
+                'CustomerOnboardingService',
+              );
               ssiAccessToken =
                 ssiAccessToken ||
                 (await this.appAuthService.getAccessToken(
@@ -285,15 +439,16 @@ export class CustomerOnboardingService {
                   ssiService,
                   4,
                 ));
+
               const didToRegister =
                 issuerDidData?.did || customerOnboardingData.businessId;
 
-              if (!didDocument || didDocument == null) {
-                // Resolving did documents if step is failed after did creation
-                const resolvedDid = await fetch(
-                  `${ssiTenantUrl}/api/v1/did/${
-                    issuerDidData?.did || customerOnboardingData?.businessId
-                  }`,
+              if (!didDocument) {
+                const resolvedDidData = await this.makeExternalRequest(
+                  `${sanitizeUrl(
+                    ssiTenantUrl,
+                    true,
+                  )}api/v1/did/${didToRegister}`,
                   {
                     method: 'POST',
                     headers: {
@@ -301,56 +456,74 @@ export class CustomerOnboardingService {
                       'Content-Type': 'application/json',
                     },
                   },
+                  'Failed to resolve DID',
                 );
-                const data = await resolvedDid.json();
-                didDocument = data.didDocument;
+                didDocument = resolvedDidData.didDocument;
               }
-              // Reuse existing DID if already created
 
-              await fetch(`${ssiTenantUrl}/api/v1/did/register`, {
-                method: 'POST',
-                headers: {
-                  authorization: `Bearer ${ssiAccessToken.access_token}`,
-                  'Content-Type': 'application/json',
+              await this.makeExternalRequest(
+                `${sanitizeUrl(ssiTenantUrl, true)}api/v1/did/register`,
+                {
+                  method: 'POST',
+                  headers: {
+                    authorization: `Bearer ${ssiAccessToken.access_token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    didDocument,
+                    verificationMethodId: `${didToRegister}#key-1`,
+                  }),
                 },
-                body: JSON.stringify({
-                  didDocument,
-                  verificationMethodId: `${didToRegister}#key-1`,
-                }),
-              });
+                'Failed to register DID',
+              );
+              Logger.debug(
+                'REGISTER_DID step ends',
+                'CustomerOnboardingService',
+              );
               break;
             }
 
             case OnboardingStep.CREATE_KYC_SERVICE: {
-              const createKYCServiceDto = {
-                appName: `${companyName}_KYC_Service`,
-                domain,
-                serviceIds: [SERVICE_TYPES.CAVACH_API] as [SERVICE_TYPES],
-                whitelistedCors: ['*'],
-                env: APP_ENVIRONMENT.dev,
-                hasDomainVerified: false,
-                dependentServices: [
-                  ssiService?.appId || customerOnboardingData.kycServiceId,
-                ],
-                issuerDid:
-                  issuerDidData?.did || customerOnboardingData.businessId,
-                issuerVerificationMethodId: `${
-                  issuerDidData?.did || customerOnboardingData.businessId
-                }#key-1`,
-              };
-
+              Logger.log(
+                'CREATE_KYC_SERVICE step started',
+                'CustomerOnboardingService',
+              );
               kycService = await this.appAuthService.createAnApp(
-                createKYCServiceDto,
+                {
+                  appName: `${companyName}_KYC_Service`,
+                  domain,
+                  serviceIds: [SERVICE_TYPES.CAVACH_API],
+                  whitelistedCors: ['*'],
+                  env: APP_ENVIRONMENT.dev,
+                  hasDomainVerified: false,
+                  dependentServices: [
+                    ssiService?.appId || customerOnboardingData.kycServiceId,
+                  ],
+                  issuerDid:
+                    issuerDidData?.did || customerOnboardingData.businessId,
+                  issuerVerificationMethodId: `${
+                    issuerDidData?.did || customerOnboardingData.businessId
+                  }#key-1`,
+                },
                 userId,
               );
+
               kycSubdomain = kycService.subdomain;
               onboardingUpdateData.kycSubdomain = kycService.subdomain;
               onboardingUpdateData.kycServiceId = kycService.appId;
               kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
+              Logger.debug(
+                'CREATE_KYC_SERVICE step ends',
+                'CustomerOnboardingService',
+              );
               break;
             }
 
             case OnboardingStep.GIVE_KYC_DASHBOARD_ACCESS: {
+              Logger.log(
+                'GIVE_KYC_DASHBOARD_ACCESS step started',
+                'CustomerOnboardingService',
+              );
               await this.userRepository.findOneUpdate(
                 {
                   userId,
@@ -373,39 +546,41 @@ export class CustomerOnboardingService {
                   },
                 },
               );
+              Logger.debug(
+                'GIVE_KYC_DASHBOARD_ACCESS step ends',
+                'CustomerOnboardingService',
+              );
               break;
             }
 
             case OnboardingStep.CREDIT_KYC_SERVICE: {
-              const kycCreditPayload = {
-                serviceId:
-                  kycService?.appId || customerOnboardingData?.kycServiceId,
-                purpose: 'CreditRecharge',
-                amount: kycCreditDetail.amount,
-                validityPeriod: kycCreditDetail.validityPeriod,
-                validityPeriodUnit: kycCreditDetail.validityPeriodUnit,
-                amountDenom: kycCreditDetail.amountDenom,
-                subdomain:
-                  kycService?.subdomain || customerOnboardingData.kycSubdomain,
-                grantType: GRANT_TYPES.access_service_kyc,
-                whitelistedCors: kycService?.whitelistedCors || ['*'],
-              };
-
-              const kycCreditToken = await this.jwt.signAsync(
-                kycCreditPayload,
-                { expiresIn: '5m', secret },
+              Logger.log(
+                'CREDIT_KYC_SERVICE step started',
+                'CustomerOnboardingService',
               );
-              await fetch(`${kycTenantUrl}api/v1/credit`, {
-                method: 'POST',
-                headers: {
-                  authorization: `Bearer ${kycCreditToken}`,
-                  'Content-Type': 'application/json',
+              await this.handleCreditService(
+                kycCreditDetail,
+                {
+                  appId:
+                    kycService?.appId || customerOnboardingData?.kycServiceId,
+                  subdomain:
+                    kycService?.subdomain ||
+                    customerOnboardingData.kycSubdomain,
                 },
-              });
+                GRANT_TYPES.access_service_kyc,
+                kycTenantUrl,
+                secret,
+                kycService?.whitelistedCors,
+              );
+              Logger.debug(
+                'CREDIT_KYC_SERVICE step ends',
+                'CustomerOnboardingService',
+              );
               break;
             }
 
             case OnboardingStep.COMPLETED: {
+              Logger.log('COMPLETED', 'CustomerOnboardingService');
               onboardingUpdateData.creditStatus = CreditStatus.APPROVED;
               break;
             }
@@ -416,6 +591,8 @@ export class CustomerOnboardingService {
           break;
         }
       }
+
+      // Update onboarding details
       await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
         { _id: id },
         {
@@ -426,6 +603,7 @@ export class CustomerOnboardingService {
           ),
         },
       );
+      // Check for failures
       const failed = onboardingLogs.find((l) => l.status === StepStatus.FAILED);
       if (failed) {
         throw new BadRequestException(
@@ -436,10 +614,16 @@ export class CustomerOnboardingService {
       return { message: 'Customer onboarding completed successfully' };
     } catch (e) {
       if (e instanceof HttpException) throw e;
-      else throw new BadRequestException([`${e.message}`]);
+      throw new BadRequestException([e.message]);
     }
   }
 
+  /**
+   * Merges existing logs with new logs, maintaining chronological order and deduplication
+   * @param existing - Array of existing log details
+   * @param newOnes - Array of new log details to be merged
+   * @returns Combined and sorted array of unique log details
+   */
   private mergeLogs(existing: LogDetail[], newOnes: LogDetail[]): LogDetail[] {
     const map = new Map<string, LogDetail>();
     for (const log of existing) map.set(log.step, log);
@@ -449,10 +633,21 @@ export class CustomerOnboardingService {
     );
   }
 
+  /**
+   * Logs a successful step completion in the onboarding process
+   * @param logs - Array of log details to append to
+   * @param step - The onboarding step that was completed successfully
+   */
   private logStepSuccess(logs: LogDetail[], step: OnboardingStep) {
     logs.push({ step, status: StepStatus.SUCCESS, time: new Date() });
   }
 
+  /**
+   * Logs a failed step in the onboarding process with error details
+   * @param logs - Array of log details to append to
+   * @param step - The onboarding step that failed
+   * @param error - The error object containing failure details
+   */
   private logStepFailure(logs: LogDetail[], step: OnboardingStep, error: any) {
     logs.push({
       step,
@@ -462,6 +657,12 @@ export class CustomerOnboardingService {
     });
   }
 
+  /**
+   * Constructs the tenant URL based on the base URL and subdomain
+   * @param baseUrl - The base URL of the service
+   * @param subdomain - Optional subdomain to be prepended
+   * @returns Formatted tenant URL with proper subdomain handling
+   */
   private getTenantUrl(baseUrl: string, subdomain?: string): string {
     const url = new URL(baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
     if (!subdomain) return url.origin + '/';

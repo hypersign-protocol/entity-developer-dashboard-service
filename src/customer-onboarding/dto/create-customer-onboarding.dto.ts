@@ -9,6 +9,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  ValidateNested,
 } from 'class-validator';
 import {
   BusinessField,
@@ -16,10 +17,13 @@ import {
   CreditStatus,
   CustomerType,
   InterestedService,
+  OnboardingStep,
+  StepStatus,
   YearlyVolume,
 } from '../constants/enum';
 import { ExactlyOneTrue } from 'src/utils/customDecorator/kyc-kyb-selection.validator';
 import { IsPhoneNumberByCountry } from 'src/utils/customDecorator/validate-phone-no-country.decorator';
+import { Type } from 'class-transformer';
 @ExactlyOneTrue({
   message: 'Exactly one of isKyc, isKyb, or both must be true',
 })
@@ -176,7 +180,7 @@ export class CreateCustomerOnboardingDto extends CustomerOnboardingBasicDto {
   @IsBoolean()
   isKycAndKyb: boolean;
 }
-export class FetchCustomerOnboardingRespDto extends CustomerOnboardingBasicDto {
+export class CreateCustomerOnboardingRespDto extends CustomerOnboardingBasicDto {
   @ApiProperty({
     name: 'userId',
     description: 'Unique identification of user',
@@ -213,4 +217,98 @@ export class FetchCustomerOnboardingRespDto extends CustomerOnboardingBasicDto {
   })
   @IsString()
   updatedAt: string;
+}
+export class CustomerStepLogs {
+  @ApiProperty({
+    name: 'step',
+    description: 'Onboarding step',
+    example: OnboardingStep.CREATE_SSI_SERVICE,
+    enum: OnboardingStep,
+  })
+  @IsEnum(OnboardingStep)
+  step: OnboardingStep;
+  @ApiProperty({
+    name: 'time',
+    description: 'Timestamp of the log entry',
+    example: '2025-11-01T12:50:03.984Z',
+  })
+  @IsString()
+  time: string;
+  @ApiProperty({
+    name: 'status',
+    description: 'Status of the onboarding step',
+    example: 'COMPLETED',
+    enum: StepStatus,
+  })
+  @IsEnum(StepStatus)
+  status: StepStatus;
+  @ApiProperty({
+    name: 'failureReason',
+    description: 'Reason for failure if the step failed',
+    example: 'Invalid documents provided',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  failureReason?: string;
+}
+export class FetchCustomerOnboardingRespDto extends CreateCustomerOnboardingRespDto {
+  @ApiProperty({
+    name: 'logs',
+    description: 'Logs related to customer onboarding process',
+    type: CustomerStepLogs,
+    required: false,
+  })
+  @IsOptional()
+  @Type(() => CustomerStepLogs)
+  @ValidateNested()
+  logs?: CustomerStepLogs;
+  @ApiProperty({
+    name: 'businessIdName',
+    description: 'Name of business id for kyb',
+    example: 'hypermine-kyb-did',
+  })
+  @IsOptional()
+  @IsString()
+  businessIdName?: string;
+  @ApiProperty({
+    name: 'businessId',
+    description: 'Did document id for business',
+    example: 'did:ion:EiDgH6...',
+  })
+  @IsOptional()
+  @IsString()
+  businessId?: string;
+  @ApiProperty({
+    name: 'ssiSubdomain',
+    description: 'Subdomain for ssi service',
+    example: 'ent-abc123',
+  })
+  @IsOptional()
+  @IsString()
+  ssiSubdomain?: string;
+  @ApiProperty({
+    name: 'kycSubdomain',
+    description: 'Subdomain for kyc service',
+    example: 'ent-def123',
+  })
+  @IsOptional()
+  @IsString()
+  kycSubdomain?: string;
+  @ApiProperty({
+    name: 'ssiServiceId',
+    example: 'adcc346677',
+    description: 'Service id for ssi service',
+  })
+  @IsOptional()
+  @IsString()
+  ssiServiceId?: string;
+  @ApiProperty({
+    name: 'kycServiceId',
+    example: 'dbc1234346677',
+    description: 'Service id for kyc service',
+  })
+  @IsOptional()
+  @IsString()
+  kycServiceId?: string;
 }

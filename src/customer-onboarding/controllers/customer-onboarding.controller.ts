@@ -3,7 +3,6 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
   Logger,
   Req,
@@ -12,6 +11,7 @@ import {
 } from '@nestjs/common';
 import {
   CreateCustomerOnboardingDto,
+  CreateCustomerOnboardingRespDto,
   FetchCustomerOnboardingRespDto,
 } from '../dto/create-customer-onboarding.dto';
 import {
@@ -37,7 +37,7 @@ export class CustomerOnboardingController {
   @ApiBearerAuth('Authorization')
   @ApiCreatedResponse({
     description: 'Customer Onboarding detail created successfully',
-    type: FetchCustomerOnboardingRespDto,
+    type: CreateCustomerOnboardingRespDto,
   })
   @ApiBadRequestResponse({
     description: 'Error occured while storing onboarding detail',

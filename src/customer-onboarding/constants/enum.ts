@@ -79,7 +79,7 @@ export enum JobRole {
   OTHER = 'OTHER',
 }
 export enum CreditStatus {
-  REQUESTED = 'REQUESTED', // Initial state when credit is requested
+  INITIATED = 'INITIATED', // Initial state when credit is requested
   PROCESSING = 'PROCESSING', // When credit provisioning has started
   APPROVED = 'APPROVED', // When credit has been successfully provided
   FAILED = 'FAILED', // When credit provisioning fails
@@ -115,6 +115,7 @@ export enum BusinessField {
 }
 
 export enum OnboardingStep {
+  CREATE_TEAM_ROLE = 'CREATE_TEAM_ROLE',
   CREATE_SSI_SERVICE = 'CREATE_SSI_SERVICE',
   CREDIT_SSI_SERVICE = 'CREDIT_SSI_SERVICE',
   CREATE_DID = 'CREATE_DID',
@@ -122,5 +123,7 @@ export enum OnboardingStep {
   CREATE_KYC_SERVICE = 'CREATE_KYC_SERVICE',
   GIVE_KYC_DASHBOARD_ACCESS = 'GIVE_KYC_DASHBOARD_ACCESS',
   CREDIT_KYC_SERVICE = 'CREDIT_KYC_SERVICE',
+  SETUP_KYC_WIDGET = 'SETUP_KYC_WIDGET',
+  CONFIGURE_KYC_VERIFIER_PAGE = 'CONFIGURE_KYC_VERIFIER_PAGE',
   COMPLETED = 'COMPLETED',
 }

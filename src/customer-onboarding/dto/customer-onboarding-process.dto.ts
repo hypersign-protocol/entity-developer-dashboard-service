@@ -45,14 +45,6 @@ export class CreditDetail {
 }
 export class CustomerOnboardingProcessDto {
   @ApiProperty({
-    name: 'userEmail',
-    description: 'email of the user',
-    example: 'xyz@gmail.com',
-  })
-  @IsNotEmpty()
-  @IsString()
-  userEmail: string;
-  @ApiProperty({
     name: 'ssiCreditDetail',
     description: 'Credit detail for ssi service',
     type: CreditDetail,

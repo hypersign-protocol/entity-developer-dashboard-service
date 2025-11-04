@@ -60,9 +60,9 @@ export class CustomerOnboarding {
     type: String,
     required: false,
     enum: CreditStatus,
-    default: CreditStatus.REQUESTED,
+    default: CreditStatus.INITIATED,
   })
-  creditStatus?: CreditStatus;
+  onboardingStatus?: CreditStatus;
   @Prop({ type: Array<LogDetail>, required: false, default: [] })
   logs?: LogDetail[];
   @Prop({ type: String, required: false }) // didDocumet id for business

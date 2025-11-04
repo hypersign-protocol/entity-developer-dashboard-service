@@ -189,12 +189,12 @@ export class CreateCustomerOnboardingRespDto extends CustomerOnboardingBasicDto 
   @IsString()
   userId: string;
   @ApiProperty({
-    name: 'creditStatus',
-    description: 'Credit status of the customer',
-    example: CreditStatus.REQUESTED,
+    name: 'onboardingStatus',
+    description: 'Onboarding process status of the customer',
+    example: CreditStatus.INITIATED,
   })
   @IsEnum(CreditStatus)
-  creditStatus: CreditStatus;
+  onboardingStatus: CreditStatus;
   @ApiProperty({
     name: '_id',
     description: 'Unique identifier for the customer onboarding record',
@@ -258,6 +258,7 @@ export class FetchCustomerOnboardingRespDto extends CreateCustomerOnboardingResp
     description: 'Logs related to customer onboarding process',
     type: CustomerStepLogs,
     required: false,
+    isArray: true,
   })
   @IsOptional()
   @Type(() => CustomerStepLogs)

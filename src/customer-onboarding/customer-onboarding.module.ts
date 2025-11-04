@@ -23,6 +23,8 @@ import { MailNotificationModule } from 'src/mail-notification/mail-notification.
 import { SuperAdminMiddleware } from 'src/utils/middleware/super-admin.middleware';
 import { AppAuthModule } from 'src/app-auth/app-auth.module';
 import { JwtModule } from '@nestjs/jwt';
+import { TeamModule } from 'src/roles/role.module';
+import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
 
 @Module({
   imports: [
@@ -34,6 +36,8 @@ import { JwtModule } from '@nestjs/jwt';
       { name: CustomerOnboarding.name, schema: CustomerOnboardingSchema },
     ]),
     AppAuthModule,
+    TeamModule,
+    WebpageConfigModule,
   ],
   controllers: [CustomerOnboardingController],
   providers: [CustomerOnboardingService, CustomerOnboardingRepository],

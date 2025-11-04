@@ -31,6 +31,13 @@ import {
 } from '../schemas/customer-onboarding.schema';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
 import { sanitizeUrl } from 'src/utils/utils';
+import { RoleRepository } from 'src/roles/repository/role.repository';
+import { ONBORDING_CONSTANT_DATA } from '../constants/en';
+import { WebpageConfigService } from 'src/webpage-config/services/webpage-config.service';
+import {
+  ExpiryType,
+  PageType,
+} from 'src/webpage-config/dto/create-webpage-config.dto';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -42,6 +49,8 @@ export class CustomerOnboardingService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly appAuthRepository: AppRepository,
+    private readonly roleRepository: RoleRepository,
+    private readonly webPageConfig: WebpageConfigService,
   ) {}
   /**
    * Creates a new customer onboarding record and notifies super admins
@@ -184,12 +193,13 @@ export class CustomerOnboardingService {
     Logger.log('Inside makeExternalRequest()', 'CustomerOnboardingService');
     try {
       const response = await fetch(url, options);
+      const detail = await response.json();
       if (!response.ok) {
-        throw new Error(`${errorMessage}: ${response.statusText}`);
+        throw new Error(`${errorMessage}: ${detail.error.details}`);
       }
-      return await response.json();
+      return detail;
     } catch (error) {
-      throw new Error(`${errorMessage}: ${error.message}`);
+      throw new Error(`${error.message}`);
     }
   }
 
@@ -283,35 +293,30 @@ export class CustomerOnboardingService {
     const onboardingLogs: LogDetail[] = [];
     const onboardingUpdateData: Partial<CustomerOnboarding> = {};
     let ssiService: any,
+      kycAccessToken: any,
       ssiAccessToken: any,
       issuerDidData: any,
       kycService: any,
       didDocument: any;
 
     try {
-      const { userEmail, ssiCreditDetail, kycCreditDetail } =
-        customerOnboardingProcessDto;
+      const { ssiCreditDetail, kycCreditDetail } = customerOnboardingProcessDto;
 
       // Validate and fetch customer onboarding details
       const customerOnboardingData =
         await this.customerOnboardingRepository.findCustomerOnboardingById({
           _id: id,
-          email: userEmail,
         });
 
-      if (
-        !customerOnboardingData ||
-        userEmail !== customerOnboardingData.customerEmail
-      ) {
+      if (!customerOnboardingData) {
         throw new BadRequestException(
-          !customerOnboardingData
-            ? `Customer onboarding detail not found for id: ${id}`
-            : "User email doesn't match with onboarding email",
+          `Customer onboarding detail not found for id: ${id}`,
         );
       }
 
       // Initialize configuration
-      const { companyName, domain, userId } = customerOnboardingData;
+      const { companyName, domain, userId, companyLogo, customerEmail } =
+        customerOnboardingData;
       const ssiBaseDomain = this.config.get<string>('SSI_API_DOMAIN');
       const cavachBaseDomain = this.config.get<string>('CAVACH_API_DOMAIN');
       const secret = this.config.get('JWT_SECRET');
@@ -331,11 +336,44 @@ export class CustomerOnboardingService {
         ? Object.values(OnboardingStep).indexOf(lastStep) + 1
         : 0;
       const remainingSteps = Object.values(OnboardingStep).slice(startIndex);
-
+      if (remainingSteps.length === 0) {
+        throw new BadRequestException(['Customer onboarding is already done']);
+      }
       // Process each step
       for (const step of remainingSteps) {
         try {
           switch (step) {
+            case OnboardingStep.CREATE_TEAM_ROLE: {
+              Logger.log(
+                'CREATE_TEAM_ROLE step started',
+                'CustomerOnboardingService',
+              );
+              const existingRole = await this.roleRepository.findOne({
+                userId,
+              });
+              if (!existingRole) {
+                await this.roleRepository.create({
+                  userId,
+                  roleName: ONBORDING_CONSTANT_DATA.TEAM_ROLE_NAME,
+                  roleDescription: ONBORDING_CONSTANT_DATA.ROLE_DESCRIPTION,
+                  permissions: ONBORDING_CONSTANT_DATA.ROLE_PERMISSIONS,
+                });
+                Logger.debug(
+                  'Team role created successfully',
+                  'CustomerOnboardingService',
+                );
+              } else {
+                Logger.debug(
+                  `Role '${ONBORDING_CONSTANT_DATA.TEAM_ROLE_NAME}' already exists for user ${userId}`,
+                  'CustomerOnboardingService',
+                );
+              }
+              Logger.debug(
+                'CREATE_TEAM_ROLE step ends',
+                'CustomerOnboardingService',
+              );
+              break;
+            }
             case OnboardingStep.CREATE_SSI_SERVICE: {
               Logger.log(
                 'CREATE_SSI_SERVICE step started',
@@ -343,12 +381,13 @@ export class CustomerOnboardingService {
               );
               ssiService = await this.appAuthService.createAnApp(
                 {
-                  appName: `${companyName}_SSI_Service`,
+                  appName: `${companyName}`,
                   domain,
                   serviceIds: [SERVICE_TYPES.SSI_API],
                   whitelistedCors: ['*'],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
+                  logoUrl: companyLogo,
                 },
                 userId,
               );
@@ -357,7 +396,7 @@ export class CustomerOnboardingService {
               onboardingUpdateData.ssiSubdomain = ssiService.subdomain;
               onboardingUpdateData.ssiServiceId = ssiService.appId;
               ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
-              Logger.log(
+              Logger.debug(
                 'CREATE_SSI_SERVICE step ends',
                 'CustomerOnboardingService',
               );
@@ -490,8 +529,8 @@ export class CustomerOnboardingService {
               );
               kycService = await this.appAuthService.createAnApp(
                 {
-                  appName: `${companyName}_KYC_Service`,
-                  domain,
+                  appName: `${companyName}`,
+                  domain: domain,
                   serviceIds: [SERVICE_TYPES.CAVACH_API],
                   whitelistedCors: ['*'],
                   env: APP_ENVIRONMENT.dev,
@@ -499,6 +538,7 @@ export class CustomerOnboardingService {
                   dependentServices: [
                     ssiService?.appId || customerOnboardingData.kycServiceId,
                   ],
+                  logoUrl: companyLogo,
                   issuerDid:
                     issuerDidData?.did || customerOnboardingData.businessId,
                   issuerVerificationMethodId: `${
@@ -578,10 +618,103 @@ export class CustomerOnboardingService {
               );
               break;
             }
+            case OnboardingStep.SETUP_KYC_WIDGET: {
+              Logger.log(
+                'SETUP_KYC_WIDGET step started',
+                'CustomerOnboardingService',
+              );
+              if (!kycService && customerOnboardingData.kycServiceId) {
+                kycService = await this.appAuthRepository.findOne({
+                  appId: customerOnboardingData.kycServiceId,
+                });
+              }
+              kycAccessToken = await this.appAuthService.getAccessToken(
+                GRANT_TYPES.access_service_kyc,
+                kycService,
+                4,
+              );
+              const requestBody = {
+                faceRecog: true,
+                idOcr: {
+                  enabled: false,
+                  documentType: null,
+                },
+                issuerDID:
+                  issuerDidData?.did || customerOnboardingData.businessId,
+                issuerVerificationMethodId: `${
+                  issuerDidData?.did || customerOnboardingData.businessId
+                }#key-1`,
+                onChainId: {
+                  enabled: false,
+                  selectedOnChainKYCconfiguration: null,
+                },
+                zkProof: {
+                  enabled: false,
+                  proofs: [],
+                },
+                userConsent: {
+                  domain,
+                  enabled: true,
+                  logoUrl: companyLogo,
+                  reason:
+                    'The app is requesting your KYC data to provide you service',
+                },
+              };
+              await this.makeExternalRequest(
+                `${sanitizeUrl(
+                  kycTenantUrl,
+                  true,
+                )}api/v1/e-kyc/verification/widget-config`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'x-kyc-access-token': kycAccessToken.access_token,
+                    'Content-Type': 'application/json',
+                    origin: '*',
+                  },
+                  body: JSON.stringify(requestBody),
+                },
+                'Failed to set up widget configuration',
+              );
+              Logger.debug(
+                'SETUP_KYC_WIDGET step ends',
+                'CustomerOnboardingService',
+              );
+              break;
+            }
+            case OnboardingStep.CONFIGURE_KYC_VERIFIER_PAGE: {
+              Logger.log(
+                'CONFIGURE_KYC_VERIFIER_PAGE step started',
+                'CustomerOnboardingService',
+              );
+
+              const user = await this.userRepository.findOne({
+                userId: userId,
+              });
+              const serviceId =
+                kycService?.appId || customerOnboardingData.kycServiceId;
+              await this.webPageConfig.storeWebPageConfigDetial(
+                serviceId,
+                {
+                  pageTitle: 'KYC Verification',
+                  pageDescription: 'Complete your KYC verification to proceed',
+                  expiryType: ExpiryType.ONE_MONTH,
+                  pageType: PageType.KYC,
+                  contactEmail: customerEmail,
+                  themeColor: 'vibrant',
+                },
+                user,
+              );
+              Logger.debug(
+                'CONFIGURE_KYC_VERIFIER_PAGE step ends',
+                'CustomerOnboardingService',
+              );
+              break;
+            }
 
             case OnboardingStep.COMPLETED: {
               Logger.log('COMPLETED', 'CustomerOnboardingService');
-              onboardingUpdateData.creditStatus = CreditStatus.APPROVED;
+              onboardingUpdateData.onboardingStatus = CreditStatus.APPROVED;
               break;
             }
           }

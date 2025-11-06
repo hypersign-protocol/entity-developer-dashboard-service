@@ -54,6 +54,7 @@ export class CustomerOnboardingModule implements NestModule {
       .exclude(
         { path: 'api/v1/customer-onboarding/:id', method: RequestMethod.GET },
         { path: 'api/v1/customer-onboarding', method: RequestMethod.POST },
+        { path: 'api/v1/customer-onboarding', method: RequestMethod.GET },
       )
       .forRoutes(CustomerOnboardingController);
     consumer

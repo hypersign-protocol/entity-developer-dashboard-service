@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  NotFoundException,
   ForbiddenException,
   HttpException,
   Injectable,
@@ -805,5 +806,27 @@ export class CustomerOnboardingService {
     else parts[0] = `${subdomain}.${parts[0]}`;
     url.hostname = parts.join('.');
     return url.origin + '/';
+  }
+
+  async findUserOnboardingDetail(user) {
+    Logger.log(
+      'Inside findUserOnboardingDetail() method start:: to get onboarding detail of particular user',
+      'CustomerOnboardingService',
+    );
+    try {
+      const userOnboardingDetail =
+        await this.customerOnboardingRepository.findCustomerOnboardingById({
+          userId: user.userId,
+        });
+      if (!userOnboardingDetail) {
+        throw new NotFoundException(
+          `No onboarding detail found for user with id: ${user.userId}`,
+        );
+      }
+      return userOnboardingDetail;
+    } catch (e) {
+      if (e instanceof HttpException) throw e;
+      throw new BadRequestException([e.message]);
+    }
   }
 }

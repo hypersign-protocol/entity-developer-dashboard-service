@@ -60,6 +60,19 @@ export class CustomerOnboardingController {
   }
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({
+    description: 'Customer Onboarding detail of user fetched successfully',
+    type: FetchCustomerOnboardingRespDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Error occured while fetching user onboarding detail',
+    type: AppError,
+  })
+  @Get()
+  findUserOnboardingDetail(@Req() req: Request) {
+    return this.customerOnboardingService.findUserOnboardingDetail(req.user);
+  }
+  @ApiBearerAuth('Authorization')
+  @ApiOkResponse({
     description: 'Customer Onboarding detail fetched successfully',
     type: FetchCustomerOnboardingRespDto,
   })

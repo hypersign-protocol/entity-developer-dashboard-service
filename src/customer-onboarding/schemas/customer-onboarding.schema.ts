@@ -77,11 +77,12 @@ export class CustomerOnboarding {
   ssiServiceId?: string;
   @Prop({ type: String, required: false })
   kycServiceId?: string;
-  @Prop({ type: String, required: true })
+  @Prop({ type: String, required: true, unique: true })
   userId: string;
 }
 
 export const CustomerOnboardingSchema =
   SchemaFactory.createForClass(CustomerOnboarding);
+CustomerOnboardingSchema.index({ userId: 1 });
 CustomerOnboardingSchema.index({ companyName: 1 });
 CustomerOnboardingSchema.index({ companyEmail: 1 });

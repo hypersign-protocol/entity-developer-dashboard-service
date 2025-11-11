@@ -25,7 +25,12 @@ import {
 } from 'src/supported-service/services/iServiceList';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { CreditStatus, OnboardingStep, StepStatus } from '../constants/enum';
+import {
+  CreditStatus,
+  OnboardingStep,
+  StepStatus,
+  SupportedDocument,
+} from '../constants/enum';
 import {
   CustomerOnboarding,
   LogDetail,
@@ -39,6 +44,7 @@ import {
   ExpiryType,
   PageType,
 } from 'src/webpage-config/dto/create-webpage-config.dto';
+import getOnboardingRetryNotificationMail from 'src/mail-notification/constants/templates/request-retry-onboarding';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -196,7 +202,14 @@ export class CustomerOnboardingService {
       const response = await fetch(url, options);
       const detail = await response.json();
       if (!response.ok) {
-        throw new Error(`${errorMessage}: ${detail.error.details}`);
+        const serverError =
+          detail?.error?.details ||
+          (Array.isArray(detail?.message)
+            ? detail.message.join(', ')
+            : detail?.message) ||
+          JSON.stringify(detail) ||
+          'Unknown error from external service';
+        throw new Error(`${errorMessage}: ${serverError}`);
       }
       return detail;
     } catch (error) {
@@ -340,6 +353,7 @@ export class CustomerOnboardingService {
       if (remainingSteps.length === 0) {
         throw new BadRequestException(['Customer onboarding is already done']);
       }
+      let onboardingStatus;
       // Process each step
       for (const step of remainingSteps) {
         try {
@@ -637,8 +651,8 @@ export class CustomerOnboardingService {
               const requestBody = {
                 faceRecog: true,
                 idOcr: {
-                  enabled: false,
-                  documentType: null,
+                  enabled: true,
+                  documentType: SupportedDocument.PASSPORT,
                 },
                 issuerDID:
                   issuerDidData?.did || customerOnboardingData.businessId,
@@ -716,12 +730,14 @@ export class CustomerOnboardingService {
             case OnboardingStep.COMPLETED: {
               Logger.log('COMPLETED', 'CustomerOnboardingService');
               onboardingUpdateData.onboardingStatus = CreditStatus.APPROVED;
+              onboardingStatus = CreditStatus.APPROVED;
               break;
             }
           }
           this.logStepSuccess(onboardingLogs, step as OnboardingStep);
         } catch (error) {
           this.logStepFailure(onboardingLogs, step as OnboardingStep, error);
+          onboardingStatus = CreditStatus.FAILED;
           break;
         }
       }
@@ -731,6 +747,7 @@ export class CustomerOnboardingService {
         { _id: id },
         {
           ...onboardingUpdateData,
+          onboardingStatus,
           logs: this.mergeLogs(
             customerOnboardingData.logs || [],
             onboardingLogs,
@@ -828,5 +845,58 @@ export class CustomerOnboardingService {
       if (e instanceof HttpException) throw e;
       throw new BadRequestException([e.message]);
     }
+  }
+
+  async notifyAdminOnOnboardingRetry(
+    createCustomerOnboardingDto: CreateCustomerOnboardingDto,
+    userId,
+  ) {
+    Logger.log(
+      'Inside notifyAdminOnOnboardingRetry() method to notify super admin about retry',
+      'CustomerOnboardingService',
+    );
+    const customerOnboardingData =
+      await this.customerOnboardingRepository.findCustomerOnboardingById({
+        userId,
+      });
+    if (!customerOnboardingData) {
+      throw new BadRequestException(
+        `No customer onboarding detail found for userId: ${userId}`,
+      );
+    }
+    if (customerOnboardingData.onboardingStatus === CreditStatus.APPROVED) {
+      throw new BadRequestException(['Customer onboarding is already done']);
+    }
+    const failedLogs =
+      customerOnboardingData.onboardingStatus === CreditStatus.FAILED
+        ? customerOnboardingData.logs.filter(
+            (log) => log.status === StepStatus.FAILED,
+          )
+        : [];
+    const failedStep = failedLogs[0]?.step || 'Unknown step';
+    const failureReason =
+      failedLogs[0]?.failureReason || 'Failure reason not recorded';
+    const message = getOnboardingRetryNotificationMail(
+      userId,
+      createCustomerOnboardingDto.customerEmail,
+      failedStep,
+      failureReason,
+      customerOnboardingData._id.toString(),
+    );
+    const superAdminDetails = await this.userRepository.find({
+      role: UserRole.SUPER_ADMIN,
+    });
+    const superAdminEmails = superAdminDetails?.map((admin) => admin.email);
+    const subject = 'Re-Onboarding Request Received';
+    await this.sendOnboardingRequestMailToSuperAdmin(
+      message,
+      superAdminEmails,
+      subject,
+    );
+    Logger.log(
+      `Re-onboarding notification sent to ${superAdminEmails.length} super admin(s)`,
+      'CustomerOnboardingService',
+    );
+    return customerOnboardingData;
   }
 }

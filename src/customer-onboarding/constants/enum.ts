@@ -127,3 +127,7 @@ export enum OnboardingStep {
   CONFIGURE_KYC_VERIFIER_PAGE = 'CONFIGURE_KYC_VERIFIER_PAGE',
   COMPLETED = 'COMPLETED',
 }
+
+export enum SupportedDocument {
+  PASSPORT = 'passport',
+}

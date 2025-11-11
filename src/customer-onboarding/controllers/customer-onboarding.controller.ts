@@ -53,6 +53,12 @@ export class CustomerOnboardingController {
       'Inside customer onboardig controller create method',
       'CustomerOnboardingController',
     );
+    if (createCustomerOnboardingDto.isRetry) {
+      return this.customerOnboardingService.notifyAdminOnOnboardingRetry(
+        createCustomerOnboardingDto,
+        req.user['userId'],
+      );
+    }
     return this.customerOnboardingService.createCustomerOnboardingDetail(
       createCustomerOnboardingDto,
       req.user['userId'],

@@ -29,7 +29,7 @@ export class CustomerOnboarding {
   @Prop({ type: String })
   customerEmail: string;
   @Prop({ type: String })
-  companyLogo: string;
+  companyLogo?: string;
   @Prop({ type: String })
   domain: string;
   @Prop({ type: String, enum: CustomerType, required: true })

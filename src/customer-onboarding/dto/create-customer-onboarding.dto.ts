@@ -10,6 +10,8 @@ import {
   IsOptional,
   IsString,
   ValidateNested,
+  IsUrl,
+  Matches,
 } from 'class-validator';
 import {
   BusinessField,
@@ -42,10 +44,15 @@ export class CustomerOnboardingBasicDto {
     name: 'companyLogo',
     description: 'logo url og company',
     example: 'https://logo.com/logo.png',
+    required: false,
   })
+  @IsOptional()
   @IsNotEmpty()
   @IsString()
-  companyLogo: string;
+  @IsUrl({
+    require_protocol: true,
+  })
+  companyLogo?: string;
   @ApiProperty({
     name: 'customerEmail',
     example: 'xyz@gmail.com',
@@ -61,6 +68,10 @@ export class CustomerOnboardingBasicDto {
   })
   @IsNotEmpty()
   @IsString()
+  @Matches(/^(?!:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/, {
+    message:
+      'domain must be a valid domain name (e.g., example.com, sub.domain.io)',
+  })
   domain: string;
   @ApiProperty({
     name: 'type',
@@ -103,10 +114,12 @@ export class CustomerOnboardingBasicDto {
     name: 'twitterUrl',
     description: 'twitter profile url of the company',
     example: 'https://www.twitter.com/hypermine',
+    required: false,
   })
+  @IsOptional()
   @IsNotEmpty()
   @IsString()
-  twitterUrl: string;
+  twitterUrl?: string;
   @ApiProperty({
     name: 'linkedinUrl',
     description: 'linkdin profile url of the company',
@@ -179,6 +192,16 @@ export class CreateCustomerOnboardingDto extends CustomerOnboardingBasicDto {
   })
   @IsBoolean()
   isKycAndKyb: boolean;
+  @ApiProperty({
+    name: 'isRetry',
+    description:
+      'Indicates if the customer is retrying onboarding (re-request)',
+    example: false,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isRetry?: boolean;
 }
 export class CreateCustomerOnboardingRespDto extends CustomerOnboardingBasicDto {
   @ApiProperty({

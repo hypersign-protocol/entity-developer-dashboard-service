@@ -72,11 +72,10 @@ export class CustomerOnboardingService {
     userId: string,
   ) {
     try {
-      let { isKyc, isKyb } = createCustomerOnboardingDto;
-      const { isKycAndKyb } = createCustomerOnboardingDto;
-      if (isKycAndKyb) {
+      let { isKyc = false } = createCustomerOnboardingDto;
+      const { isKyb = false } = createCustomerOnboardingDto;
+      if (!isKyc && !isKyb) {
         isKyc = true;
-        isKyb = true;
       }
       const onboardingData =
         await this.customerOnboardingRepository.createCustomerOnboarding({
@@ -86,14 +85,15 @@ export class CustomerOnboardingService {
           userId,
         });
 
-      const requestedServices = isKycAndKyb
-        ? 'KYC and KYB Service'
-        : isKyc
-        ? 'KYC Service'
-        : isKyb
-        ? 'KYB Service'
-        : 'No service requested';
-
+      const requestedServices =
+        isKyc && isKyb
+          ? 'KYC and KYB Service'
+          : isKyc
+          ? 'KYC Service'
+          : isKyb
+          ? 'KYB Service'
+          : 'KYC Service';
+      console.log(requestedServices);
       const { customerEmail } = createCustomerOnboardingDto;
 
       const message = getCreditRequestNotificationMail(

@@ -38,6 +38,7 @@ import { AllExceptionsFilter } from '../../utils/utils';
 import { AppError, GetAppList } from '../dtos/fetch-app.dto';
 import { PaginationDto } from 'src/utils/pagination.dto';
 import { TransformResponseInterceptor } from '../interceptors/transformResponse.interseptor';
+import { UserRole } from 'src/user/schema/user.schema';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Application')
 @Controller('/api/v1/app')
@@ -77,6 +78,11 @@ export class AppAuthController {
     @Query() pageOption: PaginationDto,
   ): Promise<App[]> {
     Logger.log('getApps() method: starts', 'AppAuthController');
+    if (!req.user.role || req.user.role === UserRole.ADMIN) {
+      pageOption.limit = 2;
+      pageOption.page = 1;
+    }
+
     const userId = req.user.userId;
     const appList: any = await this.appAuthService.getAllApps(
       userId,

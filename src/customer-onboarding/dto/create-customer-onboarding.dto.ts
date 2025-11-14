@@ -23,12 +23,9 @@ import {
   StepStatus,
   YearlyVolume,
 } from '../constants/enum';
-import { ExactlyOneTrue } from 'src/utils/customDecorator/kyc-kyb-selection.validator';
 import { IsPhoneNumberByCountry } from 'src/utils/customDecorator/validate-phone-no-country.decorator';
 import { Type } from 'class-transformer';
-@ExactlyOneTrue({
-  message: 'Exactly one of isKyc, isKyb, or both must be true',
-})
+
 export class CustomerOnboardingBasicDto {
   @ApiProperty({
     name: 'companyName',
@@ -117,7 +114,6 @@ export class CustomerOnboardingBasicDto {
     required: false,
   })
   @IsOptional()
-  @IsNotEmpty()
   @IsString()
   twitterUrl?: string;
   @ApiProperty({
@@ -126,7 +122,7 @@ export class CustomerOnboardingBasicDto {
     example: 'https://www.linkedin.com/company/hypermine',
     required: false,
   })
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
   linkedinUrl?: string;
   @ApiProperty({
@@ -173,25 +169,22 @@ export class CustomerOnboardingBasicDto {
     name: 'isKyc',
     description: 'Is kyc service is to be created for customer',
     example: true,
+    required: false,
   })
+  @IsOptional()
   @IsBoolean()
-  isKyc: boolean;
+  isKyc?: boolean;
   @ApiProperty({
     name: 'isKyb',
     description: 'Is kyb service is to be created for customer',
     example: false,
+    required: false,
   })
+  @IsOptional()
   @IsBoolean()
-  isKyb: boolean;
+  isKyb?: boolean;
 }
 export class CreateCustomerOnboardingDto extends CustomerOnboardingBasicDto {
-  @ApiProperty({
-    name: 'isKycAndKyb',
-    description: ' Is both kyc and kyb service to be created for customer',
-    example: false,
-  })
-  @IsBoolean()
-  isKycAndKyb: boolean;
   @ApiProperty({
     name: 'isRetry',
     description:

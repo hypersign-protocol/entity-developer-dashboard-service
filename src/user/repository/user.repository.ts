@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { User, UserDocument } from '../schema/user.schema';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model } from 'mongoose';
+import { FilterQuery, Model, UpdateQuery } from 'mongoose';
 
 export class UserRepository {
   constructor(
@@ -26,7 +26,7 @@ export class UserRepository {
 
   async findOneUpdate(
     userFilterQuery: FilterQuery<UserDocument>,
-    user: Partial<UserDocument>,
+    user: UpdateQuery<UserDocument>,
   ) {
     Logger.log(
       'findOneUpdate() method: start, updating user db',

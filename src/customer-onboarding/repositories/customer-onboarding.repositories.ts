@@ -3,7 +3,7 @@ import {
   CustomerOnboarding,
   CustomerOnboardingDocument,
 } from '../schemas/customer-onboarding.schema';
-import { Model, FilterQuery } from 'mongoose';
+import { Model, FilterQuery, UpdateQuery } from 'mongoose';
 import { Logger } from '@nestjs/common';
 
 export class CustomerOnboardingRepository {
@@ -32,7 +32,7 @@ export class CustomerOnboardingRepository {
   }
   updateCustomerOnboardingDetails(
     customerFilterQuery: FilterQuery<CustomerOnboarding>,
-    updateData: Partial<CustomerOnboarding>,
+    updateData: UpdateQuery<CustomerOnboarding>,
   ) {
     Logger.log(
       'Updating customer onboarding details',

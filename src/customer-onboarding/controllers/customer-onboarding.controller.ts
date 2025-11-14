@@ -3,7 +3,6 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
   Logger,
   Req,
@@ -12,9 +11,9 @@ import {
 } from '@nestjs/common';
 import {
   CreateCustomerOnboardingDto,
+  CreateCustomerOnboardingRespDto,
   FetchCustomerOnboardingRespDto,
 } from '../dto/create-customer-onboarding.dto';
-import { UpdateCustomerOnboardingDto } from '../dto/update-customer-onboarding.dto';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -25,6 +24,10 @@ import {
 import { CustomerOnboardingService } from '../services/customer-onboarding.service';
 import { Request } from 'express';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
+import {
+  CustomerOnboardingProcessDto,
+  ProcessCustomerOnboardingRespDto,
+} from '../dto/customer-onboarding-process.dto';
 @ApiTags('Customer-Onboarding')
 @Controller('api/v1/customer-onboarding')
 export class CustomerOnboardingController {
@@ -34,7 +37,7 @@ export class CustomerOnboardingController {
   @ApiBearerAuth('Authorization')
   @ApiCreatedResponse({
     description: 'Customer Onboarding detail created successfully',
-    type: FetchCustomerOnboardingRespDto,
+    type: CreateCustomerOnboardingRespDto,
   })
   @ApiBadRequestResponse({
     description: 'Error occured while storing onboarding detail',
@@ -50,10 +53,29 @@ export class CustomerOnboardingController {
       'Inside customer onboardig controller create method',
       'CustomerOnboardingController',
     );
+    if (createCustomerOnboardingDto.isRetry) {
+      return this.customerOnboardingService.notifyAdminOnOnboardingRetry(
+        createCustomerOnboardingDto,
+        req.user['userId'],
+      );
+    }
     return this.customerOnboardingService.createCustomerOnboardingDetail(
       createCustomerOnboardingDto,
       req.user['userId'],
     );
+  }
+  @ApiBearerAuth('Authorization')
+  @ApiOkResponse({
+    description: 'Customer Onboarding detail of user fetched successfully',
+    type: FetchCustomerOnboardingRespDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Error occured while fetching user onboarding detail',
+    type: AppError,
+  })
+  @Get()
+  findUserOnboardingDetail(@Req() req: Request) {
+    return this.customerOnboardingService.findUserOnboardingDetail(req.user);
   }
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({
@@ -67,5 +89,24 @@ export class CustomerOnboardingController {
   @Get(':id')
   findOne(@Param('id') id: string, @Req() req: Request) {
     return this.customerOnboardingService.findOne(id, req.user);
+  }
+  @ApiBearerAuth('Authorization')
+  @ApiOkResponse({
+    description: 'Customer Onboarding detail updated successfully',
+    type: ProcessCustomerOnboardingRespDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Error occured while process onboarding detail',
+    type: AppError,
+  })
+  @Post(':id/process')
+  processCustomerOnboarding(
+    @Param('id') id: string,
+    @Body() customerOnboardingProcessDto: CustomerOnboardingProcessDto,
+  ) {
+    return this.customerOnboardingService.processCustomerOnboarding(
+      id,
+      customerOnboardingProcessDto,
+    );
   }
 }

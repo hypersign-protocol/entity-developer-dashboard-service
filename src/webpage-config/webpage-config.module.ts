@@ -43,6 +43,7 @@ import {
     WebPageConfigRepository,
     AdminPeopleRepository,
   ],
+  exports: [WebpageConfigService],
 })
 export class WebpageConfigModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

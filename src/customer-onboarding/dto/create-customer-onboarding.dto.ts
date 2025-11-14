@@ -9,6 +9,10 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  ValidateNested,
+  IsUrl,
+  Matches,
+  ValidateIf,
 } from 'class-validator';
 import {
   BusinessField,
@@ -16,13 +20,13 @@ import {
   CreditStatus,
   CustomerType,
   InterestedService,
+  OnboardingStep,
+  StepStatus,
   YearlyVolume,
 } from '../constants/enum';
-import { ExactlyOneTrue } from 'src/utils/customDecorator/kyc-kyb-selection.validator';
 import { IsPhoneNumberByCountry } from 'src/utils/customDecorator/validate-phone-no-country.decorator';
-@ExactlyOneTrue({
-  message: 'Exactly one of isKyc, isKyb, or both must be true',
-})
+import { Type } from 'class-transformer';
+
 export class CustomerOnboardingBasicDto {
   @ApiProperty({
     name: 'companyName',
@@ -38,10 +42,15 @@ export class CustomerOnboardingBasicDto {
     name: 'companyLogo',
     description: 'logo url og company',
     example: 'https://logo.com/logo.png',
+    required: false,
   })
+  @IsOptional()
   @IsNotEmpty()
   @IsString()
-  companyLogo: string;
+  @IsUrl({
+    require_protocol: true,
+  })
+  companyLogo?: string;
   @ApiProperty({
     name: 'customerEmail',
     example: 'xyz@gmail.com',
@@ -55,9 +64,14 @@ export class CustomerOnboardingBasicDto {
     description: 'domain of the company',
     example: 'hypermine.in',
   })
+  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
   @IsNotEmpty()
   @IsString()
-  domain: string;
+  @Matches(/^(?!:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/, {
+    message:
+      'domain must be a valid domain name (e.g., example.com, sub.domain.io)',
+  })
+  domain?: string;
   @ApiProperty({
     name: 'type',
     description: 'type of customer',
@@ -74,6 +88,7 @@ export class CustomerOnboardingBasicDto {
       'Country where the company is located (ISO Alpha-2 code preferred)',
     enum: CountryCode,
   })
+  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
   @IsNotEmpty()
   @IsString()
   @IsIn(CountryCode)
@@ -83,9 +98,10 @@ export class CustomerOnboardingBasicDto {
     description: 'registration number of the company',
     example: '1234567890',
   })
+  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
   @IsNotEmpty()
   @IsString()
-  registrationNumber: string;
+  registrationNumber?: string;
   @ApiProperty({
     name: 'billingAddress',
     description: 'billing address of the company',
@@ -99,24 +115,51 @@ export class CustomerOnboardingBasicDto {
     name: 'twitterUrl',
     description: 'twitter profile url of the company',
     example: 'https://www.twitter.com/hypermine',
+    required: false,
   })
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  twitterUrl: string;
+  @ValidateIf((o) => o.twitterUrl !== '')
+  @Matches(/^https?:\/\/(twitter\.com|x\.com)\/[A-Za-z0-9_]+\/?$/, {
+    message: 'Invalid Twitter/X profile URL',
+  })
+  twitterUrl?: string;
   @ApiProperty({
     name: 'linkedinUrl',
     description: 'linkdin profile url of the company',
     example: 'https://www.linkedin.com/company/hypermine',
     required: false,
   })
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
+  @ValidateIf((o) => o.linkedinUrl !== '')
+  @Matches(
+    /^https?:\/\/(www\.)?linkedin\.com\/(in|company)\/[A-Za-z0-9_-]+\/?$/,
+    {
+      message: 'Invalid LinkedIn profile URL',
+    },
+  )
   linkedinUrl?: string;
+  @ApiProperty({
+    name: 'telegramUrl',
+    description: 'Telegram profile or channel URL',
+    example: 'https://t.me/hypermine',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @ValidateIf((o) => o.telegramUrl !== '')
+  @Matches(
+    /^https?:\/\/(t\.me|telegram\.me)\/([A-Za-z0-9_]+|joinchat\/[A-Za-z0-9_-]+)\/?$/,
+    { message: 'Invalid Telegram URL' },
+  )
+  telegramUrl?: string;
   @ApiProperty({
     name: 'phoneNumber',
     description: 'Contact phone number of the company',
     example: '6234572090',
   })
+  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
   @IsNotEmpty()
   @IsString()
   @IsPhoneNumberByCountry()
@@ -124,7 +167,7 @@ export class CustomerOnboardingBasicDto {
   @ApiProperty({
     name: 'interestedService',
     description: 'Services interested by customer',
-    example: [InterestedService.ID_VERIFICATION],
+    example: [InterestedService.AGE_VERIFICATION],
     enum: InterestedService,
     isArray: true,
   })
@@ -151,32 +194,20 @@ export class CustomerOnboardingBasicDto {
   @ArrayNotEmpty()
   @IsEnum(BusinessField, { each: true })
   businessField: BusinessField[];
-
-  @ApiProperty({
-    name: 'isKyc',
-    description: 'Is kyc service is to be created for customer',
-    example: true,
-  })
-  @IsBoolean()
-  isKyc: boolean;
-  @ApiProperty({
-    name: 'isKyb',
-    description: 'Is kyb service is to be created for customer',
-    example: false,
-  })
-  @IsBoolean()
-  isKyb: boolean;
 }
 export class CreateCustomerOnboardingDto extends CustomerOnboardingBasicDto {
   @ApiProperty({
-    name: 'isKycAndKyb',
-    description: ' Is both kyc and kyb service to be created for customer',
+    name: 'isRetry',
+    description:
+      'Indicates if the customer is retrying onboarding (re-request)',
     example: false,
+    required: false,
   })
+  @IsOptional()
   @IsBoolean()
-  isKycAndKyb: boolean;
+  isRetry?: boolean;
 }
-export class FetchCustomerOnboardingRespDto extends CustomerOnboardingBasicDto {
+export class CreateCustomerOnboardingRespDto extends CustomerOnboardingBasicDto {
   @ApiProperty({
     name: 'userId',
     description: 'Unique identification of user',
@@ -185,12 +216,12 @@ export class FetchCustomerOnboardingRespDto extends CustomerOnboardingBasicDto {
   @IsString()
   userId: string;
   @ApiProperty({
-    name: 'creditStatus',
-    description: 'Credit status of the customer',
-    example: CreditStatus.REQUESTED,
+    name: 'onboardingStatus',
+    description: 'Onboarding process status of the customer',
+    example: CreditStatus.INITIATED,
   })
   @IsEnum(CreditStatus)
-  creditStatus: CreditStatus;
+  onboardingStatus: CreditStatus;
   @ApiProperty({
     name: '_id',
     description: 'Unique identifier for the customer onboarding record',
@@ -213,4 +244,99 @@ export class FetchCustomerOnboardingRespDto extends CustomerOnboardingBasicDto {
   })
   @IsString()
   updatedAt: string;
+}
+export class CustomerStepLogs {
+  @ApiProperty({
+    name: 'step',
+    description: 'Onboarding step',
+    example: OnboardingStep.CREATE_SSI_SERVICE,
+    enum: OnboardingStep,
+  })
+  @IsEnum(OnboardingStep)
+  step: OnboardingStep;
+  @ApiProperty({
+    name: 'time',
+    description: 'Timestamp of the log entry',
+    example: '2025-11-01T12:50:03.984Z',
+  })
+  @IsString()
+  time: string;
+  @ApiProperty({
+    name: 'status',
+    description: 'Status of the onboarding step',
+    example: 'COMPLETED',
+    enum: StepStatus,
+  })
+  @IsEnum(StepStatus)
+  status: StepStatus;
+  @ApiProperty({
+    name: 'failureReason',
+    description: 'Reason for failure if the step failed',
+    example: 'Invalid documents provided',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  failureReason?: string;
+}
+export class FetchCustomerOnboardingRespDto extends CreateCustomerOnboardingRespDto {
+  @ApiProperty({
+    name: 'logs',
+    description: 'Logs related to customer onboarding process',
+    type: CustomerStepLogs,
+    required: false,
+    isArray: true,
+  })
+  @IsOptional()
+  @Type(() => CustomerStepLogs)
+  @ValidateNested()
+  logs?: CustomerStepLogs;
+  @ApiProperty({
+    name: 'businessIdName',
+    description: 'Name of business id for kyb',
+    example: 'hypermine-kyb-did',
+  })
+  @IsOptional()
+  @IsString()
+  businessIdName?: string;
+  @ApiProperty({
+    name: 'businessId',
+    description: 'Did document id for business',
+    example: 'did:ion:EiDgH6...',
+  })
+  @IsOptional()
+  @IsString()
+  businessId?: string;
+  @ApiProperty({
+    name: 'ssiSubdomain',
+    description: 'Subdomain for ssi service',
+    example: 'ent-abc123',
+  })
+  @IsOptional()
+  @IsString()
+  ssiSubdomain?: string;
+  @ApiProperty({
+    name: 'kycSubdomain',
+    description: 'Subdomain for kyc service',
+    example: 'ent-def123',
+  })
+  @IsOptional()
+  @IsString()
+  kycSubdomain?: string;
+  @ApiProperty({
+    name: 'ssiServiceId',
+    example: 'adcc346677',
+    description: 'Service id for ssi service',
+  })
+  @IsOptional()
+  @IsString()
+  ssiServiceId?: string;
+  @ApiProperty({
+    name: 'kycServiceId',
+    example: 'dbc1234346677',
+    description: 'Service id for kyc service',
+  })
+  @IsOptional()
+  @IsString()
+  kycServiceId?: string;
 }

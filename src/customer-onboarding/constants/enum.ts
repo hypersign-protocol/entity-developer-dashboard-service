@@ -7,6 +7,11 @@ export enum StepStatus {
   SUCCESS = 'SUCCESS',
   FAILED = 'FAILED',
 }
+export enum TimeUnit {
+  'Days' = 'Days',
+  'Month' = 'Month',
+  'Year' = 'Year',
+}
 export const CountryCode = [
   'IN',
   'SG',
@@ -74,17 +79,20 @@ export enum JobRole {
   OTHER = 'OTHER',
 }
 export enum CreditStatus {
-  REQUESTED = 'REQUESTED', // Initial state when credit is requested
+  INITIATED = 'INITIATED', // Initial state when credit is requested
   PROCESSING = 'PROCESSING', // When credit provisioning has started
   APPROVED = 'APPROVED', // When credit has been successfully provided
   FAILED = 'FAILED', // When credit provisioning fails
 }
 
 export enum InterestedService {
-  ID_VERIFICATION = 'ID Verification',
   AML_SCREEN = 'AML Screening',
-  BIOMETRIC_VERIFCATION = 'Biometric Verification',
   PROOF_OF_ADDRESS = 'Proof Of Address',
+  KYB = 'Know Your Business (KYB)',
+  KYC = 'Know Your Customer (KYC)',
+  AGE_VERIFICATION = 'Age Verification',
+  FRAUD_PREVENTION = 'Fraud Prevention',
+  COLLECT_WALLET = 'Collect Wallet Address',
 }
 
 export enum YearlyVolume {
@@ -99,12 +107,39 @@ export enum BusinessField {
   CRYPTO = 'Crypto',
   GAMBLING = 'Gambling',
   MARKETPLACES = 'Marketplaces',
-  'ONLINE_TRAVEL' = 'Online travel',
+  ONLINE_TRAVEL = 'Online Travel',
   TELCO = 'Telco',
-  HR_GIG_PLATFORM = 'HR/Gig Platform',
   E_COMM = 'E-commerce',
-  EDTECH = 'Edtech',
-  GAMING = 'Gaming',
-  GOVENRNMENT = 'Government',
+  BANKING = 'Banking',
+  INSURANCE = 'Insurance',
   HEALTHCARE = 'Healthcare',
+  GOVERNMENT = 'Government / Public Sector',
+  EDUCATION = 'Education / EdTech',
+  REAL_ESTATE = 'Real Estate',
+  TRANSPORT = 'Transport / Mobility',
+  SOCIAL_MEDIA = 'Social Media / Community Platforms',
+  ENTERTAINMENT = 'Entertainment / Streaming',
+  GAMING = 'Gaming / Esports',
+  LEGAL = 'Legal / Compliance Services',
+  SUPPLY_CHAIN = 'Supply Chain / Logistics',
+  NFT_WEB3 = 'NFT / Web3 Projects',
+  OTHER = 'Other',
+}
+
+export enum OnboardingStep {
+  CREATE_TEAM_ROLE = 'CREATE_TEAM_ROLE',
+  CREATE_SSI_SERVICE = 'CREATE_SSI_SERVICE',
+  CREDIT_SSI_SERVICE = 'CREDIT_SSI_SERVICE',
+  CREATE_DID = 'CREATE_DID',
+  REGISTER_DID = 'REGISTER_DID',
+  CREATE_KYC_SERVICE = 'CREATE_KYC_SERVICE',
+  GIVE_KYC_DASHBOARD_ACCESS = 'GIVE_KYC_DASHBOARD_ACCESS',
+  CREDIT_KYC_SERVICE = 'CREDIT_KYC_SERVICE',
+  SETUP_KYC_WIDGET = 'SETUP_KYC_WIDGET',
+  CONFIGURE_KYC_VERIFIER_PAGE = 'CONFIGURE_KYC_VERIFIER_PAGE',
+  COMPLETED = 'COMPLETED',
+}
+
+export enum SupportedDocument {
+  PASSPORT = 'passport',
 }

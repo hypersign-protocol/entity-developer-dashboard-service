@@ -28,6 +28,7 @@ import { UserRepository } from 'src/user/repository/user.repository';
 import { AuthzCreditService } from 'src/credits/services/credits.service';
 import { AuthZCreditsRepository } from 'src/credits/repositories/authz.repository';
 import { EdvClientKeysManager } from 'src/edv/services/edv.singleton';
+import { UserRole } from 'src/user/schema/user.schema';
 
 export enum GRANT_TYPES {
   access_service_kyc = 'access_service_kyc',
@@ -58,7 +59,6 @@ export class AppAuthService {
     userId: string,
   ): Promise<createAppResponse> {
     Logger.log('createAnApp() method: starts....', 'AppAuthService');
-
     const { serviceIds } = createAppDto;
     if (!serviceIds) {
       throw new Error('No serviceIds provided while creating an app');
@@ -267,7 +267,7 @@ export class AppAuthService {
     return { apiSecretKey };
   }
 
-  getAllApps(userId: string, paginationOption) {
+  async getAllApps(userId: string, paginationOption, userRole) {
     Logger.log('getAllApps() method: starts....', 'AppAuthService');
 
     const skip = (paginationOption.page - 1) * paginationOption.limit;
@@ -276,11 +276,77 @@ export class AppAuthService {
       'getAllApps() method: before calling app repository to fetch app details',
       'AppAuthService',
     );
+    let app;
+    if (userRole === UserRole.SUPER_ADMIN) {
+      app = await this.appRepository.find({
+        paginationOption,
+      });
+    } else {
+      const basePipeline = this.appRepository.appDataProjectPipelineToReturn();
+      const pipeline = [
+        {
+          $facet: {
+            cavachApp: [
+              {
+                $match: {
+                  userId,
+                  services: { $elemMatch: { id: SERVICE_TYPES.CAVACH_API } },
+                },
+              },
+              { $sort: { _id: -1 } },
+              { $limit: 1 },
+              { $project: basePipeline },
+            ],
 
-    return this.appRepository.find({
-      userId,
-      paginationOption,
-    });
+            dependentApps: [{ $match: { userId } }, { $project: basePipeline }],
+
+            totalCount: [{ $match: { userId } }, { $count: 'total' }],
+          },
+        },
+
+        {
+          $unwind: {
+            path: '$cavachApp',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        {
+          $project: {
+            totalCount: '$totalCount',
+
+            data: {
+              $concatArrays: [
+                {
+                  $cond: [
+                    { $ifNull: ['$cavachApp', false] },
+                    ['$cavachApp'],
+                    [],
+                  ],
+                },
+                {
+                  $cond: [
+                    { $ifNull: ['$cavachApp', false] },
+                    {
+                      $filter: {
+                        input: '$dependentApps',
+                        as: 'app',
+                        cond: {
+                          $in: ['$$app.appId', '$cavachApp.dependentServices'],
+                        },
+                      },
+                    },
+                    [],
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      ];
+      app = await this.appRepository.findAppsByPipeline(pipeline);
+    }
+    return app;
   }
 
   getAppsForMarketplace() {

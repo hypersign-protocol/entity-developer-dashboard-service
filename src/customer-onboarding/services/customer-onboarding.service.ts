@@ -8,9 +8,9 @@ import {
   Logger,
 } from '@nestjs/common';
 import { CreateCustomerOnboardingDto } from '../dto/create-customer-onboarding.dto';
-import { UpdateCustomerOnboardingDto } from '../dto/update-customer-onboarding.dto';
 import { CustomerOnboardingRepository } from '../repositories/customer-onboarding.repositories';
 import getCreditRequestNotificationMail from 'src/mail-notification/constants/templates/credit-request.template';
+import getOnboardingApprovedNotificationMail from 'src/mail-notification/constants/templates/onboarding-approve.template';
 import { UserRepository } from 'src/user/repository/user.repository';
 import { UserRole } from 'src/user/schema/user.schema';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
@@ -750,11 +750,36 @@ export class CustomerOnboardingService {
         );
       }
 
+      if (onboardingStatus === CreditStatus.APPROVED) {
+        const userDetail = await this.userRepository.findOne({ userId });
+        const { email, name } = userDetail;
+        const message = getOnboardingApprovedNotificationMail(name);
+        this.sendCustomerCreditRequestNotification({
+          to: email,
+          message,
+          subject: 'Onboarding Approved',
+          cc: [customerOnboardingData.customerEmail],
+          mailType: 'send-credit-approval-notification-mail',
+        });
+      }
       return { message: 'Customer onboarding completed successfully' };
     } catch (e) {
       if (e instanceof HttpException) throw e;
       throw new BadRequestException([e.message]);
     }
+  }
+
+  private async sendCustomerCreditRequestNotification({
+    to,
+    message,
+    subject,
+    cc,
+    mailType,
+  }) {
+    await this.mailNotificationService.addAJob(
+      { to, subject, message, cc },
+      mailType,
+    );
   }
 
   /**

@@ -64,13 +64,14 @@ export class CustomerOnboardingBasicDto {
     description: 'domain of the company',
     example: 'hypermine.in',
   })
+  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
   @IsNotEmpty()
   @IsString()
   @Matches(/^(?!:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/, {
     message:
       'domain must be a valid domain name (e.g., example.com, sub.domain.io)',
   })
-  domain: string;
+  domain?: string;
   @ApiProperty({
     name: 'type',
     description: 'type of customer',
@@ -97,9 +98,10 @@ export class CustomerOnboardingBasicDto {
     description: 'registration number of the company',
     example: '1234567890',
   })
+  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
   @IsNotEmpty()
   @IsString()
-  registrationNumber: string;
+  registrationNumber?: string;
   @ApiProperty({
     name: 'billingAddress',
     description: 'billing address of the company',

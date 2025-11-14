@@ -30,12 +30,12 @@ export class CustomerOnboarding {
   customerEmail: string;
   @Prop({ type: String })
   companyLogo?: string;
-  @Prop({ type: String })
-  domain: string;
+  @Prop({ type: String, requried: false })
+  domain?: string;
   @Prop({ type: String, enum: CustomerType, required: true })
   type: CustomerType;
-  @Prop({ required: true, type: String, enum: CountryCode })
-  country: string;
+  @Prop({ required: false, type: String })
+  country?: string;
   @Prop({ type: String, required: false })
   billingAddress?: string;
   @Prop({ type: String, required: false })
@@ -46,8 +46,8 @@ export class CustomerOnboarding {
   telegramUrl?: string;
   @Prop({ type: String, required: false })
   phoneNumber?: string;
-  @Prop({ type: String, required: true })
-  registrationNumber: string;
+  @Prop({ type: String, required: false })
+  registrationNumber?: string;
   @Prop({ type: [String], required: true, enum: InterestedService })
   interestedService: InterestedService[];
   @Prop({ type: String, enum: YearlyVolume, required: true })

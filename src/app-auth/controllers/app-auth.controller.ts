@@ -78,15 +78,12 @@ export class AppAuthController {
     @Query() pageOption: PaginationDto,
   ): Promise<App[]> {
     Logger.log('getApps() method: starts', 'AppAuthController');
-    if (!req.user.role || req.user.role === UserRole.ADMIN) {
-      pageOption.limit = 2;
-      pageOption.page = 1;
-    }
-
+    const userRole = req.user?.role ?? UserRole.ADMIN;
     const userId = req.user.userId;
     const appList: any = await this.appAuthService.getAllApps(
       userId,
       pageOption,
+      userRole,
     );
     if (appList.length === 0) {
       throw new AppNotFoundException();

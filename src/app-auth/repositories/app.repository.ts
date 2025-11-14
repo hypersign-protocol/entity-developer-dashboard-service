@@ -13,7 +13,7 @@ export class AppRepository {
     private readonly supportedServices: SupportedServiceService,
   ) {}
 
-  private appDataProjectPipelineToReturn() {
+  public appDataProjectPipelineToReturn() {
     return {
       appName: 1,
       appId: 1,

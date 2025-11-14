@@ -13,7 +13,7 @@ import { supportedServiceResponseDto } from 'src/supported-service/dto/create-su
 import { APP_ENVIRONMENT } from 'src/supported-service/services/iServiceList';
 export type AppDocument = App & Document;
 
-@Schema()
+@Schema({ timestamps: true })
 export class App {
   @ApiHideProperty()
   @Prop()

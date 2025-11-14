@@ -137,7 +137,7 @@ export class CustomerOnboardingBasicDto {
   @ApiProperty({
     name: 'interestedService',
     description: 'Services interested by customer',
-    example: [InterestedService.ID_VERIFICATION],
+    example: [InterestedService.AGE_VERIFICATION],
     enum: InterestedService,
     isArray: true,
   })
@@ -164,25 +164,6 @@ export class CustomerOnboardingBasicDto {
   @ArrayNotEmpty()
   @IsEnum(BusinessField, { each: true })
   businessField: BusinessField[];
-
-  @ApiProperty({
-    name: 'isKyc',
-    description: 'Is kyc service is to be created for customer',
-    example: true,
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  isKyc?: boolean;
-  @ApiProperty({
-    name: 'isKyb',
-    description: 'Is kyb service is to be created for customer',
-    example: false,
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  isKyb?: boolean;
 }
 export class CreateCustomerOnboardingDto extends CustomerOnboardingBasicDto {
   @ApiProperty({

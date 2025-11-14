@@ -72,28 +72,16 @@ export class CustomerOnboardingService {
     userId: string,
   ) {
     try {
-      let { isKyc = false } = createCustomerOnboardingDto;
-      const { isKyb = false } = createCustomerOnboardingDto;
-      if (!isKyc && !isKyb) {
-        isKyc = true;
-      }
+      const { interestedService } = createCustomerOnboardingDto;
       const onboardingData =
         await this.customerOnboardingRepository.createCustomerOnboarding({
           ...createCustomerOnboardingDto,
-          isKyc,
-          isKyb,
           userId,
         });
-
       const requestedServices =
-        isKyc && isKyb
-          ? 'KYC and KYB Service'
-          : isKyc
-          ? 'KYC Service'
-          : isKyb
-          ? 'KYB Service'
-          : 'KYC Service';
-      console.log(requestedServices);
+        interestedService.length === 1
+          ? `${interestedService[0]} Service`
+          : `${interestedService.join(', ')} Services`;
       const { customerEmail } = createCustomerOnboardingDto;
 
       const message = getCreditRequestNotificationMail(

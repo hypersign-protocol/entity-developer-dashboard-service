@@ -52,10 +52,6 @@ export class CustomerOnboarding {
   yearlyVolume: string;
   @Prop({ type: [String], required: true, enum: BusinessField })
   businessField: BusinessField[];
-  @Prop({ type: Boolean, required: false })
-  isKyc?: boolean;
-  @Prop({ type: Boolean, required: false })
-  isKyb?: boolean;
   @Prop({
     type: String,
     required: false,

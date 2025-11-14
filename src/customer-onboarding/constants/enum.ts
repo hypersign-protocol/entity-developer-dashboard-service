@@ -86,10 +86,13 @@ export enum CreditStatus {
 }
 
 export enum InterestedService {
-  ID_VERIFICATION = 'ID Verification',
   AML_SCREEN = 'AML Screening',
-  BIOMETRIC_VERIFCATION = 'Biometric Verification',
   PROOF_OF_ADDRESS = 'Proof Of Address',
+  KYB = 'Know Your Business (KYB)',
+  KYC = 'Know Your Customer (KYC)',
+  AGE_VERIFICATION = 'Age Verification',
+  FRAUD_PREVENTION = 'Fraud Prevention',
+  COLLECT_WALLET = 'Collect Wallet Address',
 }
 
 export enum YearlyVolume {
@@ -104,14 +107,23 @@ export enum BusinessField {
   CRYPTO = 'Crypto',
   GAMBLING = 'Gambling',
   MARKETPLACES = 'Marketplaces',
-  'ONLINE_TRAVEL' = 'Online travel',
+  ONLINE_TRAVEL = 'Online Travel',
   TELCO = 'Telco',
-  HR_GIG_PLATFORM = 'HR/Gig Platform',
   E_COMM = 'E-commerce',
-  EDTECH = 'Edtech',
-  GAMING = 'Gaming',
-  GOVENRNMENT = 'Government',
+  BANKING = 'Banking',
+  INSURANCE = 'Insurance',
   HEALTHCARE = 'Healthcare',
+  GOVERNMENT = 'Government / Public Sector',
+  EDUCATION = 'Education / EdTech',
+  REAL_ESTATE = 'Real Estate',
+  TRANSPORT = 'Transport / Mobility',
+  SOCIAL_MEDIA = 'Social Media / Community Platforms',
+  ENTERTAINMENT = 'Entertainment / Streaming',
+  GAMING = 'Gaming / Esports',
+  LEGAL = 'Legal / Compliance Services',
+  SUPPLY_CHAIN = 'Supply Chain / Logistics',
+  NFT_WEB3 = 'NFT / Web3 Projects',
+  OTHER = 'Other',
 }
 
 export enum OnboardingStep {

@@ -52,7 +52,7 @@ export class CreateAppDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)
-  description: string;
+  description?: string;
   @ApiProperty({
     description: 'logoUrl',
     example: 'http://image.png',
@@ -61,7 +61,7 @@ export class CreateAppDto {
   @IsOptional()
   @IsString()
   @IsUrlEmpty()
-  logoUrl: string;
+  logoUrl?: string;
   @ApiProperty({
     description: 'services',
     example: [SERVICE_TYPES.SSI_API],
@@ -90,7 +90,7 @@ export class CreateAppDto {
   })
   @IsOptional()
   @IsArray()
-  dependentServices: Array<string>; // ids of dependent services / apps
+  dependentServices?: Array<string>; // ids of dependent services / apps
 
   @ApiProperty({
     description: 'environment',
@@ -112,7 +112,7 @@ export class CreateAppDto {
   })
   @IsOptional()
   @IsString()
-  issuerDid: string;
+  issuerDid?: string;
 
   @ApiProperty({
     description: 'issuerVerificationMethodId',
@@ -121,7 +121,7 @@ export class CreateAppDto {
   })
   @IsOptional()
   @IsString()
-  issuerVerificationMethodId: string;
+  issuerVerificationMethodId?: string;
   @ApiProperty({
     description: 'domain',
     example: 'hypersign.id',
@@ -139,7 +139,7 @@ export class CreateAppDto {
   })
   @IsOptional()
   @IsBoolean()
-  hasDomainVerified: boolean;
+  hasDomainVerified?: boolean;
 }
 
 export class DeleteAppResponse {

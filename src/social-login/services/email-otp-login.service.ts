@@ -67,7 +67,6 @@ export class EmailOtpLoginService {
         'Too many OTP requests. Try again after 1 hour',
       );
     }
-
     // Generate secure 6-character alphanumeric OTP
     const otp = randomBytes(3).toString('hex').toUpperCase();
     // Hash OTP using SHA-256

@@ -757,7 +757,7 @@ export class CustomerOnboardingService {
         this.sendCustomerCreditRequestNotification({
           to: email,
           message,
-          subject: 'Onboarding Approved',
+          subject: 'Hypersign Dashboard  - Onboarding Approved',
           cc: [customerOnboardingData.customerEmail],
           mailType: 'send-credit-approval-notification-mail',
         });

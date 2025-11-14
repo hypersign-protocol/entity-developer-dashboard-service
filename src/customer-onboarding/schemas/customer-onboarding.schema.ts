@@ -43,6 +43,8 @@ export class CustomerOnboarding {
   @Prop({ type: String, required: false })
   twitterUrl?: string;
   @Prop({ type: String, required: false })
+  telegramUrl?: string;
+  @Prop({ type: String, required: false })
   phoneNumber?: string;
   @Prop({ type: String, required: true })
   registrationNumber: string;

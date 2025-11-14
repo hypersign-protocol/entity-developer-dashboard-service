@@ -12,6 +12,7 @@ import {
   ValidateNested,
   IsUrl,
   Matches,
+  ValidateIf,
 } from 'class-validator';
 import {
   BusinessField,
@@ -86,6 +87,7 @@ export class CustomerOnboardingBasicDto {
       'Country where the company is located (ISO Alpha-2 code preferred)',
     enum: CountryCode,
   })
+  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
   @IsNotEmpty()
   @IsString()
   @IsIn(CountryCode)
@@ -115,6 +117,10 @@ export class CustomerOnboardingBasicDto {
   })
   @IsOptional()
   @IsString()
+  @ValidateIf((o) => o.twitterUrl !== '')
+  @Matches(/^https?:\/\/(twitter\.com|x\.com)\/[A-Za-z0-9_]+\/?$/, {
+    message: 'Invalid Twitter/X profile URL',
+  })
   twitterUrl?: string;
   @ApiProperty({
     name: 'linkedinUrl',
@@ -124,12 +130,34 @@ export class CustomerOnboardingBasicDto {
   })
   @IsOptional()
   @IsString()
+  @ValidateIf((o) => o.linkedinUrl !== '')
+  @Matches(
+    /^https?:\/\/(www\.)?linkedin\.com\/(in|company)\/[A-Za-z0-9_-]+\/?$/,
+    {
+      message: 'Invalid LinkedIn profile URL',
+    },
+  )
   linkedinUrl?: string;
+  @ApiProperty({
+    name: 'telegramUrl',
+    description: 'Telegram profile or channel URL',
+    example: 'https://t.me/hypermine',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @ValidateIf((o) => o.telegramUrl !== '')
+  @Matches(
+    /^https?:\/\/(t\.me|telegram\.me)\/([A-Za-z0-9_]+|joinchat\/[A-Za-z0-9_-]+)\/?$/,
+    { message: 'Invalid Telegram URL' },
+  )
+  telegramUrl?: string;
   @ApiProperty({
     name: 'phoneNumber',
     description: 'Contact phone number of the company',
     example: '6234572090',
   })
+  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
   @IsNotEmpty()
   @IsString()
   @IsPhoneNumberByCountry()

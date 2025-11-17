@@ -99,6 +99,14 @@ spec:
           value: "__REDIS_HOST__"
         - name: KYC_VERIFIER_APP_BASE_URL
           value: "__KYC_VERIFIER_APP_BASE_URL__"        
+        - name: OTP_COOLDOWN_MINUTES
+          value: '__OTP_COOLDOWN_MINUTES__'
+        - name: OTP_HOURLY_LIMIT
+          value: '__OTP_HOURLY_LIMIT__'  
+        - name: OTP_EXPIRY_MINUTES
+          value: '__OTP_EXPIRY_MINUTES__'  
+        - name: MAX_RETRY_ATTEMPT
+          value: '__MAX_RETRY_ATTEMPT__'          
         volumeMounts:
         - name: mongo
           mountPath: "/data"

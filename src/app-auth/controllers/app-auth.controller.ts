@@ -201,7 +201,7 @@ export class AppAuthController {
 
     const app = await this.appAuthService.getAppById(appId, userId);
     if (app) {
-      return this.appAuthService.updateAnApp(appId, updateAppDto, userId);
+      return this.appAuthService.updateAnApp(appId, updateAppDto, req.user);
     } else throw new AppNotFoundException();
   }
 

@@ -1,4 +1,5 @@
 import {
+  forwardRef,
   MiddlewareConsumer,
   Module,
   NestModule,
@@ -31,6 +32,7 @@ import {
   AdminPeopleSchema,
 } from 'src/people/schema/people.schema';
 import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
+import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
 
 @Module({
   imports: [
@@ -43,6 +45,7 @@ import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware'
     UserModule,
     JwtModule.register({}),
     CreditModule,
+    forwardRef(() => WebpageConfigModule),
   ],
   providers: [
     AppAuthService,
@@ -56,7 +59,7 @@ import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware'
   ],
   controllers: [AppAuthController],
 
-  exports: [AppAuthService, AppRepository, AppAuthApiKeyService, AppAuthModule],
+  exports: [AppAuthService, AppRepository, AppAuthApiKeyService],
 })
 export class AppAuthModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

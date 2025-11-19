@@ -43,7 +43,7 @@ export class SocialLoginService {
           sanitizeUrl(
             this.config.get('DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP'),
           ) + '/api/v1/login/callback'
-        }&scope=email%20profile&client_id=${this.config.get(
+        }&scope=email%20profile&prompt=select_account&client_id=${this.config.get(
           'GOOGLE_CLIENT_ID',
         )}`;
         break;

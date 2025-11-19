@@ -50,7 +50,7 @@ export class SocialLoginController {
   constructor(
     private readonly socialLoginService: SocialLoginService,
     private readonly config: ConfigService,
-  ) { }
+  ) {}
   @ApiResponse({
     status: 200,
     description: 'Auth url',

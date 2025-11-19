@@ -68,10 +68,10 @@ const TeammateTemplate = `
     <div class="container">
         <p>Hi <strong>@@InviteeName@@</strong>,</p>
 
-        <p><strong>@@SenderEmailId@@</strong> has invited you to join their workspace on the <strong>Entity Studio
+        <p><strong>@@SenderEmailId@@</strong> has invited you to join their workspace on the <strong>Hypersign
                 Dashboard</strong>.</p>
 
-        <p>The Entity Studio Dashboard lets you manage all your digital identity needs from one powerful, interactive
+        <p>The Hypersign Dashboard lets you manage all your digital identity needs from one powerful, interactive
             dashboard.</p>
 
         <p>Click below to accept the invitation from your teammate and start collaboration:</p>
@@ -84,10 +84,10 @@ const TeammateTemplate = `
 
         <!-- <div class="footer">
             <p style="margin-left: 0;">—</p>
-            <p style="margin-left: 20px;">The <strong>Entity Studio</strong> Team</p> -->
+            <p style="margin-left: 20px;">The <strong>Hypersign</strong> Team</p> -->
         <div class="footer">
             <p>—</p>
-            <p> The Entity Studio Team</p>
+            <p> The Hypersign Team</p>
         </div>
     </div>
     </div>

@@ -81,7 +81,7 @@ export class PeopleService {
       mailName: JobNames.SEND_TEAM_MATE_INVITATION_MAIL,
       teamMateMailId: emailId,
       adminEmailId: adminUserData.email,
-      mailSubject: " You're invited to join Entity Studio Dashboard",
+      mailSubject: " You're invited to join Hypersign Dashboard",
       inviteLink: `${this.configService.get('INVITATIONURL')}`,
     });
     return invite;

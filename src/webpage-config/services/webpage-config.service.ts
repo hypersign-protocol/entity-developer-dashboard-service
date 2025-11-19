@@ -27,7 +27,7 @@ export class WebpageConfigService {
     private readonly appAuthService: AppAuthService,
     private readonly webPageConfigRepo: WebPageConfigRepository,
     private readonly config: ConfigService,
-  ) { }
+  ) {}
   async storeWebPageConfigDetial(
     serviceId: string,
     createWebpageConfigDto: CreateWebpageConfigDto,

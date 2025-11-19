@@ -71,6 +71,10 @@ export class SocialLoginModule implements NestModule {
           method: RequestMethod.GET,
         },
         {
+          path: '/api/v1/auth/logout',
+          method: RequestMethod.POST,
+        },
+        {
           path: '/api/v1/login/callback',
           method: RequestMethod.GET,
         },

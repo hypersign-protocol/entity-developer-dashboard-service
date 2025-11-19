@@ -223,7 +223,6 @@ export class SocialLoginController {
       httpOnly: true,
       maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
       secure: isProduction,
-      domain: isProduction ? cookieDomain : undefined,
       sameSite: isProduction ? 'None' : 'Lax',
       path: '/',
     });
@@ -264,11 +263,11 @@ export class SocialLoginController {
     const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
     const isProduction = this.config.get<string>('NODE_ENV') === 'production';
     res.clearCookie('authToken', {
-      httpOnly: true,
-      secure: isProduction,
+      path: '/',
       domain: isProduction ? cookieDomain : undefined,
       sameSite: isProduction ? 'None' : 'Lax',
-      path: '/',
+      secure: isProduction,
+      httpOnly: true,
     });
     res.clearCookie('refreshToken', {
       path: '/',

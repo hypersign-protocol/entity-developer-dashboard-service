@@ -282,6 +282,7 @@ export class AppAuthService {
     if (userRole === UserRole.SUPER_ADMIN) {
       app = await this.appRepository.find({
         paginationOption,
+        userId
       });
     } else {
       const basePipeline = this.appRepository.appDataProjectPipelineToReturn();

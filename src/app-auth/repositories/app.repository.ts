@@ -142,9 +142,8 @@ export class AppRepository {
       'find() method: starts, finding list of apps from db',
       'AppRepository',
     );
-
     const pipeline = [
-      // { $match: { userId: appsFilterQuery.userId } },
+      { $match: { userId: appsFilterQuery.userId } },
       {
         $facet: {
           totalCount: [{ $count: 'total' }],

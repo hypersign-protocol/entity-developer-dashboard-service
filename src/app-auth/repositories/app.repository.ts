@@ -144,7 +144,7 @@ export class AppRepository {
     );
 
     const pipeline = [
-      { $match: { userId: appsFilterQuery.userId } },
+      // { $match: { userId: appsFilterQuery.userId } },
       {
         $facet: {
           totalCount: [{ $count: 'total' }],

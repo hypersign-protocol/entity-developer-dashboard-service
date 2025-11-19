@@ -19,7 +19,7 @@ export class EmailOtpLoginService {
   constructor(
     private readonly mailNotificationService: MailNotificationService,
     private readonly config: ConfigService,
-  ) { }
+  ) {}
 
   /**
    * Generates and sends a one-time email OTP.

@@ -12,7 +12,7 @@ export class WebPageConfig {
   kycAccessToken: string;
   @Prop({ type: String, enum: ExpiryType, required: true })
   expiryType: ExpiryType;
-  @Prop({ type: String })
+  @Prop({ type: String, unique: true })
   serviceId: string;
   @Prop({ type: Date })
   expiryDate: Date;

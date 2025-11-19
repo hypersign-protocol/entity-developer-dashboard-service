@@ -20,6 +20,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
 import { UserRole } from 'src/user/schema/user.schema';
+import { JobNames } from 'src/utils/time-constant';
 
 @Injectable()
 export class PeopleService {
@@ -77,7 +78,7 @@ export class PeopleService {
       ).toISOString(),
     });
     this.mailNotificationService.addJobToMailQueue({
-      mailName: 'sendTeamMatemail',
+      mailName: JobNames.SEND_TEAM_MATE_INVITATION_MAIL,
       teamMateMailId: emailId,
       adminEmailId: adminUserData.email,
       mailSubject: " You're invited to join Entity Studio Dashboard",

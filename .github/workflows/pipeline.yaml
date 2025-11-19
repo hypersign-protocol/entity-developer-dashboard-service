@@ -139,5 +139,13 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__GEOLOCATION_DB_PATH__#${{ secrets.GEOLOCATION_DB_PATH }}#" {} \;
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__NODE_ENV__#${{ secrets.NODE_ENV }}#" {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__OTP_COOLDOWN_MINUTES__#${{ secrets.OTP_COOLDOWN_MINUTES }}#" {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__OTP_HOURLY_LIMIT__#${{ secrets.OTP_HOURLY_LIMIT }}#" {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__OTP_EXPIRY_MINUTES__#${{ secrets.OTP_EXPIRY_MINUTES }}#" {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MAX_RETRY_ATTEMPT__#${{ secrets.MAX_RETRY_ATTEMPT }}#" {} \;
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

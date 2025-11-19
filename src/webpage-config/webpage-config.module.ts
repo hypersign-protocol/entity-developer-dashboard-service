@@ -1,4 +1,5 @@
 import {
+  forwardRef,
   MiddlewareConsumer,
   Module,
   NestModule,
@@ -28,7 +29,7 @@ import {
 
 @Module({
   imports: [
-    AppAuthModule,
+    forwardRef(() => AppAuthModule),
     UserModule,
     MongooseModule.forFeature([
       { name: WebPageConfig.name, schema: WebPageConfigSchema },
@@ -43,6 +44,7 @@ import {
     WebPageConfigRepository,
     AdminPeopleRepository,
   ],
+  exports: [WebpageConfigService, WebPageConfigRepository],
 })
 export class WebpageConfigModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

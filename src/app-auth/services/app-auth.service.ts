@@ -28,6 +28,8 @@ import { UserRepository } from 'src/user/repository/user.repository';
 import { AuthzCreditService } from 'src/credits/services/credits.service';
 import { AuthZCreditsRepository } from 'src/credits/repositories/authz.repository';
 import { EdvClientKeysManager } from 'src/edv/services/edv.singleton';
+import { UserRole } from 'src/user/schema/user.schema';
+import { WebPageConfigRepository } from 'src/webpage-config/repositories/webpage-config.repository';
 
 export enum GRANT_TYPES {
   access_service_kyc = 'access_service_kyc',
@@ -51,6 +53,7 @@ export class AppAuthService {
     private readonly userRepository: UserRepository,
     private readonly authzCreditService: AuthzCreditService,
     private readonly authzCreditRepository: AuthZCreditsRepository,
+    private readonly webpageConfigRepo: WebPageConfigRepository,
   ) {}
 
   async createAnApp(
@@ -58,7 +61,6 @@ export class AppAuthService {
     userId: string,
   ): Promise<createAppResponse> {
     Logger.log('createAnApp() method: starts....', 'AppAuthService');
-
     const { serviceIds } = createAppDto;
     if (!serviceIds) {
       throw new Error('No serviceIds provided while creating an app');
@@ -267,7 +269,7 @@ export class AppAuthService {
     return { apiSecretKey };
   }
 
-  getAllApps(userId: string, paginationOption) {
+  async getAllApps(userId: string, paginationOption, userRole) {
     Logger.log('getAllApps() method: starts....', 'AppAuthService');
 
     const skip = (paginationOption.page - 1) * paginationOption.limit;
@@ -276,11 +278,77 @@ export class AppAuthService {
       'getAllApps() method: before calling app repository to fetch app details',
       'AppAuthService',
     );
+    let app;
+    if (userRole === UserRole.SUPER_ADMIN) {
+      app = await this.appRepository.find({
+        paginationOption,
+      });
+    } else {
+      const basePipeline = this.appRepository.appDataProjectPipelineToReturn();
+      const pipeline = [
+        {
+          $facet: {
+            cavachApp: [
+              {
+                $match: {
+                  userId,
+                  services: { $elemMatch: { id: SERVICE_TYPES.CAVACH_API } },
+                },
+              },
+              { $sort: { _id: -1 } },
+              { $limit: 1 },
+              { $project: basePipeline },
+            ],
 
-    return this.appRepository.find({
-      userId,
-      paginationOption,
-    });
+            dependentApps: [{ $match: { userId } }, { $project: basePipeline }],
+
+            totalCount: [{ $match: { userId } }, { $count: 'total' }],
+          },
+        },
+
+        {
+          $unwind: {
+            path: '$cavachApp',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        {
+          $project: {
+            totalCount: '$totalCount',
+
+            data: {
+              $concatArrays: [
+                {
+                  $cond: [
+                    { $ifNull: ['$cavachApp', false] },
+                    ['$cavachApp'],
+                    [],
+                  ],
+                },
+                {
+                  $cond: [
+                    { $ifNull: ['$cavachApp', false] },
+                    {
+                      $filter: {
+                        input: '$dependentApps',
+                        as: 'app',
+                        cond: {
+                          $in: ['$$app.appId', '$cavachApp.dependentServices'],
+                        },
+                      },
+                    },
+                    [],
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      ];
+      app = await this.appRepository.findAppsByPipeline(pipeline);
+    }
+    return app;
   }
 
   getAppsForMarketplace() {
@@ -400,11 +468,12 @@ export class AppAuthService {
   async updateAnApp(
     appId: string,
     updataAppDto: UpdateAppDto,
-    userId: string,
+    userDetail,
   ): Promise<createAppResponse> {
     Logger.log('updateAnApp() method: starts....', 'AppAuthService');
 
     const { env, hasDomainVerified, domain, logoUrl, issuerDid } = updataAppDto;
+    const { userId } = userDetail;
     const oldApp = await this.getAppById(appId, userId);
     if (!oldApp) {
       throw new BadRequestException(
@@ -462,6 +531,16 @@ export class AppAuthService {
       { appId, userId },
       updataAppDto,
     );
+    // update webpage detail
+    if ((app.services[0].id = SERVICE_TYPES.CAVACH_API)) {
+      this.updateWebPageConfigDetail(app, userDetail).catch((err) => {
+        Logger.error(
+          `updateWebPageConfigDetail failed for ${appId}: ${err.message}`,
+          err.stack,
+        );
+      });
+    }
+
     return this.getAppResponse(app);
   }
 
@@ -818,5 +897,84 @@ export class AppAuthService {
     }
 
     return this.getAccessToken(grantType, app, 12, accessList);
+  }
+
+  private async updateWebPageConfigDetail(app, userDetail) {
+    const webpageDetail = await this.webpageConfigRepo.findAWebpageConfig({
+      serviceId: app.appId,
+    });
+    if (!webpageDetail) {
+      Logger.warn(`No webpage config found for serviceId ${app.appId}`);
+      return;
+    }
+    let expiryDate = webpageDetail.expiryDate;
+    const userAccessList = userDetail.accessList;
+    Logger.log(
+      'Inside updateWebPageConfigDetail(): Method to generate ssi and kyc token',
+      'AppAuthService',
+    );
+    const ssiAccessList = (userAccessList || [])
+      .filter(
+        (x) =>
+          x.serviceType === SERVICE_TYPES.SSI_API &&
+          !this.checkIfDateExpired(x.expiryDate),
+      )
+      .map((x) => x.access);
+
+    const kycAccessList = (userAccessList || [])
+      .filter(
+        (x) =>
+          x.serviceType === SERVICE_TYPES.CAVACH_API &&
+          !this.checkIfDateExpired(x.expiryDate),
+      )
+      .map((x) => x.access);
+
+    if (ssiAccessList.length <= 0 || kycAccessList.length <= 0) {
+      throw new UnauthorizedException(
+        `You are not authorized for both SSI and KYC services.`,
+      );
+    }
+    expiryDate = new Date(expiryDate);
+
+    if (isNaN(expiryDate.getTime())) {
+      throw new BadRequestException('Invalid custom expiry date format.');
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (expiryDate < today) {
+      throw new BadRequestException(
+        'Custom expiry date cannot be earlier than today.',
+      );
+    }
+    const expiresIn = Math.floor(
+      (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60),
+    );
+
+    const ssiServiceDetail = await this.appRepository.findOne({
+      appId: app.dependentServices[0],
+    });
+    if (!ssiServiceDetail) {
+      throw new BadRequestException([
+        `No service found with dependentServiceId: ${app.dependentServices[0]}`,
+      ]);
+    }
+    // Get access tokens
+    const ssiAccessTokenDetail = await this.getAccessToken(
+      GRANT_TYPES.access_service_ssi,
+      ssiServiceDetail,
+      expiresIn,
+    );
+    const kycAccessTokenDetail = await this.getAccessToken(
+      GRANT_TYPES.access_service_kyc,
+      app,
+      expiresIn,
+    );
+    await this.webpageConfigRepo.findOneAndUpdate(
+      { _id: webpageDetail['_id'] },
+      {
+        ssiAccessToken: ssiAccessTokenDetail.access_token,
+        kycAccessToken: kycAccessTokenDetail.access_token,
+      },
+    );
   }
 }

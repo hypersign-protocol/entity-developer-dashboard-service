@@ -11,7 +11,6 @@ import {
 } from '../dto/create-webpage-config.dto';
 import { UpdateWebpageConfigDto } from '../dto/update-webpage-config.dto';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
-import { AppAuthApiKeyService } from 'src/app-auth/services/app-auth-apikey.service';
 import {
   AppAuthService,
   GRANT_TYPES,
@@ -26,10 +25,9 @@ export class WebpageConfigService {
   constructor(
     private readonly appRepository: AppRepository,
     private readonly appAuthService: AppAuthService,
-    private readonly appAuthKeyService: AppAuthApiKeyService,
     private readonly webPageConfigRepo: WebPageConfigRepository,
     private readonly config: ConfigService,
-  ) {}
+  ) { }
   async storeWebPageConfigDetial(
     serviceId: string,
     createWebpageConfigDto: CreateWebpageConfigDto,

@@ -13,7 +13,7 @@ import { supportedServiceResponseDto } from 'src/supported-service/dto/create-su
 import { APP_ENVIRONMENT } from 'src/supported-service/services/iServiceList';
 export type AppDocument = App & Document;
 
-@Schema()
+@Schema({ timestamps: true })
 export class App {
   @ApiHideProperty()
   @Prop()
@@ -72,7 +72,7 @@ export class App {
   @IsOptional()
   @IsString()
   @Prop({ required: false })
-  description: string;
+  description?: string;
 
   @ApiProperty({
     description: 'whitelistedCors',
@@ -92,7 +92,7 @@ export class App {
   @IsString()
   @IsUrl()
   @Prop({ required: false })
-  logoUrl: string;
+  logoUrl?: string;
 
   @IsOptional()
   @IsString()
@@ -114,7 +114,7 @@ export class App {
   })
   @IsArray()
   @Prop({ required: false })
-  dependentServices: Array<string>;
+  dependentServices?: Array<string>;
 
   @IsOptional()
   @IsString()
@@ -128,7 +128,7 @@ export class App {
     required: false,
   })
   @Prop({ required: false })
-  issuerDid: string;
+  issuerDid?: string;
 
   @IsOptional()
   @IsString()
@@ -137,7 +137,7 @@ export class App {
     required: false,
   })
   @Prop({ required: false })
-  issuerVerificationMethodId: string;
+  issuerVerificationMethodId?: string;
 
   @IsOptional()
   @IsString()

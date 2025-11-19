@@ -38,6 +38,7 @@ import { AllExceptionsFilter } from '../../utils/utils';
 import { AppError, GetAppList } from '../dtos/fetch-app.dto';
 import { PaginationDto } from 'src/utils/pagination.dto';
 import { TransformResponseInterceptor } from '../interceptors/transformResponse.interseptor';
+import { UserRole } from 'src/user/schema/user.schema';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Application')
 @Controller('/api/v1/app')
@@ -77,10 +78,12 @@ export class AppAuthController {
     @Query() pageOption: PaginationDto,
   ): Promise<App[]> {
     Logger.log('getApps() method: starts', 'AppAuthController');
+    const userRole = req.user?.role ?? UserRole.ADMIN;
     const userId = req.user.userId;
     const appList: any = await this.appAuthService.getAllApps(
       userId,
       pageOption,
+      userRole,
     );
     if (appList.length === 0) {
       throw new AppNotFoundException();
@@ -198,7 +201,7 @@ export class AppAuthController {
 
     const app = await this.appAuthService.getAppById(appId, userId);
     if (app) {
-      return this.appAuthService.updateAnApp(appId, updateAppDto, userId);
+      return this.appAuthService.updateAnApp(appId, updateAppDto, req.user);
     } else throw new AppNotFoundException();
   }
 

@@ -53,7 +53,7 @@ export class WebPageConfigRepository {
     return this.webPageConfigModel.findOneAndUpdate(
       webpageCofigFilterQuery,
       webPageConfig,
-      { new: true },
+      { new: true, lean: true },
     );
   }
 

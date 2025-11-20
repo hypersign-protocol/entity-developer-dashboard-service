@@ -64,8 +64,6 @@ export class SupportedServiceList {
       // Giving access of SSI service by default
       Object.keys(SERVICES[serviceType].ACCESS_TYPES).forEach((access) => {
         if (access == SERVICES[serviceType].ACCESS_TYPES.ALL) {
-          return;
-        } else {
           const serviceAccess = {
             serviceType: serviceType,
             access: access,
@@ -76,24 +74,7 @@ export class SupportedServiceList {
       });
     } else if (serviceType == SERVICE_TYPES.CAVACH_API) {
       Object.keys(SERVICES[serviceType].ACCESS_TYPES).forEach((access) => {
-        if (access == SERVICES[serviceType].ACCESS_TYPES.READ_SESSION) {
-          return;
-        } else if (access == SERVICES[serviceType].ACCESS_TYPES.ALL) {
-          return;
-        } else {
-          const serviceAccess = {
-            serviceType: serviceType,
-            access: access,
-            expiryDate: null, // never expires
-          };
-          defaultServicesAccess.push(serviceAccess);
-        }
-      });
-    } else if (serviceType == SERVICE_TYPES.QUEST) {
-      Object.keys(SERVICES[serviceType].ACCESS_TYPES).forEach((access) => {
         if (access == SERVICES[serviceType].ACCESS_TYPES.ALL) {
-          return;
-        } else {
           const serviceAccess = {
             serviceType: serviceType,
             access: access,
@@ -102,7 +83,20 @@ export class SupportedServiceList {
           defaultServicesAccess.push(serviceAccess);
         }
       });
-    } else {
+    }
+    // else if (serviceType == SERVICE_TYPES.QUEST) {
+    //   Object.keys(SERVICES[serviceType].ACCESS_TYPES).forEach((access) => {
+    //     if (access == SERVICES[serviceType].ACCESS_TYPES.ALL) {
+    //       const serviceAccess = {
+    //         serviceType: serviceType,
+    //         access: access,
+    //         expiryDate: null, // never expires
+    //       };
+    //       defaultServicesAccess.push(serviceAccess);
+    //     }
+    //   });
+    // }
+    else {
       throw new Error('Invalid service type: ' + serviceType);
     }
     return defaultServicesAccess;

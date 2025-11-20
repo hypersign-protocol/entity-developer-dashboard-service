@@ -44,9 +44,9 @@ export class EmailOtpLoginService {
     const cooldownKey = `otp:cooldown:${email}`;
     const cooldownExists = await redisClient.exists(cooldownKey);
     if (cooldownExists) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         'Please wait a minute before requesting another OTP',
-      );
+      ]);
     }
     // Set cooldown key for 60 seconds
     await redisClient.set(
@@ -63,9 +63,9 @@ export class EmailOtpLoginService {
       await redisClient.expire(countKey, TIME.HOUR);
     }
     if (count > otpHourlyLimit) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         'Too many OTP requests. Try again after 1 hour',
-      );
+      ]);
     }
     // Generate secure 6-character alphanumeric OTP
     const otp = randomBytes(3).toString('hex').toUpperCase();
@@ -120,7 +120,7 @@ export class EmailOtpLoginService {
     const attemptsKey = `otp:attempts:${email}`;
     const storedHash = await redisClient.get(otpKey);
     if (!storedHash) {
-      throw new BadRequestException('OTP expired');
+      throw new BadRequestException(['OTP expired']);
     }
     const OtpExpiryMinute = this.config.get<number>('OTP_EXPIRY_MINUTES', 5);
     const maxAttempts = this.config.get<number>('MAX_RETRY_ATTEMPT', 3);
@@ -143,7 +143,7 @@ export class EmailOtpLoginService {
           OtpExpiryMinute * TIME.MINUTE,
         );
       }
-      throw new UnauthorizedException('Invalid OTP');
+      throw new UnauthorizedException(['Invalid OTP']);
     }
     // OTP is valid → delete it (one-time use if success)
     await redisClient.del(otpKey);

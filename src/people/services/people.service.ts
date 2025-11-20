@@ -36,7 +36,7 @@ export class PeopleService {
   async createInvitation(createPersonDto: CreateInviteDto, adminUserData) {
     const { emailId } = createPersonDto;
     if (emailId === adminUserData?.email) {
-      throw new BadRequestException('Self invitation is not available');
+      throw new BadRequestException(['Self invitation is not available']);
     }
     const userDetails = await this.userService.findOne({
       email: emailId,
@@ -53,10 +53,10 @@ export class PeopleService {
       adminId: adminUserData.userId,
     });
     if (adminPeople != null) {
-      throw new ConflictException(
+      throw new ConflictException([
         'User already exists to your account',
         'Already Invited',
-      );
+      ]);
     }
 
     // const isInvitedAlready = await this.inviteRepository.findOne({
@@ -93,23 +93,23 @@ export class PeopleService {
       inviteCode,
     });
     if (adminPeople == null) {
-      throw new BadRequestException('Wrong invitation code');
+      throw new BadRequestException(['Wrong invitation code']);
     }
     const expiry = new Date(adminPeople.invitationValidTill);
     const now = new Date();
 
     if (expiry < now) {
-      throw new BadRequestException('Invite code expired');
+      throw new BadRequestException(['Invite code expired']);
     }
     if (adminPeople == null) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         `Wrong invite code ${inviteCode}`,
         `Invitation doesnot exists`,
-      );
+      ]);
     }
 
     if (adminPeople?.accepted) {
-      throw new BadRequestException('Invite has been accepted already');
+      throw new BadRequestException(['Invite has been accepted already']);
     }
     const acceptedInvite = await this.adminPeopleService.findOneAndUpdate(
       {
@@ -134,7 +134,7 @@ export class PeopleService {
       inviteCode,
     });
     if (findInvite == null) {
-      throw new NotFoundException('Invite not found');
+      throw new NotFoundException(['Invite not found']);
     }
 
     const updateInvite = await this.adminPeopleService.findOneAndUpdate(
@@ -172,7 +172,7 @@ export class PeopleService {
       adminId: adminUserData.userId,
     });
     if (adminPeople == null) {
-      throw new ConflictException('User doesnot exists', 'Already Deleted');
+      throw new ConflictException(['User doesnot exists', 'Already Deleted']);
     }
     return this.adminPeopleService.findOneAndDelete({
       userId: userDetails?.userId || emailId,
@@ -189,10 +189,10 @@ export class PeopleService {
     });
 
     if (adminPeople == null) {
-      throw new NotFoundException('Member not found');
+      throw new NotFoundException(['Member not found']);
     }
     if (adminPeople.accepted == false) {
-      throw new BadRequestException('Invitation is pending');
+      throw new BadRequestException(['Invitation is pending']);
     }
 
     const role = await this.roleRepository.findOne({
@@ -201,7 +201,7 @@ export class PeopleService {
     });
 
     if (role == null) {
-      throw new NotFoundException('Role not found');
+      throw new NotFoundException(['Role not found']);
     }
 
     return await this.adminPeopleService.findOneAndUpdate(
@@ -224,7 +224,7 @@ export class PeopleService {
       userId: adminId,
     });
     if (adminData == null) {
-      throw new BadRequestException('Admin user not found');
+      throw new BadRequestException(['Admin user not found']);
     }
     const userId = user.userId;
     let adminPeople = user;
@@ -236,15 +236,15 @@ export class PeopleService {
       });
 
       if (adminPeople == null) {
-        throw new NotFoundException(
+        throw new NotFoundException([
           'You are not the member of ' + adminData.email,
-        );
+        ]);
       }
 
       if (adminPeople.roleId == null) {
-        throw new BadRequestException(
+        throw new BadRequestException([
           'You do not have any role to access admin account',
-        );
+        ]);
       }
 
       role = await this.roleRepository.findOne({

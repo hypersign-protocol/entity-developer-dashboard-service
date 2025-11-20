@@ -149,7 +149,7 @@ export class SocialLoginController {
   async refreshTokenGeneration(@Req() req, @Res() res) {
     const refreshToken = req.cookies['refreshToken'];
     if (!refreshToken) {
-      throw new UnauthorizedException('Missing refresh token');
+      throw new UnauthorizedException(['Missing refresh token']);
     }
     const tokens = await this.socialLoginService.verifyAndGenerateRefreshToken(
       refreshToken,

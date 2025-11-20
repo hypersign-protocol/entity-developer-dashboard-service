@@ -14,6 +14,10 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Did } from 'hs-ssi-sdk';
+import {
+  SERVICE_TYPES,
+  SERVICES,
+} from 'src/supported-service/services/iServiceList';
 
 export const existDir = (dirPath) => {
   if (!dirPath) throw new Error('Directory path undefined');
@@ -124,4 +128,18 @@ export function sanitizeUrl(url, shouldEndWithSlash = false) {
     }
   }
   return url;
+}
+
+export function mapUserAccessList(userAccessList) {
+  if (userAccessList?.length == 0) {
+    return [];
+  }
+  const allowedAccess = [SERVICES[SERVICE_TYPES.CAVACH_API].ACCESS_TYPES.ALL];
+  const data = userAccessList
+    .filter((eachAccess) => allowedAccess.includes(eachAccess.access))
+    .map((eachAccess) => ({
+      serviceType: eachAccess.serviceType,
+      access: eachAccess.access,
+    }));
+  return data;
 }

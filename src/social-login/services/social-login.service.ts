@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
 import { Providers } from '../strategy/social.strategy';
-import { sanitizeUrl } from 'src/utils/utils';
+import { mapUserAccessList, sanitizeUrl } from 'src/utils/utils';
 import { SupportedServiceList } from 'src/supported-service/services/service-list';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { AuthneticatorType } from '../dto/response.dto';
@@ -111,7 +111,7 @@ export class SocialLoginService {
       email,
       profileIcon,
       appUserID: userInfo.userId,
-      userAccessList: userInfo.accessList,
+      userAccessList: mapUserAccessList(userInfo.accessList),
       isTwoFactorEnabled: authenticator ? true : false,
       isTwoFactorAuthenticated: req.user.isTwoFactorAuthenticated
         ? req.user.isTwoFactorAuthenticated
@@ -192,7 +192,7 @@ export class SocialLoginService {
     const payload = {
       email: user.email,
       appUserID: user.userId,
-      userAccessList: user.accessList,
+      userAccessList: mapUserAccessList(user.accessList),
       isTwoFactorEnabled: user.authenticators && user.authenticators.length > 0,
       isTwoFactorAuthenticated: isVerified,
       authenticatorType,

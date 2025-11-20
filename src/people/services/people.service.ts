@@ -67,11 +67,11 @@ export class PeopleService {
     // if (isInvitedAlready !== null) {
     //   return isInvitedAlready;
     // }
-
+    const invitecode = `${Date.now()}-${uuidv4()}`;
     const invite = await this.adminPeopleService.create({
       adminId: adminUserData.userId,
       userId: userDetails?.userId || emailId,
-      inviteCode: `${Date.now()}-${uuidv4()}`,
+      inviteCode: invitecode,
       accepted: false,
       invitationValidTill: new Date(
         Date.now() + 2 * 24 * 60 * 60 * 1000,
@@ -82,7 +82,9 @@ export class PeopleService {
       teamMateMailId: emailId,
       adminEmailId: adminUserData.email,
       mailSubject: " You're invited to join Hypersign Dashboard",
-      inviteLink: `${this.configService.get('INVITATIONURL')}`,
+      inviteLink: `${this.configService.get(
+        'INVITATIONURL',
+      )}&code=${invitecode}`,
     });
     return invite;
   }

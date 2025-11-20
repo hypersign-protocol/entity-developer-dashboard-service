@@ -74,14 +74,14 @@ export class SocialLoginService {
       const kycAccessList = this.supportedServiceList.getDefaultServicesAccess(
         SERVICE_TYPES.CAVACH_API,
       );
-      const questAccessList =
-        this.supportedServiceList.getDefaultServicesAccess(SERVICE_TYPES.QUEST);
+      // const questAccessList =
+      //   this.supportedServiceList.getDefaultServicesAccess(SERVICE_TYPES.QUEST);
       userInfo = await this.userRepository.create({
         email,
         userId: appUserID,
         name: name,
         profileIcon,
-        accessList: [...ssiAccessList, ...kycAccessList, ...questAccessList],
+        accessList: [...ssiAccessList, ...kycAccessList],
         role: UserRole.ADMIN,
       });
     } else {

@@ -134,12 +134,23 @@ export function mapUserAccessList(userAccessList) {
   if (userAccessList?.length == 0) {
     return [];
   }
-  const allowedAccess = [SERVICES[SERVICE_TYPES.CAVACH_API].ACCESS_TYPES.ALL];
-  const data = userAccessList
-    .filter((eachAccess) => allowedAccess.includes(eachAccess.access))
-    .map((eachAccess) => ({
-      serviceType: eachAccess.serviceType,
-      access: eachAccess.access,
-    }));
-  return data;
+  // const allowedAccess = [SERVICES[SERVICE_TYPES.CAVACH_API].ACCESS_TYPES.ALL];
+  // const data = userAccessList
+  //   .filter((eachAccess) => allowedAccess.includes(eachAccess.access))
+  //   .map((eachAccess) => ({
+  //     serviceType: eachAccess.serviceType,
+  //     access: eachAccess.access,
+  //   }));
+  //return data;
+
+  return [
+    {
+      serviceType: SERVICE_TYPES.CAVACH_API,
+      access: SERVICES[SERVICE_TYPES.CAVACH_API].ACCESS_TYPES.ALL,
+    },
+    {
+      serviceType: SERVICE_TYPES.SSI_API,
+      access: SERVICES[SERVICE_TYPES.SSI_API].ACCESS_TYPES.ALL,
+    },
+  ];
 }

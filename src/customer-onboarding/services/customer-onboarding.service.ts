@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  NotFoundException,
   ForbiddenException,
   HttpException,
   Injectable,
@@ -70,9 +69,11 @@ export class CustomerOnboardingService {
   async createCustomerOnboardingDetail(
     createCustomerOnboardingDto: CreateCustomerOnboardingDto,
     userId: string,
+    loggedInUserEmail,
   ) {
     try {
-      const { interestedService } = createCustomerOnboardingDto;
+      const { interestedService, companyName, twitterUrl, telegramUrl, type } =
+        createCustomerOnboardingDto;
       const onboardingData =
         await this.customerOnboardingRepository.createCustomerOnboarding({
           ...createCustomerOnboardingDto,
@@ -89,6 +90,11 @@ export class CustomerOnboardingService {
         customerEmail,
         requestedServices,
         onboardingData['_id'].toString(),
+        companyName,
+        type,
+        loggedInUserEmail,
+        twitterUrl,
+        telegramUrl,
       );
       const superAdminDetails = await this.userRepository.find({
         role: UserRole.SUPER_ADMIN,
@@ -849,7 +855,7 @@ export class CustomerOnboardingService {
           userId: user.userId,
         });
       if (!userOnboardingDetail) {
-        throw new NotFoundException(
+        throw new BadRequestException(
           `No onboarding detail found for user with id: ${user.userId}`,
         );
       }

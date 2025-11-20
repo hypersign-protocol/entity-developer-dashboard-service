@@ -21,6 +21,7 @@ import { ConfigService } from '@nestjs/config';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
 import { UserRole } from 'src/user/schema/user.schema';
 import { JobNames } from 'src/utils/time-constant';
+import { mapUserAccessList } from 'src/utils/utils';
 
 @Injectable()
 export class PeopleService {
@@ -67,11 +68,11 @@ export class PeopleService {
     // if (isInvitedAlready !== null) {
     //   return isInvitedAlready;
     // }
-
+    const invitecode = `${Date.now()}-${uuidv4()}`;
     const invite = await this.adminPeopleService.create({
       adminId: adminUserData.userId,
       userId: userDetails?.userId || emailId,
-      inviteCode: `${Date.now()}-${uuidv4()}`,
+      inviteCode: invitecode,
       accepted: false,
       invitationValidTill: new Date(
         Date.now() + 2 * 24 * 60 * 60 * 1000,
@@ -82,7 +83,9 @@ export class PeopleService {
       teamMateMailId: emailId,
       adminEmailId: adminUserData.email,
       mailSubject: " You're invited to join Hypersign Dashboard",
-      inviteLink: `${this.configService.get('INVITATIONURL')}`,
+      inviteLink: `${this.configService.get(
+        'INVITATIONURL',
+      )}&code=${invitecode}`,
     });
     return invite;
   }
@@ -172,7 +175,7 @@ export class PeopleService {
       adminId: adminUserData.userId,
     });
     if (adminPeople == null) {
-      throw new ConflictException('User doesnot exists', 'Already Deleted');
+      throw new ConflictException('This teammate has already been deleted.');
     }
     return this.adminPeopleService.findOneAndDelete({
       userId: userDetails?.userId || emailId,
@@ -260,14 +263,16 @@ export class PeopleService {
     delete adminData.accessList;
     delete adminData['_id'];
     delete adminData.authenticators;
-
     const accessAccount = {
       ...adminData,
-      accessList: role?.permissions || adminPeople.accessList,
+      accessList: mapUserAccessList(
+        role?.permissions || adminPeople.accessList,
+      ),
     };
     const payload = {
       appUserID: user.userId,
       ...user,
+      accessList: mapUserAccessList(user.accessList),
       aud: domain,
     };
     delete payload._id;

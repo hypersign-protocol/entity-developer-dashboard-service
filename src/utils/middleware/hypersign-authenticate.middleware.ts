@@ -21,7 +21,7 @@ export class HypersignAuthenticateMiddleware implements NestMiddleware {
     const subject = vpObj['verifiableCredential'][0]['credentialSubject'];
     const { email } = subject;
     if (!email) {
-      throw new UnauthorizedException('Email no found, invalid presentation');
+      throw new UnauthorizedException(['Email no found, invalid presentation']);
     }
     const userIndb: User = await this.userRepository.findOne({ email: email });
     let userId;

@@ -52,7 +52,7 @@ export class IpResolverService {
         err.stack,
         'IpResolverService',
       );
-      throw new BadRequestException('IP resolution failed');
+      throw new BadRequestException(['IP resolution failed']);
     }
   }
 

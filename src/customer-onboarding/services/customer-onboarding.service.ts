@@ -311,9 +311,9 @@ export class CustomerOnboardingService {
         });
 
       if (!customerOnboardingData) {
-        throw new BadRequestException(
+        throw new BadRequestException([
           `Customer onboarding detail not found for id: ${id}`,
-        );
+        ]);
       }
 
       // Initialize configuration
@@ -745,9 +745,9 @@ export class CustomerOnboardingService {
       // Check for failures
       const failed = onboardingLogs.find((l) => l.status === StepStatus.FAILED);
       if (failed) {
-        throw new BadRequestException(
+        throw new BadRequestException([
           `Step ${failed.step} failed: ${failed.failureReason}`,
-        );
+        ]);
       }
 
       if (onboardingStatus === CreditStatus.APPROVED) {
@@ -849,9 +849,9 @@ export class CustomerOnboardingService {
           userId: user.userId,
         });
       if (!userOnboardingDetail) {
-        throw new NotFoundException(
+        throw new NotFoundException([
           `No onboarding detail found for user with id: ${user.userId}`,
-        );
+        ]);
       }
       return userOnboardingDetail;
     } catch (e) {
@@ -873,9 +873,9 @@ export class CustomerOnboardingService {
         userId,
       });
     if (!customerOnboardingData) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         `No customer onboarding detail found for userId: ${userId}`,
-      );
+      ]);
     }
     if (customerOnboardingData.onboardingStatus === CreditStatus.APPROVED) {
       throw new BadRequestException(['Customer onboarding is already done']);

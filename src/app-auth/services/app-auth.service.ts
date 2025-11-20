@@ -115,7 +115,9 @@ export class AppAuthService {
       );
 
       if (!globalThis.kmsVault) {
-        throw new InternalServerErrorException('KMS vault is not initialized');
+        throw new InternalServerErrorException([
+          'KMS vault is not initialized',
+        ]);
       }
       const edvDocToInsert = globalThis.kmsVault.prepareEdvDocument(doc, [
         { index: 'content.edvId', unique: true },
@@ -424,10 +426,10 @@ export class AppAuthService {
     const d = new URL(domain.includes('http') ? domain : 'https://' + domain);
     const fetchedTxtRecord = await this.verifyDNS01(d, txtRecord);
     if (fetchedTxtRecord && fetchedTxtRecord.error) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         fetchedTxtRecord.error?.message +
           '. If you have already added then it may take a while to complete. Please try again in sometime.',
-      );
+      ]);
     }
     if (fetchedTxtRecord.verified) {
       return {
@@ -477,9 +479,9 @@ export class AppAuthService {
     const { userId } = userDetail;
     const oldApp = await this.getAppById(appId, userId);
     if (!oldApp) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         'Service with given id do not exists for this user',
-      );
+      ]);
     }
     Logger.debug(oldApp);
     // check if hasDomainVerified is verifed by DNS-01
@@ -517,15 +519,15 @@ export class AppAuthService {
     // Env restrictions
     if (env === APP_ENVIRONMENT.prod) {
       if (!(domain && hasDomainVerified)) {
-        throw new BadRequestException(
+        throw new BadRequestException([
           'You must verify your domain before going to production',
-        );
+        ]);
       }
 
       if (!logoUrl || logoUrl == '') {
-        throw new BadRequestException(
+        throw new BadRequestException([
           'Logo must be set before going to production',
-        );
+        ]);
       }
     }
     const app: App = await this.appRepository.findOneAndUpdate(
@@ -581,7 +583,9 @@ export class AppAuthService {
       kmsId,
     );
     if (!appDataFromVault) {
-      throw new BadRequestException('App detail does not exists in datavault');
+      throw new BadRequestException([
+        'App detail does not exists in datavault',
+      ]);
     }
     const appKmsVaultWallet = await VaultWalletManager.getWallet(
       appDataFromVault.mnemonic,
@@ -667,7 +671,7 @@ export class AppAuthService {
         'AppAuthService',
       );
 
-      throw new UnauthorizedException('access_denied');
+      throw new UnauthorizedException(['access_denied']);
     }
 
     const serviceType = appDetail.services[0]?.id; // TODO: remove this later
@@ -729,14 +733,14 @@ export class AppAuthService {
         break;
       }
       default: {
-        throw new BadRequestException('Invalid service ' + appDetail.appId);
+        throw new BadRequestException(['Invalid service ' + appDetail.appId]);
       }
     }
 
     if (accessList.length <= 0) {
-      throw new UnauthorizedException(
+      throw new UnauthorizedException([
         `You are not authorized to access service of type ${serviceType}`,
-      );
+      ]);
     }
 
     return this.getAccessToken(grant_type, appDetail, expiresin, accessList);
@@ -807,20 +811,20 @@ export class AppAuthService {
       case GRANT_TYPES.access_service_quest:
         break;
       default: {
-        throw new BadRequestException(
+        throw new BadRequestException([
           'Grant type not supported, supported grant types are: ' +
             GRANT_TYPES.access_service_kyc +
             ',' +
             GRANT_TYPES.access_service_ssi,
-        );
+        ]);
       }
     }
 
     const app = await this.getAppById(appId, user.userId);
     if (!app) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         'Invalid service id or you do not have access of this service',
-      );
+      ]);
     }
 
     const userDetails = user;
@@ -835,9 +839,9 @@ export class AppAuthService {
     switch (serviceType) {
       case SERVICE_TYPES.SSI_API: {
         if (grantType != 'access_service_ssi') {
-          throw new BadRequestException(
+          throw new BadRequestException([
             'Invalid grant type for this service ' + appId,
-          );
+          ]);
         }
         accessList = userDetails.accessList
           .map((x) => {
@@ -855,9 +859,9 @@ export class AppAuthService {
           grantType != GRANT_TYPES.access_service_kyc &&
           grantType != GRANT_TYPES.access_service_kyb
         ) {
-          throw new BadRequestException(
+          throw new BadRequestException([
             'Invalid grant type for this service ' + appId,
-          );
+          ]);
         }
         accessList = userDetails.accessList
           .map((x) => {
@@ -872,9 +876,9 @@ export class AppAuthService {
       }
       case SERVICE_TYPES.QUEST: {
         if (grantType != 'access_service_quest') {
-          throw new BadRequestException(
+          throw new BadRequestException([
             'Invalid grant type for this service ' + appId,
-          );
+          ]);
         }
         accessList = userDetails.accessList
           .map((x) => {
@@ -888,13 +892,13 @@ export class AppAuthService {
         break;
       }
       default: {
-        throw new BadRequestException('Invalid service ' + appId);
+        throw new BadRequestException(['Invalid service ' + appId]);
       }
     }
     if (accessList.length <= 0) {
-      throw new UnauthorizedException(
+      throw new UnauthorizedException([
         `You are not authorized to access service of type ${serviceType}`,
-      );
+      ]);
     }
 
     return this.getAccessToken(grantType, app, 12, accessList);
@@ -931,21 +935,21 @@ export class AppAuthService {
       .map((x) => x.access);
 
     if (ssiAccessList.length <= 0 || kycAccessList.length <= 0) {
-      throw new UnauthorizedException(
+      throw new UnauthorizedException([
         `You are not authorized for both SSI and KYC services.`,
-      );
+      ]);
     }
     expiryDate = new Date(expiryDate);
 
     if (isNaN(expiryDate.getTime())) {
-      throw new BadRequestException('Invalid custom expiry date format.');
+      throw new BadRequestException(['Invalid custom expiry date format.']);
     }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (expiryDate < today) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         'Custom expiry date cannot be earlier than today.',
-      );
+      ]);
     }
     const expiresIn = Math.floor(
       (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60),

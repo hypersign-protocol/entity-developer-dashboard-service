@@ -94,7 +94,7 @@ export class EmailOtpLoginController {
       res.redirect(`${this.config.get('REDIRECT_URL')}`);
     } catch (err) {
       Logger.error(`Login failed: ${err.message}`, 'EmailOtpLoginController');
-      throw new BadRequestException('Failed to complete login');
+      throw new BadRequestException(['Failed to complete login']);
     }
   }
 }

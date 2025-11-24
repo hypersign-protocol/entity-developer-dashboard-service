@@ -108,7 +108,10 @@ spec:
         - name: OTP_EXPIRY_MINUTES
           value: '__OTP_EXPIRY_MINUTES__'  
         - name: MAX_RETRY_ATTEMPT
-          value: '__MAX_RETRY_ATTEMPT__'          
+          value: '__MAX_RETRY_ATTEMPT__'  
+        - name: MFA_REDIRECT_URL
+          value: __MFA_REDIRECT_URL__
+                  
         volumeMounts:
         - name: mongo
           mountPath: "/data"

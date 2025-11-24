@@ -59,9 +59,9 @@ export class WebpageConfigService {
       !serviceDetail?.dependentServices ||
       serviceDetail.dependentServices.length === 0
     ) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         'KYC service must have a dependent SSI service linked to it.',
-      );
+      ]);
     }
     const { appName, logoUrl, env = 'dev' } = serviceDetail;
     const tenantUrl: string = serviceDetail['tenantUrl'];
@@ -119,7 +119,7 @@ export class WebpageConfigService {
 
     if (!serviceDetail) {
       throw new BadRequestException([
-        `No service found with serviceId: ${serviceId}`,
+        [`No service found with serviceId: ${serviceId}`],
       ]);
     }
     const { appName, logoUrl, env = 'dev' } = serviceDetail;
@@ -127,9 +127,9 @@ export class WebpageConfigService {
       serviceId,
     });
     if (!webPAgeConfigData) {
-      throw new NotFoundException(
+      throw new NotFoundException([
         `No webpage configuration found for serviceId: ${serviceId}`,
-      );
+      ]);
     }
     return {
       ...webPAgeConfigData,
@@ -149,9 +149,9 @@ export class WebpageConfigService {
         serviceId,
       });
     if (!webpageConfiguration || webpageConfiguration == null) {
-      throw new NotFoundException(
+      throw new NotFoundException([
         `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
-      );
+      ]);
     }
     return webpageConfiguration;
   }
@@ -174,9 +174,9 @@ export class WebpageConfigService {
       !serviceDetail?.dependentServices ||
       serviceDetail.dependentServices.length === 0
     ) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         'KYC service must have a dependent SSI service linked to it.',
-      );
+      ]);
     }
     let tokenDetail;
     const dataToUpdate = { ...updateWebpageConfigDto };
@@ -197,9 +197,9 @@ export class WebpageConfigService {
       dataToUpdate,
     );
     if (!webpageConfiguration || webpageConfiguration == null) {
-      throw new NotFoundException(
+      throw new NotFoundException([
         `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
-      );
+      ]);
     }
     const { appName, logoUrl, env = 'dev' } = serviceDetail;
 
@@ -217,9 +217,9 @@ export class WebpageConfigService {
       serviceId,
     });
     if (!deletedConfig) {
-      throw new NotFoundException(
+      throw new NotFoundException([
         `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
-      );
+      ]);
     }
 
     return deletedConfig;
@@ -253,9 +253,9 @@ export class WebpageConfigService {
       .map((x) => x.access);
 
     if (ssiAccessList.length <= 0 || kycAccessList.length <= 0) {
-      throw new UnauthorizedException(
+      throw new UnauthorizedException([
         `You are not authorized for both SSI and KYC services.`,
-      );
+      ]);
     }
 
     // Calculate expiresIn
@@ -263,21 +263,21 @@ export class WebpageConfigService {
     let expiryDate: Date;
     if (expiryType === 'custom') {
       if (!customExpiryDate) {
-        throw new BadRequestException(
+        throw new BadRequestException([
           'Custom expiry date is required when expiryType is "custom".',
-        );
+        ]);
       }
       expiryDate = new Date(customExpiryDate);
 
       if (isNaN(expiryDate.getTime())) {
-        throw new BadRequestException('Invalid custom expiry date format.');
+        throw new BadRequestException(['Invalid custom expiry date format.']);
       }
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       if (expiryDate < today) {
-        throw new BadRequestException(
+        throw new BadRequestException([
           'Custom expiry date cannot be earlier than today.',
-        );
+        ]);
       }
       expiresIn = Math.floor(
         (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60),

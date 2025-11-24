@@ -234,9 +234,9 @@ export class SocialLoginService {
       (auth) => auth.type === authenticatorToDelete,
     );
     if (authenticatorIndex === -1) {
-      throw new NotFoundException(
+      throw new NotFoundException([
         `${authenticatorToDelete} Authenticator not found`,
-      );
+      ]);
     }
     user.authenticators.splice(authenticatorIndex, 1);
     this.userRepository.findOneUpdate(
@@ -249,9 +249,9 @@ export class SocialLoginService {
     try {
       const tokenSecret = this.config.get('JWT_REFRESH_SECRET');
       if (!tokenSecret) {
-        throw new BadRequestException(
+        throw new BadRequestException([
           'JWT_REFRESH_SECRET is not set. Please contact the admin',
-        );
+        ]);
       }
       const payload = await this.jwt.verify(token, { secret: tokenSecret });
       delete payload?.exp;
@@ -259,7 +259,7 @@ export class SocialLoginService {
       const user = await this.userRepository.findOne({
         userId: payload.appUserID,
       });
-      if (!user) throw new UnauthorizedException('User not found');
+      if (!user) throw new UnauthorizedException(['User not found']);
       const newRefreshToken = await this.generateRefreshToken(payload); // make refresh token small
       const authToken = await this.generateAuthToken(payload);
       return { authToken, refreshToken: newRefreshToken };
@@ -268,15 +268,15 @@ export class SocialLoginService {
         `Error whaile generating refreshToken ${e}`,
         'SocialLoginService',
       );
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException(['Invalid refresh token']);
     }
   }
   async generateRefreshToken(payload: any): Promise<string> {
     const tokenSecret = this.config.get('JWT_REFRESH_SECRET');
     if (!tokenSecret) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         'JWT_REFRESH_SECRET is not set. Please contact the admin',
-      );
+      ]);
     }
     return this.jwt.signAsync(payload, {
       expiresIn: '7d',
@@ -287,9 +287,9 @@ export class SocialLoginService {
   async generateAuthToken(payload: any): Promise<string> {
     const secret = this.config.get('JWT_SECRET');
     if (!secret) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         'JWT_SECRET is not set. Please contact the admin',
-      );
+      ]);
     }
     return this.jwt.signAsync(payload, {
       expiresIn: '4h',

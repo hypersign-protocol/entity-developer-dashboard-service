@@ -22,6 +22,8 @@ import {
   MFACodeVerificationDto,
 } from '../dto/request.dto';
 import { UserDocument, UserRole } from 'src/user/schema/user.schema';
+import { redisClient } from 'src/utils/redis.provider';
+import { TIME } from 'src/utils/time-constant';
 
 @Injectable()
 export class SocialLoginService {
@@ -42,7 +44,7 @@ export class SocialLoginService {
           this.config.get('GOOGLE_CALLBACK_URL') ||
           sanitizeUrl(
             this.config.get('DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP'),
-          ) + '/api/v1/login/callback'
+          ) + '/api/v1/auth/google/callback'
         }&scope=email%20profile&prompt=select_account&client_id=${this.config.get(
           'GOOGLE_CLIENT_ID',
         )}`;
@@ -54,75 +56,58 @@ export class SocialLoginService {
     }
     return { authUrl };
   }
-
-  async socialLogin(req) {
-    Logger.log('socialLogin() starts', 'SocialLoginService');
+  async socialLogin(req): Promise<{
+    mfaRequired: boolean;
+    refreshToken?: string;
+    accessToken?: string;
+    authenticators?: string[];
+  }> {
+    Logger.log(
+      'Inside handleGoogleLogin() to create or fetch user detail based on login',
+      'SocialLoginService',
+    );
     const { email, name, profileIcon } = req.user;
-    const rawUrl = this.config.get('INVITATIONURL');
-    const url = new URL(rawUrl);
-    const domain = url.origin;
-    let userInfo = await this.userRepository.findOne({
+    let user = await this.userRepository.findOne({
       email,
     });
-    let appUserID;
-    if (!userInfo) {
-      appUserID = `${Date.now()}-${uuidv4()}`;
-      // Giving default access of services...
+    if (!user) {
+      const userId = `${Date.now()}-${uuidv4()}`;
       const ssiAccessList = this.supportedServiceList.getDefaultServicesAccess(
         SERVICE_TYPES.SSI_API,
       );
       const kycAccessList = this.supportedServiceList.getDefaultServicesAccess(
         SERVICE_TYPES.CAVACH_API,
       );
-      // const questAccessList =
-      //   this.supportedServiceList.getDefaultServicesAccess(SERVICE_TYPES.QUEST);
-      userInfo = await this.userRepository.create({
+      user = await this.userRepository.create({
         email,
-        userId: appUserID,
-        name: name,
+        userId,
+        name,
         profileIcon,
         accessList: [...ssiAccessList, ...kycAccessList],
-        role: UserRole.ADMIN,
       });
-    } else {
-      const updates: Partial<UserDocument> = {};
-      if (!userInfo.name) updates.name = name;
-      if (!userInfo.profileIcon) updates.profileIcon = profileIcon;
-      if (Object.keys(updates).length > 0) {
-        this.userRepository.findOneUpdate({ email }, updates);
-      }
     }
-    Logger.log('socialLogin() starts', 'SocialLoginService');
-
-    let isVerified = false;
-    let authenticator = null;
-    if (userInfo.authenticators && userInfo.authenticators.length > 0) {
-      authenticator = userInfo.authenticators?.find((x) => {
-        if (x && x.isTwoFactorAuthenticated) {
-          return x;
-        }
-      });
-      isVerified = authenticator
-        ? authenticator.isTwoFactorAuthenticated
-        : false;
+    const updates: Partial<UserDocument> = {};
+    if (!user.name) updates.name = name;
+    if (!user.profileIcon) updates.profileIcon = profileIcon;
+    if (Object.keys(updates).length > 0)
+      this.userRepository.findOneUpdate({ email }, updates);
+    const authenticatorList = user.authenticators?.filter(
+      (auth) => auth?.isTwoFactorAuthenticated,
+    );
+    if (authenticatorList?.length) {
+      return {
+        mfaRequired: true,
+        authenticators: authenticatorList.map((a) => a.type),
+      };
     }
-    const payload = {
-      name,
-      email,
-      profileIcon,
-      appUserID: userInfo.userId,
-      userAccessList: mapUserAccessList(userInfo.accessList),
-      isTwoFactorEnabled: authenticator ? true : false,
-      isTwoFactorAuthenticated: req.user.isTwoFactorAuthenticated
-        ? req.user.isTwoFactorAuthenticated
-        : false,
-      authenticatorType: authenticator?.type,
-      aud: domain,
-      role: userInfo?.role || UserRole.ADMIN,
+    const rawUrl = this.config.get('INVITATIONURL');
+    const url = new URL(rawUrl);
+    const domain = url.origin;
+    const tokens = await this.createSessionAndToken(user, domain);
+    return {
+      mfaRequired: false,
+      ...tokens,
     };
-    const authToken = await this.generateAuthToken(payload);
-    const refreshToken = await this.generateRefreshToken(payload);
-    return { authToken, refreshToken };
   }
 
   async generate2FA(genrate2FADto: Generate2FA, user) {
@@ -173,7 +158,6 @@ export class SocialLoginService {
       secret: authenticatorDetail.secret,
     });
     if (!authenticatorDetail.isTwoFactorAuthenticated && isVerified) {
-      // update
       user.authenticators.map((authn) => {
         if (authn.type === authenticatorType) {
           authn.isTwoFactorAuthenticated = true;
@@ -284,7 +268,7 @@ export class SocialLoginService {
     });
   }
 
-  async generateAuthToken(payload: any): Promise<string> {
+  async generateAuthToken(payload: any, expiry = '4h'): Promise<string> {
     const secret = this.config.get('JWT_SECRET');
     if (!secret) {
       throw new BadRequestException([
@@ -292,8 +276,41 @@ export class SocialLoginService {
       ]);
     }
     return this.jwt.signAsync(payload, {
-      expiresIn: '4h',
+      expiresIn: expiry,
       secret,
     });
+  }
+
+  async createSessionAndToken(user, domain?: string) {
+    const sessionId = `${Date.now()}-${uuidv4()}`;
+    const role = user?.role || UserRole.ADMIN;
+    await redisClient.set(
+      `session:${sessionId}`,
+      JSON.stringify({
+        sessionId,
+        userId: user.userId,
+        role,
+        refreshVersion: 1,
+        mfaVerified: false,
+        mfaEnabled:
+          user?.authenticator?.some((x) => x.isTwoFactorAuthenticated) ?? false,
+      }),
+      'EX',
+      TIME.WEEK,
+    );
+    const accessToken = await this.generateAuthToken({
+      sid: sessionId,
+      sub: user.userId,
+      role,
+      aud: domain,
+    });
+    const refreshToken = `rt_${uuidv4()}`;
+    await redisClient.set(
+      `refresh:${refreshToken}`,
+      sessionId,
+      'EX',
+      TIME.WEEK,
+    );
+    return { accessToken, refreshToken };
   }
 }

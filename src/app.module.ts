@@ -59,7 +59,7 @@ export class AppModule implements NestModule {
       .apply(AllowedOriginMiddleware)
       .exclude(
         {
-          path: '/api/v1/login/callback',
+          path: '/api/v1/auth/google/callback',
           method: RequestMethod.GET,
         },
         { path: '/api/v1/app/oauth', method: RequestMethod.POST },

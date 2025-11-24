@@ -24,7 +24,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { AllExceptionsFilter } from 'src/utils/utils';
+import { AllExceptionsFilter, getCookieOptions } from 'src/utils/utils';
 import { ConfigService } from '@nestjs/config';
 import {
   AuthResponse,
@@ -45,7 +45,7 @@ import { UserRole } from 'src/user/schema/user.schema';
 import { TOKEN_MAX_AGE } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
-@Controller()
+@Controller('api/v1')
 export class SocialLoginController {
   constructor(
     private readonly socialLoginService: SocialLoginService,
@@ -65,7 +65,7 @@ export class SocialLoginController {
     description: 'Authentication provider',
     required: true,
   })
-  @Get('/api/v1/login')
+  @Get('auth/google/authorize')
   async socialAuthRedirect(@Res() res, @Query() loginProvider) {
     Logger.log('socialAuthRedirect() method starts', 'SocialLoginController');
     const { provider } = loginProvider;
@@ -76,33 +76,29 @@ export class SocialLoginController {
     res.json({ authUrl });
   }
   @ApiExcludeEndpoint()
-  @Get('/api/v1/login/callback')
+  @Get('auth/google/callback')
   @UseGuards(AuthGuard('google'))
   async socialAuthCallback(@Req() req, @Res() res) {
     Logger.log('socialAuthCallback() method starts', 'SocialLoginController');
-    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
-    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
-    const tokens = await this.socialLoginService.socialLogin(req);
-    Logger.debug(
-      `Cookied domain set is ${cookieDomain}`,
-      'SocialLoginController',
+    const result = await this.socialLoginService.socialLogin(req);
+    if (result.mfaRequired) {
+      const arrayString = encodeURIComponent(
+        JSON.stringify(result.authenticators),
+      );
+      return res.redirect(
+        `${this.config.get('MFA_REDIRECT_URL')}?authenticators=${arrayString}`,
+      );
+    }
+    res.cookie(
+      'accessToken',
+      result.accessToken,
+      getCookieOptions(TOKEN_MAX_AGE.AUTH_TOKEN),
     );
-    res.cookie('authToken', tokens?.authToken, {
-      httpOnly: true,
-      maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
-      secure: isProduction,
-      domain: isProduction ? cookieDomain : undefined,
-      sameSite: isProduction ? 'None' : 'Lax',
-      path: '/',
-    });
-    res.cookie('refreshToken', tokens?.refreshToken, {
-      httpOnly: true,
-      maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
-      secure: isProduction,
-      sameSite: isProduction ? 'None' : 'Lax',
-      domain: isProduction ? cookieDomain : undefined,
-      path: '/',
-    });
+    res.cookie(
+      'refreshToken',
+      result.refreshToken,
+      getCookieOptions(TOKEN_MAX_AGE.REFRESH_TOKEN),
+    );
     res.redirect(`${this.config.get('REDIRECT_URL')}`);
   }
   @ApiBearerAuth('Authorization')
@@ -114,7 +110,7 @@ export class SocialLoginController {
     status: 401,
     type: UnauthorizedError,
   })
-  @Post('/api/v1/auth')
+  @Post('users/me')
   dispatchUserDetail(@Req() req) {
     Logger.log('dispatchUserDetail() method starts', 'SocialLoginController');
     const userDetail = req.user;

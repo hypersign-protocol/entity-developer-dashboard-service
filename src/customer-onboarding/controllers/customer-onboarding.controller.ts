@@ -62,6 +62,7 @@ export class CustomerOnboardingController {
     return this.customerOnboardingService.createCustomerOnboardingDetail(
       createCustomerOnboardingDto,
       req.user['userId'],
+      req.user['email'],
     );
   }
   @ApiBearerAuth('Authorization')

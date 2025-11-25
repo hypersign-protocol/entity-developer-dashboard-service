@@ -25,6 +25,7 @@ import {
 import { UserDocument, UserRole } from 'src/user/schema/user.schema';
 import { redisClient } from 'src/utils/redis.provider';
 import { TIME } from 'src/utils/time-constant';
+import { MFA_MESSAGE } from '../constants/en';
 
 @Injectable()
 export class SocialLoginService {
@@ -319,5 +320,73 @@ export class SocialLoginService {
       TIME.WEEK,
     );
     return { accessToken, refreshToken };
+  }
+  async confirmMfaSetup(
+    user,
+    session,
+    mfaVerificationDto: MFACodeVerificationDto,
+  ): Promise<{ isVerified: boolean; refreshToken?: string; error?: string }> {
+    Logger.log(
+      'Inside confirmMfaSetup() method to Complete MFA setup',
+      'SocialLoginService',
+    );
+    const { authenticatorType, twoFactorAuthenticationCode } =
+      mfaVerificationDto;
+    const authenticatorDetail = user.authenticators.find(
+      (auth) => auth.type === authenticatorType,
+    );
+    if (authenticatorDetail.isTwoFactorAuthenticated) {
+      return { isVerified: false, error: MFA_MESSAGE.MFA_ALREADY_ENABLED };
+    }
+    const isVerified = authenticator.verify({
+      token: twoFactorAuthenticationCode,
+      secret: authenticatorDetail.secret,
+    });
+    if (!isVerified) {
+      return { isVerified, error: MFA_MESSAGE.INVALID_OTP };
+    }
+    if (!authenticatorDetail.isTwoFactorAuthenticated && isVerified) {
+      user.authenticators.map((authn) => {
+        if (authn.type === authenticatorType) {
+          authn.isTwoFactorAuthenticated = true;
+          return authn;
+        }
+        return authn;
+      });
+      this.userRepository.findOneUpdate(
+        { userId: user.userId },
+        { authenticators: user.authenticators },
+      );
+      const sessionKey = `session:${session.sessionId}`;
+      const sessionJson = await redisClient.get(sessionKey);
+      if (!sessionJson) {
+        return {
+          isVerified,
+          error: MFA_MESSAGE.SESSION_NOT_FOUND,
+        };
+      }
+      const sessionObj = JSON.parse(sessionJson);
+      sessionObj.mfaVerified = true;
+      sessionObj.mfaEnabled = true;
+      sessionObj.refreshVersion += 1;
+      await redisClient.set(
+        sessionKey,
+        JSON.stringify(sessionObj),
+        'EX',
+        TIME.WEEK,
+      );
+      const newRefreshToken = `rt_${uuidv4()}`;
+      await redisClient.set(
+        `refresh:${newRefreshToken}`,
+        session.sid,
+        'EX',
+        TIME.WEEK,
+      );
+      return {
+        isVerified,
+        refreshToken: newRefreshToken,
+      };
+    }
+    return { isVerified };
   }
 }

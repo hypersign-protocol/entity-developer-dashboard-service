@@ -44,6 +44,7 @@ import {
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { UserRole } from 'src/user/schema/user.schema';
 import { TOKEN_MAX_AGE } from 'src/utils/time-constant';
+import { MFA_MESSAGE } from '../constants/en';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller('api/v1')
@@ -137,14 +138,14 @@ export class SocialLoginController {
   }
 
   @ApiBearerAuth('Authorization')
-  @Post('/api/v1/auth/login/refresh')
+  @Post('auth/login/refresh')
   async generateRefreshToken(@Req() req) {
     return {
       authToken: await this.socialLoginService.socialLogin(req),
     };
   }
   @ApiBearerAuth('Authorization')
-  @Post('/api/v1/auth/refresh')
+  @Post('auth/refresh')
   async refreshTokenGeneration(@Req() req, @Res() res) {
     const refreshToken = req.cookies['refreshToken'];
     if (!refreshToken) {
@@ -183,7 +184,7 @@ export class SocialLoginController {
     type: UnauthorizedError,
   })
   @ApiBearerAuth('Authorization')
-  @Post('/api/v1/auth/mfa/generate')
+  @Post('auth/mfa/setup/generate')
   async generateMfa(@Req() req, @Body() body: Generate2FA) {
     const result = await this.socialLoginService.generate2FA(body, req.user);
     return { twoFADataUrl: result };
@@ -234,7 +235,7 @@ export class SocialLoginController {
     type: UnauthorizedError,
   })
   @ApiBearerAuth('Authorization')
-  @Delete('/api/v1/auth/mfa')
+  @Delete('auth/mfa')
   async removeMFA(@Req() req, @Body() mfaremoveDto: DeleteMFADto) {
     return this.socialLoginService.removeMFA(req.user, mfaremoveDto);
   }
@@ -251,7 +252,7 @@ export class SocialLoginController {
     type: UnauthorizedError,
   })
   @ApiBearerAuth('Authorization')
-  @Post('/api/v1/auth/logout')
+  @Post('auth/logout')
   async logout(@Req() req, @Res() res) {
     const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
     const isProduction = this.config.get<string>('NODE_ENV') === 'production';
@@ -270,5 +271,47 @@ export class SocialLoginController {
       httpOnly: true,
     });
     return res.status(200).json({ message: 'Logged out successfully' });
+  }
+
+  @ApiOkResponse({
+    description: 'Verified MFA code and generated new token',
+    type: Verify2FARespDto,
+  })
+  @ApiUnauthorizedResponse({
+    status: 401,
+    type: UnauthorizedError,
+  })
+  @ApiBearerAuth('Authorization')
+  @Post('auth/mfa/setup/verify')
+  async confirmMfaSetup(
+    @Req() req,
+    @Body() mfaVerificationDto: MFACodeVerificationDto,
+    @Res() res,
+  ) {
+    const data = await this.socialLoginService.confirmMfaSetup(
+      req.user,
+      req.session,
+      mfaVerificationDto,
+    );
+    if (!data.isVerified && data?.error === MFA_MESSAGE.SESSION_NOT_FOUND) {
+      return res.status(401).json({
+        statusCode: 401,
+        message: [data.error],
+        error: 'Unauthorized',
+      });
+    }
+    if (!data.isVerified) {
+      return res.json({
+        statusCode: 400,
+        message: [data.error],
+        error: 'Bad Request',
+      });
+    }
+    res.cookie(
+      'refreshToken',
+      data.refreshToken,
+      getCookieOptions(TOKEN_MAX_AGE.REFRESH_TOKEN),
+    );
+    return res.json({ isVerified: data.isVerified });
   }
 }

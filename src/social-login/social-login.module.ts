@@ -60,6 +60,10 @@ export class SocialLoginModule implements NestModule {
           path: '/api/v1/auth/refresh',
           method: RequestMethod.POST,
         },
+        {
+          path: '/api/v1/auth/mfa/login/verify',
+          method: RequestMethod.POST,
+        },
       )
       .forRoutes(SocialLoginController);
     consumer

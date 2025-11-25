@@ -19,6 +19,7 @@ import { toDataURL } from 'qrcode';
 import {
   DeleteMFADto,
   Generate2FA,
+  LoginMFACodeVerificationDto,
   MFACodeVerificationDto,
 } from '../dto/request.dto';
 import { UserDocument, UserRole } from 'src/user/schema/user.schema';
@@ -61,6 +62,7 @@ export class SocialLoginService {
     refreshToken?: string;
     accessToken?: string;
     authenticators?: string[];
+    sessionId?: string;
   }> {
     Logger.log(
       'Inside handleGoogleLogin() to create or fetch user detail based on login',
@@ -91,21 +93,22 @@ export class SocialLoginService {
     if (!user.profileIcon) updates.profileIcon = profileIcon;
     if (Object.keys(updates).length > 0)
       this.userRepository.findOneUpdate({ email }, updates);
-    const authenticatorList = user.authenticators?.filter(
-      (auth) => auth?.isTwoFactorAuthenticated,
+    const sessionId = await this.createSession(user);
+    const activeAuthenticators = user.authenticators?.filter(
+      (a) => a.isTwoFactorAuthenticated,
     );
-    if (authenticatorList?.length) {
+    if (activeAuthenticators?.length) {
       return {
         mfaRequired: true,
-        authenticators: authenticatorList.map((a) => a.type),
+        sessionId,
+        authenticators: activeAuthenticators.map((a) => a.type),
       };
     }
-    const rawUrl = this.config.get('INVITATIONURL');
-    const url = new URL(rawUrl);
-    const domain = url.origin;
-    const tokens = await this.createSessionAndToken(user, domain);
+    const tokens = await this.generateTokensForSession(sessionId, user);
+
     return {
       mfaRequired: false,
+      sessionId,
       ...tokens,
     };
   }
@@ -143,56 +146,52 @@ export class SocialLoginService {
     const otpAuthUrl = authenticator.keyuri(user.email, issuer, secret);
     return toDataURL(otpAuthUrl);
   }
-  async verifyMFACode(user, mfaVerificationDto: MFACodeVerificationDto) {
+  async verifyMFACode(
+    mfaVerificationDto: LoginMFACodeVerificationDto,
+  ): Promise<{
+    isVerified: boolean;
+    accessToken?: string;
+    refreshToken?: string;
+  }> {
     Logger.log(
       'Inside verifyMFACode() method to verify MFA code',
       'SocialLoginService',
     );
-    const { authenticatorType, twoFactorAuthenticationCode } =
+
+    const { authenticatorType, twoFactorAuthenticationCode, sessionId } =
       mfaVerificationDto;
-    const authenticatorDetail = user.authenticators.find(
+    const sessionKey = `session:${sessionId}`;
+    const sessionDetailJson = await redisClient.get(sessionKey);
+    if (!sessionDetailJson) {
+      throw new BadRequestException(['Invalid or expired sessionId']);
+    }
+    const sessionDetail = JSON.parse(sessionDetailJson);
+    const userDetail = await this.userRepository.findOne({
+      userId: sessionDetail.userId,
+    });
+    const authenticatorDetail = userDetail.authenticators.find(
       (auth) => auth.type === authenticatorType,
     );
     const isVerified = authenticator.verify({
       token: twoFactorAuthenticationCode,
       secret: authenticatorDetail.secret,
     });
-    if (!authenticatorDetail.isTwoFactorAuthenticated && isVerified) {
-      user.authenticators.map((authn) => {
-        if (authn.type === authenticatorType) {
-          authn.isTwoFactorAuthenticated = true;
-          return authn;
-        }
-        return authn;
-      });
-      this.userRepository.findOneUpdate(
-        { userId: user.userId },
-        { authenticators: user.authenticators },
-      );
+    if (!isVerified) {
+      await redisClient.del(sessionKey);
+      return { isVerified: false };
     }
-    const rawUrl = this.config.get('INVITATIONURL');
-    const url = new URL(rawUrl);
-    const domain = url.origin;
-    const payload = {
-      email: user.email,
-      appUserID: user.userId,
-      userAccessList: mapUserAccessList(user.accessList),
-      isTwoFactorEnabled: user.authenticators && user.authenticators.length > 0,
-      isTwoFactorAuthenticated: isVerified,
-      authenticatorType,
-      accessAccount: user.accessAccount,
-      aud: domain,
-      role: user?.role || UserRole.ADMIN,
-    };
-    const accessToken = await this.jwt.signAsync(payload, {
-      expiresIn: '24h',
-      secret: this.config.get('JWT_SECRET'),
-    });
-    const refreshToken = await this.generateRefreshToken(payload);
+    sessionDetail.mfaVerified = true;
+    sessionDetail.mfaEnabled = true;
+    await redisClient.set(
+      sessionKey,
+      JSON.stringify(sessionDetail),
+      'EX',
+      TIME.WEEK,
+    );
+    const tokens = await this.generateTokensForSession(sessionId, userDetail);
     return {
       isVerified,
-      authToken: accessToken,
-      refreshToken,
+      ...tokens,
     };
   }
 
@@ -281,9 +280,12 @@ export class SocialLoginService {
     });
   }
 
-  async createSessionAndToken(user, domain?: string) {
+  async createSession(user): Promise<string> {
     const sessionId = `${Date.now()}-${uuidv4()}`;
     const role = user?.role || UserRole.ADMIN;
+    const activeAuthenticators = user.authenticators?.filter(
+      (auth) => auth.isTwoFactorAuthenticated === true,
+    );
     await redisClient.set(
       `session:${sessionId}`,
       JSON.stringify({
@@ -292,16 +294,21 @@ export class SocialLoginService {
         role,
         refreshVersion: 1,
         mfaVerified: false,
-        mfaEnabled:
-          user?.authenticator?.some((x) => x.isTwoFactorAuthenticated) ?? false,
+        mfaEnabled: activeAuthenticators?.length > 0,
       }),
       'EX',
       TIME.WEEK,
     );
+    return sessionId;
+  }
+
+  async generateTokensForSession(sessionId, user) {
+    const rawUrl = this.config.get('INVITATIONURL');
+    const domain = new URL(rawUrl).origin;
     const accessToken = await this.generateAuthToken({
       sid: sessionId,
       sub: user.userId,
-      role,
+      role: user.role || UserRole.ADMIN,
       aud: domain,
     });
     const refreshToken = `rt_${uuidv4()}`;

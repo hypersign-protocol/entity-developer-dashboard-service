@@ -38,6 +38,7 @@ import {
 import {
   DeleteMFADto,
   Generate2FA,
+  LoginMFACodeVerificationDto,
   MFACodeVerificationDto,
 } from '../dto/request.dto';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
@@ -87,7 +88,9 @@ export class SocialLoginController {
         JSON.stringify(result.authenticators),
       );
       return res.redirect(
-        `${this.config.get('MFA_REDIRECT_URL')}?authenticators=${arrayString}`,
+        `${this.config.get(
+          'MFA_REDIRECT_URL',
+        )}?authenticators=${arrayString}&sessionId=${result.sessionId}`,
       );
     }
     res.cookie(
@@ -196,33 +199,27 @@ export class SocialLoginController {
     type: UnauthorizedError,
   })
   @ApiBearerAuth('Authorization')
-  @Post('auth/mfa/verify')
+  @Post('auth/mfa/login/verify')
   async verifyMFA(
-    @Req() req,
-    @Body() mfaVerificationDto: MFACodeVerificationDto,
+    @Body() mfaVerificationDto: LoginMFACodeVerificationDto,
     @Res() res,
   ) {
     const data = await this.socialLoginService.verifyMFACode(
-      req.user,
       mfaVerificationDto,
     );
-    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
-    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
-    res.cookie('authToken', data?.authToken, {
-      httpOnly: true,
-      maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
-      secure: isProduction,
-      domain: isProduction ? cookieDomain : undefined,
-      sameSite: isProduction ? 'None' : 'Lax',
-      path: '/',
-    });
-    res.cookie('refreshToken', data?.refreshToken, {
-      httpOnly: true,
-      maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
-      secure: isProduction,
-      sameSite: isProduction ? 'None' : 'Lax',
-      path: '/',
-    });
+    if (data.isVerified) {
+      res.cookie(
+        'accessToken',
+        data.accessToken,
+        getCookieOptions(TOKEN_MAX_AGE.AUTH_TOKEN),
+      );
+      res.cookie(
+        'refreshToken',
+        data.refreshToken,
+        getCookieOptions(TOKEN_MAX_AGE.REFRESH_TOKEN),
+      );
+    }
+
     res.json({ isVerified: data.isVerified });
   }
   @ApiOkResponse({

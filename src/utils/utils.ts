@@ -161,7 +161,7 @@ export function getCookieOptions(maxAge: number) {
   return {
     httpOnly: true,
     secure: isProd,
-    sameSite: isProd ? 'None' : 'Lax',
+    sameSite: isProd === 'production' ? 'None' : 'Lax',
     domain: isProd ? cookieDomain : undefined,
     path: '/',
     maxAge,

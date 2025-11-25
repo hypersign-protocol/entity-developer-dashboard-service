@@ -20,6 +20,16 @@ export class MFACodeVerificationDto {
   @IsNotEmpty()
   twoFactorAuthenticationCode: string;
 }
+export class LoginMFACodeVerificationDto extends MFACodeVerificationDto {
+  @ApiProperty({
+    name: 'sessionId',
+    description: 'Id of the session',
+    example: '1764056485204-0644acbc-bbc9-4b07-a613-811d2ad1ad4a',
+  })
+  @IsNotEmpty()
+  @IsString()
+  sessionId: string;
+}
 
 export class Generate2FA {
   @ApiProperty({

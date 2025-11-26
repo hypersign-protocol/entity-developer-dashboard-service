@@ -310,7 +310,7 @@ export class SocialLoginService {
     }
     await redisClient.set(
       `session:${sessionId}`,
-      JSON.stringify(sessionId),
+      JSON.stringify(sessionData),
       'EX',
       TIME.WEEK,
     );

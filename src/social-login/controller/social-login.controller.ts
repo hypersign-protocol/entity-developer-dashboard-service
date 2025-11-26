@@ -164,14 +164,14 @@ export class SocialLoginController {
     }
 
     res.cookie(
-      'accessToken',
+      TOKEN.AUTH.name,
       tokens.accessToken,
-      getCookieOptions(TOKEN_MAX_AGE.AUTH_TOKEN),
+      getCookieOptions(TOKEN.AUTH.expiry),
     );
     res.cookie(
-      'refreshToken',
+      TOKEN.REFRESH.name,
       tokens.refreshToken,
-      getCookieOptions(TOKEN_MAX_AGE.REFRESH_TOKEN),
+      getCookieOptions(TOKEN.REFRESH.expiry),
     );
     res.json({ message: 'Tokens refreshed' });
   }

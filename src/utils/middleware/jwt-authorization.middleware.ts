@@ -10,7 +10,11 @@ import { NextFunction, Request, Response } from 'express';
 import { UserRepository } from 'src/user/repository/user.repository';
 import { sanitizeUrl } from '../utils';
 import { redisClient } from '../redis.provider';
-import { AUTH_ERRORS } from 'src/social-login/constants/en';
+import {
+  AUTH_ERRORS,
+  ERROR_MESSAGE,
+  REFRESH_TOKEN_ERROR,
+} from 'src/social-login/constants/en';
 @Injectable()
 export class JWTAuthorizeMiddleware implements NestMiddleware {
   constructor(private readonly userRepository: UserRepository) {}
@@ -18,9 +22,7 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
     Logger.log('Inside JWTAuthorizeMiddleware', 'JWTAuthorizeMiddleware');
     const authToken: string = req?.cookies?.accessToken;
     if (!authToken) {
-      throw new UnauthorizedException([
-        'Please pass authorization token in cookie',
-      ]);
+      throw new UnauthorizedException([AUTH_ERRORS.EMPTY_TOKEN]);
     }
     let decoded;
     try {
@@ -51,17 +53,15 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
               sanitizeUrl(decoded.aud, false),
             );
             if (!ifDomainValid) {
-              throw new Error(
-                'This token was issued for a different domain than the one making the request.',
-              );
+              throw new Error(AUTH_ERRORS.TOKEN_DOMAIN_MISMATCH);
             }
           } else {
-            throw new Error('Token does not contain a valid domain.');
+            throw new Error(AUTH_ERRORS.TOKEN_DOMAIN_MISSING);
           }
         }
         const { sid, sub } = decoded;
         if (!sid || !sub) {
-          throw new UnauthorizedException(['Invalid token']);
+          throw new UnauthorizedException([AUTH_ERRORS.INVALID_TOKEN]);
         }
         const sessionRaw = await redisClient.get(`session:${sid}`);
         if (!sessionRaw) {
@@ -73,10 +73,10 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
         }
         if (session.refreshVersion !== decoded.refreshVersion) {
           throw new UnauthorizedException([
-            'Your session has expired. Please log in again.',
+            REFRESH_TOKEN_ERROR.REFRESH_VERSION_MISMATCH,
           ]);
         }
-       
+
         if (session.isTwoFactorAuthenticated) {
           if (!session.isTwoFactorVerified) {
             throw new UnauthorizedException([AUTH_ERRORS.TWO_FA_REQUIRED]);
@@ -86,7 +86,7 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
           userId: decoded.sub,
         });
         if (!user) {
-          throw new Error('User not found');
+          throw new Error(ERROR_MESSAGE.USER_NOT_FOUND);
         }
         req['user'] = user;
         req['session'] = session;

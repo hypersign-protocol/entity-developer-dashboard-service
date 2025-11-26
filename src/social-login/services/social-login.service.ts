@@ -24,7 +24,10 @@ import {
 import { UserDocument, UserRole } from 'src/user/schema/user.schema';
 import { redisClient } from 'src/utils/redis.provider';
 import { TIME } from 'src/utils/time-constant';
-import { ERROR_MESSAGE as MFA_MESSAGE } from '../constants/en';
+import {
+  ERROR_MESSAGE as MFA_MESSAGE,
+  REFRESH_TOKEN_ERROR,
+} from '../constants/en';
 
 @Injectable()
 export class SocialLoginService {
@@ -104,12 +107,11 @@ export class SocialLoginService {
         authenticators: activeAuthenticators.map((a) => a.type),
       };
     }
-    const role = user?.role || UserRole.ADMIN;
     const tokens = await this.generateTokensForSession(
       sessionId,
       user.userId,
-      role,
-      refreshVersion
+      user?.role || UserRole.ADMIN,
+      refreshVersion,
     );
 
     return {
@@ -194,9 +196,9 @@ export class SocialLoginService {
     );
     const tokens = await this.generateTokensForSession(
       sessionId,
-      sessionDetail.refreshVersion,
       sessionDetail.userId,
       sessionDetail.role,
+      sessionDetail.refreshVersion,
     );
     return {
       isVerified,
@@ -243,7 +245,7 @@ export class SocialLoginService {
     try {
       const sessionId = await redisClient.get(`refresh:${token}`);
       if (!sessionId) {
-        return { error: MFA_MESSAGE.REFRESH_TOKEN_NOT_FOUND };
+        return { error: REFRESH_TOKEN_ERROR.REFRESH_TOKEN_NOT_FOUND };
       }
       const sessionKey = `session:${sessionId}`;
       const sessionDetail = await redisClient.get(sessionKey);
@@ -271,16 +273,19 @@ export class SocialLoginService {
       );
       const newToken = await this.generateTokensForSession(
         sessionJson.sessionId,
-        user,
+        user.userId,
+        user?.role || UserRole.ADMIN,
         sessionJson.refreshVersion,
       );
       return { ...newToken };
     } catch (e) {
       Logger.error(
-        `Error whaile generating refreshToken ${e}`,
+        `Error while generating refreshToken ${e}`,
         'SocialLoginService',
       );
-      throw new UnauthorizedException(['Invalid refresh token']);
+      throw new UnauthorizedException([
+        REFRESH_TOKEN_ERROR.INVALID_REFRESH_TOKEN,
+      ]);
     }
   }
   async generateRefreshToken(payload: any): Promise<string> {
@@ -309,12 +314,11 @@ export class SocialLoginService {
     });
   }
 
-
   async createSession(user): Promise<{
     sessionId: string;
     activeAuthenticators: any[];
     isMfaRequired: boolean;
-    refreshVersion: number
+    refreshVersion: number;
   }> {
     const sessionId = `${Date.now()}-${uuidv4()}`;
     const role = user?.role || UserRole.ADMIN;
@@ -322,7 +326,7 @@ export class SocialLoginService {
       user.authenticators?.filter(
         (auth) => auth.isTwoFactorAuthenticated === true,
       ) || [];
-        const refreshVersion = 1;
+    const refreshVersion = 1;
     const isMfaRequired = activeAuthenticators.length > 0;
     const sessionData: any = {
       sessionId,
@@ -341,16 +345,16 @@ export class SocialLoginService {
       'EX',
       TIME.WEEK,
     );
-    return { sessionId, activeAuthenticators, isMfaRequired };
+    return { sessionId, activeAuthenticators, isMfaRequired, refreshVersion };
   }
 
-  async generateTokensForSession(sessionId, userId, role) {
+  async generateTokensForSession(sessionId, userId, role, refreshVersion) {
     const rawUrl = this.config.get('INVITATIONURL');
     const domain = new URL(rawUrl).origin;
     const accessToken = await this.generateAuthToken({
       sid: sessionId,
       sub: userId,
-      role: role || UserRole.ADMIN,
+      role,
       aud: domain,
       refreshVersion,
     });

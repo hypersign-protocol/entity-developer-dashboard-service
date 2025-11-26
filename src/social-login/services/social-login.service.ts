@@ -10,10 +10,9 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
 import { Providers } from '../strategy/social.strategy';
-import { mapUserAccessList, sanitizeUrl } from 'src/utils/utils';
+import { sanitizeUrl } from 'src/utils/utils';
 import { SupportedServiceList } from 'src/supported-service/services/service-list';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
-import { AuthneticatorType } from '../dto/response.dto';
 import { authenticator } from 'otplib';
 import { toDataURL } from 'qrcode';
 import {
@@ -58,7 +57,7 @@ export class SocialLoginService {
     return { authUrl };
   }
   async socialLogin(req): Promise<{
-    mfaRequired: boolean;
+    isMfaRequired: boolean;
     refreshToken?: string;
     accessToken?: string;
     authenticators?: string[];
@@ -93,21 +92,25 @@ export class SocialLoginService {
     if (!user.profileIcon) updates.profileIcon = profileIcon;
     if (Object.keys(updates).length > 0)
       this.userRepository.findOneUpdate({ email }, updates);
-    const sessionId = await this.createSession(user);
-    const activeAuthenticators = user.authenticators?.filter(
-      (a) => a.isTwoFactorAuthenticated,
-    );
-    if (activeAuthenticators?.length) {
+    const { sessionId, activeAuthenticators, isMfaRequired } =
+      await this.createSession(user);
+
+    if (isMfaRequired) {
       return {
-        mfaRequired: true,
+        isMfaRequired,
         sessionId,
         authenticators: activeAuthenticators.map((a) => a.type),
       };
     }
-    const tokens = await this.generateTokensForSession(sessionId, user);
+    const role = user?.role || UserRole.ADMIN;
+    const tokens = await this.generateTokensForSession(
+      sessionId,
+      user.userId,
+      role,
+    );
 
     return {
-      mfaRequired: false,
+      isMfaRequired,
       sessionId,
       ...tokens,
     };
@@ -166,10 +169,7 @@ export class SocialLoginService {
       throw new BadRequestException(['Invalid or expired sessionId']);
     }
     const sessionDetail = JSON.parse(sessionDetailJson);
-    const userDetail = await this.userRepository.findOne({
-      userId: sessionDetail.userId,
-    });
-    const authenticatorDetail = userDetail.authenticators.find(
+    const authenticatorDetail = sessionDetail.authenticators.find(
       (auth) => auth.type === authenticatorType,
     );
     const isVerified = authenticator.verify({
@@ -180,15 +180,20 @@ export class SocialLoginService {
       await redisClient.del(sessionKey);
       return { isVerified: false };
     }
-    sessionDetail.mfaVerified = true;
-    sessionDetail.mfaEnabled = true;
+    delete sessionDetail?.authenticators;
+    sessionDetail.isTwoFactorVerified = true;
+    sessionDetail.isTwoFactorAuthenticated = true;
     await redisClient.set(
       sessionKey,
       JSON.stringify(sessionDetail),
       'EX',
       TIME.WEEK,
     );
-    const tokens = await this.generateTokensForSession(sessionId, userDetail);
+    const tokens = await this.generateTokensForSession(
+      sessionId,
+      sessionDetail.userId,
+      sessionDetail.role,
+    );
     return {
       isVerified,
       ...tokens,
@@ -280,38 +285,48 @@ export class SocialLoginService {
     });
   }
 
-  async createSession(user): Promise<string> {
+  async createSession(user): Promise<{
+    sessionId: string;
+    activeAuthenticators: any[];
+    isMfaRequired: boolean;
+  }> {
     const sessionId = `${Date.now()}-${uuidv4()}`;
     const role = user?.role || UserRole.ADMIN;
-    const activeAuthenticators = user.authenticators?.filter(
-      (auth) => auth.isTwoFactorAuthenticated === true,
-    );
+    const activeAuthenticators =
+      user.authenticators?.filter(
+        (auth) => auth.isTwoFactorAuthenticated === true,
+      ) || [];
+    const isMfaRequired = activeAuthenticators.length > 0;
+    const sessionData: any = {
+      sessionId,
+      role,
+      refreshVersion: 1,
+      ...user,
+      isTwoFactorVerified: false,
+      isTwoFactorAuthenticated: isMfaRequired,
+    };
+    if (isMfaRequired) {
+      sessionData.authenticators = activeAuthenticators;
+    }
     await redisClient.set(
       `session:${sessionId}`,
-      JSON.stringify({
-        sessionId,
-        userId: user.userId,
-        role,
-        refreshVersion: 1,
-        mfaVerified: false,
-        mfaEnabled: activeAuthenticators?.length > 0,
-      }),
+      JSON.stringify(sessionId),
       'EX',
       TIME.WEEK,
     );
-    return sessionId;
+    return { sessionId, activeAuthenticators, isMfaRequired };
   }
 
-  async generateTokensForSession(sessionId, user) {
+  async generateTokensForSession(sessionId, userId, role) {
     const rawUrl = this.config.get('INVITATIONURL');
     const domain = new URL(rawUrl).origin;
     const accessToken = await this.generateAuthToken({
       sid: sessionId,
-      sub: user.userId,
-      role: user.role || UserRole.ADMIN,
+      sub: userId,
+      role: role || UserRole.ADMIN,
       aud: domain,
     });
-    const refreshToken = `rt_${uuidv4()}`;
+    const refreshToken = `${uuidv4()}`;
     await redisClient.set(
       `refresh:${refreshToken}`,
       sessionId,

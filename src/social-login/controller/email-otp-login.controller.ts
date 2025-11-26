@@ -75,7 +75,7 @@ export class EmailOtpLoginController {
     );
     try {
       const result = await this.socialLoginService.socialLogin(req);
-      if (result.mfaRequired) {
+      if (result.isMfaRequired) {
         res.redirect(this.config.get('MFA_REDIRECT_URL'));
       }
       res.cookie(

@@ -70,6 +70,11 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
         if (session.userId !== decoded.sub) {
           throw new UnauthorizedException(['Token does not match session']);
         }
+        if (session.refreshVersion !== decoded.refreshVersion) {
+          throw new UnauthorizedException([
+            'Your session has expired. Please log in again.',
+          ]);
+        }
         if (session.mfaEnabled) {
           if (!session.mfaVerified) {
             throw new UnauthorizedException(['2FA verification required']);

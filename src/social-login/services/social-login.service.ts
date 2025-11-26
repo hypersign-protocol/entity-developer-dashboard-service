@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
 import { Providers } from '../strategy/social.strategy';
-import { mapUserAccessList, sanitizeUrl } from 'src/utils/utils';
+import { sanitizeUrl } from 'src/utils/utils';
 import { SupportedServiceList } from 'src/supported-service/services/service-list';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { AuthneticatorType } from '../dto/response.dto';
@@ -25,7 +25,7 @@ import {
 import { UserDocument, UserRole } from 'src/user/schema/user.schema';
 import { redisClient } from 'src/utils/redis.provider';
 import { TIME } from 'src/utils/time-constant';
-import { MFA_MESSAGE } from '../constants/en';
+import { ERROR_MESSAGE as MFA_MESSAGE } from '../constants/en';
 
 @Injectable()
 export class SocialLoginService {
@@ -34,22 +34,20 @@ export class SocialLoginService {
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
     private readonly supportedServiceList: SupportedServiceList,
-  ) {}
+  ) { }
   async generateAuthUrlByProvider(provider: string) {
     let authUrl;
     switch (provider) {
       case Providers.google: {
-        authUrl = `${
-          this.config.get('GOOGLE_AUTH_BASE_URL') ||
+        authUrl = `${this.config.get('GOOGLE_AUTH_BASE_URL') ||
           'https://accounts.google.com/o/oauth2/v2/auth'
-        }?response_type=code&redirect_uri=${
-          this.config.get('GOOGLE_CALLBACK_URL') ||
+          }?response_type=code&redirect_uri=${this.config.get('GOOGLE_CALLBACK_URL') ||
           sanitizeUrl(
             this.config.get('DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP'),
           ) + '/api/v1/auth/google/callback'
-        }&scope=email%20profile&prompt=select_account&client_id=${this.config.get(
-          'GOOGLE_CLIENT_ID',
-        )}`;
+          }&scope=email%20profile&prompt=select_account&client_id=${this.config.get(
+            'GOOGLE_CLIENT_ID',
+          )}`;
         break;
       }
       default: {
@@ -94,7 +92,7 @@ export class SocialLoginService {
     if (!user.profileIcon) updates.profileIcon = profileIcon;
     if (Object.keys(updates).length > 0)
       this.userRepository.findOneUpdate({ email }, updates);
-    const sessionId = await this.createSession(user);
+    const { sessionId, refreshVersion } = await this.createSession(user);
     const activeAuthenticators = user.authenticators?.filter(
       (a) => a.isTwoFactorAuthenticated,
     );
@@ -105,7 +103,11 @@ export class SocialLoginService {
         authenticators: activeAuthenticators.map((a) => a.type),
       };
     }
-    const tokens = await this.generateTokensForSession(sessionId, user);
+    const tokens = await this.generateTokensForSession(
+      sessionId,
+      user,
+      refreshVersion,
+    );
 
     return {
       mfaRequired: false,
@@ -189,7 +191,11 @@ export class SocialLoginService {
       'EX',
       TIME.WEEK,
     );
-    const tokens = await this.generateTokensForSession(sessionId, userDetail);
+    const tokens = await this.generateTokensForSession(
+      sessionId,
+      userDetail,
+      sessionDetail.refreshVersion,
+    );
     return {
       isVerified,
       ...tokens,
@@ -229,24 +235,44 @@ export class SocialLoginService {
     );
     return { message: 'Removed authenticator successfully' };
   }
-  async verifyAndGenerateRefreshToken(token: string) {
+  async verifyAndGenerateRefreshToken(
+    token: string,
+  ): Promise<{ error?: string; accessToken?: string; refreshToken?: string }> {
     try {
-      const tokenSecret = this.config.get('JWT_REFRESH_SECRET');
-      if (!tokenSecret) {
-        throw new BadRequestException([
-          'JWT_REFRESH_SECRET is not set. Please contact the admin',
-        ]);
+      const sessionId = await redisClient.get(`refresh:${token}`);
+      if (!sessionId) {
+        return { error: MFA_MESSAGE.REFRESH_TOKEN_NOT_FOUND };
       }
-      const payload = await this.jwt.verify(token, { secret: tokenSecret });
-      delete payload?.exp;
-      delete payload?.iat;
+      const sessionKey = `session:${sessionId}`
+      const sessionDetail = await redisClient.get(sessionKey)
+      if (!sessionDetail) {
+        return {
+          error: MFA_MESSAGE.SESSION_NOT_FOUND
+        }
+      }
+      const sessionJson = JSON.parse(sessionDetail)
+      if (sessionJson?.mfaEnabled && !sessionJson?.mfaVerified) {
+        return {
+          error: MFA_MESSAGE.MFA_NOT_VERIFIED
+        }
+      }
+      sessionJson.refreshVersion += 1;
       const user = await this.userRepository.findOne({
-        userId: payload.appUserID,
+        userId: sessionJson.userId,
       });
       if (!user) throw new UnauthorizedException(['User not found']);
-      const newRefreshToken = await this.generateRefreshToken(payload); // make refresh token small
-      const authToken = await this.generateAuthToken(payload);
-      return { authToken, refreshToken: newRefreshToken };
+      await redisClient.set(
+        sessionKey,
+        JSON.stringify(sessionJson),
+        'EX',
+        TIME.WEEK,
+      );
+      const newToken = await this.generateTokensForSession(
+        sessionJson.sessionId,
+        user,
+        sessionJson.refreshVersion
+      );
+      return { ...newToken };
     } catch (e) {
       Logger.error(
         `Error whaile generating refreshToken ${e}`,
@@ -281,29 +307,32 @@ export class SocialLoginService {
     });
   }
 
-  async createSession(user): Promise<string> {
+  async createSession(
+    user,
+  ): Promise<{ sessionId: string; refreshVersion: number }> {
     const sessionId = `${Date.now()}-${uuidv4()}`;
     const role = user?.role || UserRole.ADMIN;
     const activeAuthenticators = user.authenticators?.filter(
       (auth) => auth.isTwoFactorAuthenticated === true,
     );
+    const refreshVersion = 1;
     await redisClient.set(
       `session:${sessionId}`,
       JSON.stringify({
         sessionId,
         userId: user.userId,
         role,
-        refreshVersion: 1,
+        refreshVersion: refreshVersion,
         mfaVerified: false,
         mfaEnabled: activeAuthenticators?.length > 0,
       }),
       'EX',
       TIME.WEEK,
     );
-    return sessionId;
+    return { sessionId, refreshVersion };
   }
 
-  async generateTokensForSession(sessionId, user) {
+  async generateTokensForSession(sessionId, user, refreshVersion = 1) {
     const rawUrl = this.config.get('INVITATIONURL');
     const domain = new URL(rawUrl).origin;
     const accessToken = await this.generateAuthToken({
@@ -311,6 +340,7 @@ export class SocialLoginService {
       sub: user.userId,
       role: user.role || UserRole.ADMIN,
       aud: domain,
+      refreshVersion,
     });
     const refreshToken = `rt_${uuidv4()}`;
     await redisClient.set(

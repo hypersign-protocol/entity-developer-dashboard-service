@@ -44,7 +44,7 @@ import {
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { UserRole } from 'src/user/schema/user.schema';
 import { TOKEN_MAX_AGE } from 'src/utils/time-constant';
-import { MFA_MESSAGE } from '../constants/en';
+import { ERROR_MESSAGE as MFA_MESSAGE } from '../constants/en';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller('api/v1')
@@ -52,7 +52,7 @@ export class SocialLoginController {
   constructor(
     private readonly socialLoginService: SocialLoginService,
     private readonly config: ConfigService,
-  ) {}
+  ) { }
   @ApiResponse({
     status: 200,
     description: 'Auth url',
@@ -145,7 +145,7 @@ export class SocialLoginController {
     };
   }
   @ApiBearerAuth('Authorization')
-  @Post('auth/refresh')
+  @Post('auth/tokens/refresh')
   async refreshTokenGeneration(@Req() req, @Res() res) {
     const refreshToken = req.cookies['refreshToken'];
     if (!refreshToken) {
@@ -154,24 +154,24 @@ export class SocialLoginController {
     const tokens = await this.socialLoginService.verifyAndGenerateRefreshToken(
       refreshToken,
     );
-    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
-    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
-    res.cookie('authToken', tokens.authToken, {
-      httpOnly: true,
-      maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
-      secure: isProduction,
-      domain: isProduction ? cookieDomain : undefined,
-      sameSite: isProduction ? 'None' : 'Lax',
-      path: '/',
-    });
-    res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
-      secure: isProduction,
-      sameSite: isProduction ? 'None' : 'Lax',
-      domain: isProduction ? cookieDomain : undefined,
-      path: '/',
-    });
+    if (tokens.error) {
+      return res.status(401).json({
+        statusCode: 401,
+        message: [tokens.error],
+        error: 'Unauthorized',
+      });
+    }
+
+    res.cookie(
+      'accessToken',
+      tokens.accessToken,
+      getCookieOptions(TOKEN_MAX_AGE.AUTH_TOKEN),
+    );
+    res.cookie(
+      'refreshToken',
+      tokens.refreshToken,
+      getCookieOptions(TOKEN_MAX_AGE.REFRESH_TOKEN),
+    );
     res.json({ message: 'Tokens refreshed' });
   }
 

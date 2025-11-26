@@ -301,7 +301,7 @@ export class SocialLoginService {
       sessionId,
       role,
       refreshVersion: 1,
-      ...user,
+      userId: user.userId,
       isTwoFactorVerified: false,
       isTwoFactorAuthenticated: isMfaRequired,
     };

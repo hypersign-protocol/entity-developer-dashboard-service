@@ -10,6 +10,7 @@ import { NextFunction, Request, Response } from 'express';
 import { UserRepository } from 'src/user/repository/user.repository';
 import { sanitizeUrl } from '../utils';
 import { redisClient } from '../redis.provider';
+import { AUTH_ERRORS } from 'src/social-login/constants/en';
 @Injectable()
 export class JWTAuthorizeMiddleware implements NestMiddleware {
   constructor(private readonly userRepository: UserRepository) {}
@@ -64,20 +65,21 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
         }
         const sessionRaw = await redisClient.get(`session:${sid}`);
         if (!sessionRaw) {
-          throw new UnauthorizedException(['Session expired or logged out']);
+          throw new UnauthorizedException([AUTH_ERRORS.SESSION_EXPIRED]);
         }
         const session = JSON.parse(sessionRaw);
         if (session.userId !== decoded.sub) {
-          throw new UnauthorizedException(['Token does not match session']);
+          throw new UnauthorizedException([AUTH_ERRORS.SESSION_MISMATCH]);
         }
         if (session.refreshVersion !== decoded.refreshVersion) {
           throw new UnauthorizedException([
             'Your session has expired. Please log in again.',
           ]);
         }
-        if (session.mfaEnabled) {
-          if (!session.mfaVerified) {
-            throw new UnauthorizedException(['2FA verification required']);
+       
+        if (session.isTwoFactorAuthenticated) {
+          if (!session.isTwoFactorVerified) {
+            throw new UnauthorizedException([AUTH_ERRORS.TWO_FA_REQUIRED]);
           }
         }
         const user = await this.userRepository.findOne({

@@ -11,6 +11,7 @@ import {
   Body,
   Delete,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { SocialLoginService } from '../services/social-login.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -43,8 +44,8 @@ import {
 } from '../dto/request.dto';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { UserRole } from 'src/user/schema/user.schema';
-import { TOKEN_MAX_AGE } from 'src/utils/time-constant';
 import { ERROR_MESSAGE as MFA_MESSAGE } from '../constants/en';
+import { TOKEN_MAX_AGE, TOKEN } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller('api/v1')
@@ -83,7 +84,7 @@ export class SocialLoginController {
   async socialAuthCallback(@Req() req, @Res() res) {
     Logger.log('socialAuthCallback() method starts', 'SocialLoginController');
     const result = await this.socialLoginService.socialLogin(req);
-    if (result.mfaRequired) {
+    if (result.isMfaRequired) {
       const arrayString = encodeURIComponent(
         JSON.stringify(result.authenticators),
       );
@@ -94,14 +95,14 @@ export class SocialLoginController {
       );
     }
     res.cookie(
-      'accessToken',
+      TOKEN.AUTH.name,
       result.accessToken,
-      getCookieOptions(TOKEN_MAX_AGE.AUTH_TOKEN),
+      getCookieOptions(TOKEN.AUTH.expiry),
     );
     res.cookie(
-      'refreshToken',
+      TOKEN.REFRESH.name,
       result.refreshToken,
-      getCookieOptions(TOKEN_MAX_AGE.REFRESH_TOKEN),
+      getCookieOptions(TOKEN.REFRESH.expiry),
     );
     res.redirect(`${this.config.get('REDIRECT_URL')}`);
   }
@@ -209,14 +210,14 @@ export class SocialLoginController {
     );
     if (data.isVerified) {
       res.cookie(
-        'accessToken',
+        TOKEN.AUTH.name,
         data.accessToken,
-        getCookieOptions(TOKEN_MAX_AGE.AUTH_TOKEN),
+        getCookieOptions(TOKEN.AUTH.expiry),
       );
       res.cookie(
-        'refreshToken',
+        TOKEN.REFRESH.name,
         data.refreshToken,
-        getCookieOptions(TOKEN_MAX_AGE.REFRESH_TOKEN),
+        getCookieOptions(TOKEN.REFRESH.expiry),
       );
     }
 
@@ -294,23 +295,15 @@ export class SocialLoginController {
       mfaVerificationDto,
     );
     if (!data.isVerified && data?.error === MFA_MESSAGE.SESSION_NOT_FOUND) {
-      return res.status(401).json({
-        statusCode: 401,
-        message: [data.error],
-        error: 'Unauthorized',
-      });
+      throw new UnauthorizedException([data.error]);
     }
     if (!data.isVerified) {
-      return res.json({
-        statusCode: 400,
-        message: [data.error],
-        error: 'Bad Request',
-      });
+      throw new BadRequestException([data.error]);
     }
     res.cookie(
-      'refreshToken',
+      TOKEN.REFRESH.name,
       data.refreshToken,
-      getCookieOptions(TOKEN_MAX_AGE.REFRESH_TOKEN),
+      getCookieOptions(TOKEN.REFRESH.expiry),
     );
     return res.json({ isVerified: data.isVerified });
   }

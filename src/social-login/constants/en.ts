@@ -4,4 +4,10 @@ export const ERROR_MESSAGE = {
   INVALID_OTP: 'Invalid or expired OTP code.',
   REFRESH_TOKEN_NOT_FOUND: 'Refresh token not found or expired.',
   MFA_NOT_VERIFIED: 'Two-factor authentication (2FA) is required.',
+} as const;
+
+export const AUTH_ERRORS = {
+  SESSION_EXPIRED: 'Session expired or logged out',
+  SESSION_MISMATCH: 'Token does not match session',
+  TWO_FA_REQUIRED: '2FA verification required',
 };

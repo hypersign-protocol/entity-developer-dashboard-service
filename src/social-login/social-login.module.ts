@@ -57,7 +57,7 @@ export class SocialLoginModule implements NestModule {
           method: RequestMethod.GET,
         },
         {
-          path: '/api/v1/auth/refresh',
+          path: '/api/v1/auth/tokens/refresh',
           method: RequestMethod.POST,
         },
         {

@@ -24,6 +24,10 @@ import {
 import { UserDocument, UserRole } from 'src/user/schema/user.schema';
 import { redisClient } from 'src/utils/redis.provider';
 import { TIME } from 'src/utils/time-constant';
+import {
+  ERROR_MESSAGE as MFA_MESSAGE,
+  REFRESH_TOKEN_ERROR,
+} from '../constants/en';
 
 @Injectable()
 export class SocialLoginService {
@@ -92,7 +96,8 @@ export class SocialLoginService {
     if (!user.profileIcon) updates.profileIcon = profileIcon;
     if (Object.keys(updates).length > 0)
       this.userRepository.findOneUpdate({ email }, updates);
-    const { sessionId, activeAuthenticators, isMfaRequired } =
+
+    const { sessionId, activeAuthenticators, isMfaRequired, refreshVersion } =
       await this.createSession(user);
 
     if (isMfaRequired) {
@@ -102,11 +107,11 @@ export class SocialLoginService {
         authenticators: activeAuthenticators.map((a) => a.type),
       };
     }
-    const role = user?.role || UserRole.ADMIN;
     const tokens = await this.generateTokensForSession(
       sessionId,
       user.userId,
-      role,
+      user?.role || UserRole.ADMIN,
+      refreshVersion,
     );
 
     return {
@@ -193,6 +198,7 @@ export class SocialLoginService {
       sessionId,
       sessionDetail.userId,
       sessionDetail.role,
+      sessionDetail.refreshVersion,
     );
     return {
       isVerified,
@@ -233,30 +239,53 @@ export class SocialLoginService {
     );
     return { message: 'Removed authenticator successfully' };
   }
-  async verifyAndGenerateRefreshToken(token: string) {
+  async verifyAndGenerateRefreshToken(
+    token: string,
+  ): Promise<{ error?: string; accessToken?: string; refreshToken?: string }> {
     try {
-      const tokenSecret = this.config.get('JWT_REFRESH_SECRET');
-      if (!tokenSecret) {
-        throw new BadRequestException([
-          'JWT_REFRESH_SECRET is not set. Please contact the admin',
-        ]);
+      const sessionId = await redisClient.get(`refresh:${token}`);
+      if (!sessionId) {
+        return { error: REFRESH_TOKEN_ERROR.REFRESH_TOKEN_NOT_FOUND };
       }
-      const payload = await this.jwt.verify(token, { secret: tokenSecret });
-      delete payload?.exp;
-      delete payload?.iat;
+      const sessionKey = `session:${sessionId}`;
+      const sessionDetail = await redisClient.get(sessionKey);
+      if (!sessionDetail) {
+        return {
+          error: MFA_MESSAGE.SESSION_NOT_FOUND,
+        };
+      }
+      const sessionJson = JSON.parse(sessionDetail);
+      if (sessionJson?.mfaEnabled && !sessionJson?.mfaVerified) {
+        return {
+          error: MFA_MESSAGE.MFA_NOT_VERIFIED,
+        };
+      }
+      sessionJson.refreshVersion += 1;
       const user = await this.userRepository.findOne({
-        userId: payload.appUserID,
+        userId: sessionJson.userId,
       });
       if (!user) throw new UnauthorizedException(['User not found']);
-      const newRefreshToken = await this.generateRefreshToken(payload); // make refresh token small
-      const authToken = await this.generateAuthToken(payload);
-      return { authToken, refreshToken: newRefreshToken };
+      await redisClient.set(
+        sessionKey,
+        JSON.stringify(sessionJson),
+        'EX',
+        TIME.WEEK,
+      );
+      const newToken = await this.generateTokensForSession(
+        sessionJson.sessionId,
+        user.userId,
+        user?.role || UserRole.ADMIN,
+        sessionJson.refreshVersion,
+      );
+      return { ...newToken };
     } catch (e) {
       Logger.error(
-        `Error whaile generating refreshToken ${e}`,
+        `Error while generating refreshToken ${e}`,
         'SocialLoginService',
       );
-      throw new UnauthorizedException(['Invalid refresh token']);
+      throw new UnauthorizedException([
+        REFRESH_TOKEN_ERROR.INVALID_REFRESH_TOKEN,
+      ]);
     }
   }
   async generateRefreshToken(payload: any): Promise<string> {
@@ -289,6 +318,7 @@ export class SocialLoginService {
     sessionId: string;
     activeAuthenticators: any[];
     isMfaRequired: boolean;
+    refreshVersion: number;
   }> {
     const sessionId = `${Date.now()}-${uuidv4()}`;
     const role = user?.role || UserRole.ADMIN;
@@ -296,11 +326,12 @@ export class SocialLoginService {
       user.authenticators?.filter(
         (auth) => auth.isTwoFactorAuthenticated === true,
       ) || [];
+    const refreshVersion = 1;
     const isMfaRequired = activeAuthenticators.length > 0;
     const sessionData: any = {
       sessionId,
       role,
-      refreshVersion: 1,
+      refreshVersion: refreshVersion,
       userId: user.userId,
       isTwoFactorVerified: false,
       isTwoFactorAuthenticated: isMfaRequired,
@@ -314,17 +345,18 @@ export class SocialLoginService {
       'EX',
       TIME.WEEK,
     );
-    return { sessionId, activeAuthenticators, isMfaRequired };
+    return { sessionId, activeAuthenticators, isMfaRequired, refreshVersion };
   }
 
-  async generateTokensForSession(sessionId, userId, role) {
+  async generateTokensForSession(sessionId, userId, role, refreshVersion) {
     const rawUrl = this.config.get('INVITATIONURL');
     const domain = new URL(rawUrl).origin;
     const accessToken = await this.generateAuthToken({
       sid: sessionId,
       sub: userId,
-      role: role || UserRole.ADMIN,
+      role,
       aud: domain,
+      refreshVersion,
     });
     const refreshToken = `${uuidv4()}`;
     await redisClient.set(
@@ -334,5 +366,73 @@ export class SocialLoginService {
       TIME.WEEK,
     );
     return { accessToken, refreshToken };
+  }
+  async confirmMfaSetup(
+    user,
+    session,
+    mfaVerificationDto: MFACodeVerificationDto,
+  ): Promise<{ isVerified: boolean; refreshToken?: string; error?: string }> {
+    Logger.log(
+      'Inside confirmMfaSetup() method to Complete MFA setup',
+      'SocialLoginService',
+    );
+    const { authenticatorType, twoFactorAuthenticationCode } =
+      mfaVerificationDto;
+    const authenticatorDetail = user.authenticators.find(
+      (auth) => auth.type === authenticatorType,
+    );
+    if (authenticatorDetail.isTwoFactorAuthenticated) {
+      return { isVerified: false, error: MFA_MESSAGE.MFA_ALREADY_ENABLED };
+    }
+    const isVerified = authenticator.verify({
+      token: twoFactorAuthenticationCode,
+      secret: authenticatorDetail.secret,
+    });
+    if (!isVerified) {
+      return { isVerified, error: MFA_MESSAGE.INVALID_OTP };
+    }
+    if (!authenticatorDetail.isTwoFactorAuthenticated && isVerified) {
+      user.authenticators.map((authn) => {
+        if (authn.type === authenticatorType) {
+          authn.isTwoFactorAuthenticated = true;
+          return authn;
+        }
+        return authn;
+      });
+      this.userRepository.findOneUpdate(
+        { userId: user.userId },
+        { authenticators: user.authenticators },
+      );
+      const sessionKey = `session:${session.sessionId}`;
+      const sessionJson = await redisClient.get(sessionKey);
+      if (!sessionJson) {
+        return {
+          isVerified,
+          error: MFA_MESSAGE.SESSION_NOT_FOUND,
+        };
+      }
+      const sessionObj = JSON.parse(sessionJson);
+      sessionObj.isTwoFactorVerifed = true;
+      sessionObj.isTwoFactorAuthenticated = true;
+      sessionObj.refreshVersion += 1;
+      await redisClient.set(
+        sessionKey,
+        JSON.stringify(sessionObj),
+        'EX',
+        TIME.WEEK,
+      );
+      const newRefreshToken = uuidv4();
+      await redisClient.set(
+        `refresh:${newRefreshToken}`,
+        session.sid,
+        'EX',
+        TIME.WEEK,
+      );
+      return {
+        isVerified,
+        refreshToken: newRefreshToken,
+      };
+    }
+    return { isVerified };
   }
 }

@@ -11,6 +11,7 @@ import {
   Body,
   Delete,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { SocialLoginService } from '../services/social-login.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -43,6 +44,7 @@ import {
 } from '../dto/request.dto';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { UserRole } from 'src/user/schema/user.schema';
+import { ERROR_MESSAGE as MFA_MESSAGE } from '../constants/en';
 import { TOKEN_MAX_AGE, TOKEN } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
@@ -137,14 +139,14 @@ export class SocialLoginController {
   }
 
   @ApiBearerAuth('Authorization')
-  @Post('/api/v1/auth/login/refresh')
+  @Post('auth/login/refresh')
   async generateRefreshToken(@Req() req) {
     return {
       authToken: await this.socialLoginService.socialLogin(req),
     };
   }
   @ApiBearerAuth('Authorization')
-  @Post('/api/v1/auth/refresh')
+  @Post('auth/tokens/refresh')
   async refreshTokenGeneration(@Req() req, @Res() res) {
     const refreshToken = req.cookies['refreshToken'];
     if (!refreshToken) {
@@ -153,24 +155,24 @@ export class SocialLoginController {
     const tokens = await this.socialLoginService.verifyAndGenerateRefreshToken(
       refreshToken,
     );
-    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
-    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
-    res.cookie('authToken', tokens.authToken, {
-      httpOnly: true,
-      maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
-      secure: isProduction,
-      domain: isProduction ? cookieDomain : undefined,
-      sameSite: isProduction ? 'None' : 'Lax',
-      path: '/',
-    });
-    res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
-      secure: isProduction,
-      sameSite: isProduction ? 'None' : 'Lax',
-      domain: isProduction ? cookieDomain : undefined,
-      path: '/',
-    });
+    if (tokens.error) {
+      return res.status(401).json({
+        statusCode: 401,
+        message: [tokens.error],
+        error: 'Unauthorized',
+      });
+    }
+
+    res.cookie(
+      TOKEN.AUTH.name,
+      tokens.accessToken,
+      getCookieOptions(TOKEN.AUTH.expiry),
+    );
+    res.cookie(
+      TOKEN.REFRESH.name,
+      tokens.refreshToken,
+      getCookieOptions(TOKEN.REFRESH.expiry),
+    );
     res.json({ message: 'Tokens refreshed' });
   }
 
@@ -183,7 +185,7 @@ export class SocialLoginController {
     type: UnauthorizedError,
   })
   @ApiBearerAuth('Authorization')
-  @Post('/api/v1/auth/mfa/generate')
+  @Post('auth/mfa/setup/generate')
   async generateMfa(@Req() req, @Body() body: Generate2FA) {
     const result = await this.socialLoginService.generate2FA(body, req.user);
     return { twoFADataUrl: result };
@@ -234,7 +236,7 @@ export class SocialLoginController {
     type: UnauthorizedError,
   })
   @ApiBearerAuth('Authorization')
-  @Delete('/api/v1/auth/mfa')
+  @Delete('auth/mfa')
   async removeMFA(@Req() req, @Body() mfaremoveDto: DeleteMFADto) {
     return this.socialLoginService.removeMFA(req.user, mfaremoveDto);
   }
@@ -251,7 +253,7 @@ export class SocialLoginController {
     type: UnauthorizedError,
   })
   @ApiBearerAuth('Authorization')
-  @Post('/api/v1/auth/logout')
+  @Post('auth/logout')
   async logout(@Req() req, @Res() res) {
     const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
     const isProduction = this.config.get<string>('NODE_ENV') === 'production';
@@ -270,5 +272,39 @@ export class SocialLoginController {
       httpOnly: true,
     });
     return res.status(200).json({ message: 'Logged out successfully' });
+  }
+
+  @ApiOkResponse({
+    description: 'Verified MFA code and generated new token',
+    type: Verify2FARespDto,
+  })
+  @ApiUnauthorizedResponse({
+    status: 401,
+    type: UnauthorizedError,
+  })
+  @ApiBearerAuth('Authorization')
+  @Post('auth/mfa/setup/verify')
+  async confirmMfaSetup(
+    @Req() req,
+    @Body() mfaVerificationDto: MFACodeVerificationDto,
+    @Res() res,
+  ) {
+    const data = await this.socialLoginService.confirmMfaSetup(
+      req.user,
+      req.session,
+      mfaVerificationDto,
+    );
+    if (!data.isVerified && data?.error === MFA_MESSAGE.SESSION_NOT_FOUND) {
+      throw new UnauthorizedException([data.error]);
+    }
+    if (!data.isVerified) {
+      throw new BadRequestException([data.error]);
+    }
+    res.cookie(
+      TOKEN.REFRESH.name,
+      data.refreshToken,
+      getCookieOptions(TOKEN.REFRESH.expiry),
+    );
+    return res.json({ isVerified: data.isVerified });
   }
 }

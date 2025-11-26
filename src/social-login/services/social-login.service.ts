@@ -34,20 +34,22 @@ export class SocialLoginService {
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
     private readonly supportedServiceList: SupportedServiceList,
-  ) { }
+  ) {}
   async generateAuthUrlByProvider(provider: string) {
     let authUrl;
     switch (provider) {
       case Providers.google: {
-        authUrl = `${this.config.get('GOOGLE_AUTH_BASE_URL') ||
+        authUrl = `${
+          this.config.get('GOOGLE_AUTH_BASE_URL') ||
           'https://accounts.google.com/o/oauth2/v2/auth'
-          }?response_type=code&redirect_uri=${this.config.get('GOOGLE_CALLBACK_URL') ||
+        }?response_type=code&redirect_uri=${
+          this.config.get('GOOGLE_CALLBACK_URL') ||
           sanitizeUrl(
             this.config.get('DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP'),
           ) + '/api/v1/auth/google/callback'
-          }&scope=email%20profile&prompt=select_account&client_id=${this.config.get(
-            'GOOGLE_CLIENT_ID',
-          )}`;
+        }&scope=email%20profile&prompt=select_account&client_id=${this.config.get(
+          'GOOGLE_CLIENT_ID',
+        )}`;
         break;
       }
       default: {
@@ -243,18 +245,18 @@ export class SocialLoginService {
       if (!sessionId) {
         return { error: MFA_MESSAGE.REFRESH_TOKEN_NOT_FOUND };
       }
-      const sessionKey = `session:${sessionId}`
-      const sessionDetail = await redisClient.get(sessionKey)
+      const sessionKey = `session:${sessionId}`;
+      const sessionDetail = await redisClient.get(sessionKey);
       if (!sessionDetail) {
         return {
-          error: MFA_MESSAGE.SESSION_NOT_FOUND
-        }
+          error: MFA_MESSAGE.SESSION_NOT_FOUND,
+        };
       }
-      const sessionJson = JSON.parse(sessionDetail)
+      const sessionJson = JSON.parse(sessionDetail);
       if (sessionJson?.mfaEnabled && !sessionJson?.mfaVerified) {
         return {
-          error: MFA_MESSAGE.MFA_NOT_VERIFIED
-        }
+          error: MFA_MESSAGE.MFA_NOT_VERIFIED,
+        };
       }
       sessionJson.refreshVersion += 1;
       const user = await this.userRepository.findOne({
@@ -270,7 +272,7 @@ export class SocialLoginService {
       const newToken = await this.generateTokensForSession(
         sessionJson.sessionId,
         user,
-        sessionJson.refreshVersion
+        sessionJson.refreshVersion,
       );
       return { ...newToken };
     } catch (e) {

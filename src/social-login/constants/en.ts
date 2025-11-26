@@ -3,6 +3,5 @@ export const ERROR_MESSAGE = {
   MFA_ALREADY_ENABLED: 'MFA is already enabled for this user.',
   INVALID_OTP: 'Invalid or expired OTP code.',
   REFRESH_TOKEN_NOT_FOUND: 'Refresh token not found or expired.',
-  MFA_NOT_VERIFIED: 'Two-factor authentication (2FA) is required.'
-}
-
+  MFA_NOT_VERIFIED: 'Two-factor authentication (2FA) is required.',
+};

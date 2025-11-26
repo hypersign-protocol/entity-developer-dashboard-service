@@ -43,8 +43,8 @@ import {
 } from '../dto/request.dto';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { UserRole } from 'src/user/schema/user.schema';
-import { TOKEN_MAX_AGE } from 'src/utils/time-constant';
 import { MFA_MESSAGE } from '../constants/en';
+import { TOKEN_MAX_AGE, TOKEN } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller('api/v1')
@@ -83,7 +83,7 @@ export class SocialLoginController {
   async socialAuthCallback(@Req() req, @Res() res) {
     Logger.log('socialAuthCallback() method starts', 'SocialLoginController');
     const result = await this.socialLoginService.socialLogin(req);
-    if (result.mfaRequired) {
+    if (result.isMfaRequired) {
       const arrayString = encodeURIComponent(
         JSON.stringify(result.authenticators),
       );
@@ -94,14 +94,14 @@ export class SocialLoginController {
       );
     }
     res.cookie(
-      'accessToken',
+      TOKEN.AUTH.name,
       result.accessToken,
-      getCookieOptions(TOKEN_MAX_AGE.AUTH_TOKEN),
+      getCookieOptions(TOKEN.AUTH.expiry),
     );
     res.cookie(
-      'refreshToken',
+      TOKEN.REFRESH.name,
       result.refreshToken,
-      getCookieOptions(TOKEN_MAX_AGE.REFRESH_TOKEN),
+      getCookieOptions(TOKEN.REFRESH.expiry),
     );
     res.redirect(`${this.config.get('REDIRECT_URL')}`);
   }
@@ -209,14 +209,14 @@ export class SocialLoginController {
     );
     if (data.isVerified) {
       res.cookie(
-        'accessToken',
+        TOKEN.AUTH.name,
         data.accessToken,
-        getCookieOptions(TOKEN_MAX_AGE.AUTH_TOKEN),
+        getCookieOptions(TOKEN.AUTH.expiry),
       );
       res.cookie(
-        'refreshToken',
+        TOKEN.REFRESH.name,
         data.refreshToken,
-        getCookieOptions(TOKEN_MAX_AGE.REFRESH_TOKEN),
+        getCookieOptions(TOKEN.REFRESH.expiry),
       );
     }
 

@@ -390,7 +390,7 @@ export class SocialLoginService {
         'EX',
         TIME.WEEK,
       );
-      const newRefreshToken = `rt_${uuidv4()}`;
+      const newRefreshToken = uuidv4();
       await redisClient.set(
         `refresh:${newRefreshToken}`,
         session.sid,

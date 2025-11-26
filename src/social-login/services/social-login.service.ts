@@ -311,7 +311,7 @@ export class SocialLoginService {
     }
     await redisClient.set(
       `session:${sessionId}`,
-      JSON.stringify(sessionId),
+      JSON.stringify(sessionData),
       'EX',
       TIME.WEEK,
     );
@@ -381,8 +381,8 @@ export class SocialLoginService {
         };
       }
       const sessionObj = JSON.parse(sessionJson);
-      sessionObj.mfaVerified = true;
-      sessionObj.mfaEnabled = true;
+      sessionObj.isTwoFactorVerifed = true;
+      sessionObj.isTwoFactorAuthenticated = true;
       sessionObj.refreshVersion += 1;
       await redisClient.set(
         sessionKey,

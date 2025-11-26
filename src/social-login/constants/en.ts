@@ -1,4 +1,3 @@
-
 export const MFA_MESSAGE = {
   SESSION_NOT_FOUND: 'Session not found or expired.',
   MFA_ALREADY_ENABLED: 'MFA is already enabled for this user.',
@@ -10,4 +9,3 @@ export const AUTH_ERRORS = {
   SESSION_MISMATCH: 'Token does not match session',
   TWO_FA_REQUIRED: '2FA verification required',
 };
-

@@ -15,7 +15,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { AllExceptionsFilter } from 'src/utils/utils';
+import { AllExceptionsFilter, getCookieOptions } from 'src/utils/utils';
 import {
   GenerateEmailOtpDto,
   GenerateEmailOtpResponse,
@@ -29,7 +29,7 @@ import { UnauthorizedError } from '../dto/response.dto';
 import { TOKEN_MAX_AGE } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
-@Controller('/api/v1/auth/otp')
+@Controller('/api/v1/auth/email/otp')
 export class EmailOtpLoginController {
   constructor(
     private readonly config: ConfigService,
@@ -45,7 +45,7 @@ export class EmailOtpLoginController {
     status: 400,
     type: AppError,
   })
-  @Post('generate')
+  @Post('request')
   async generateEmailOtp(@Body() body: GenerateEmailOtpDto) {
     Logger.log('generateEmailOtp() method starts', 'EmailOtpLoginController');
     return this.emailOtpService.generateEmailOtp(body);
@@ -74,23 +74,20 @@ export class EmailOtpLoginController {
       'EmailOtpLoginController',
     );
     try {
-      const tokens = await this.socialLoginService.socialLogin(req);
-      res.cookie('authToken', tokens?.authToken, {
-        httpOnly: true,
-        secure: true,
-        domain: cookieDomain,
-        maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
-        sameSite: 'None',
-        path: '/',
-      });
-      res.cookie('refreshToken', tokens?.refreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'None',
-        domain: cookieDomain,
-        maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
-        path: '/',
-      });
+      const result = await this.socialLoginService.socialLogin(req);
+      if (result.isMfaRequired) {
+        res.redirect(this.config.get('MFA_REDIRECT_URL'));
+      }
+      res.cookie(
+        'accessToken',
+        result.accessToken,
+        getCookieOptions(TOKEN_MAX_AGE.AUTH_TOKEN),
+      );
+      res.cookie(
+        'refreshToken',
+        result.refreshToken,
+        getCookieOptions(TOKEN_MAX_AGE.REFRESH_TOKEN),
+      );
       res.redirect(`${this.config.get('REDIRECT_URL')}`);
     } catch (err) {
       Logger.error(`Login failed: ${err.message}`, 'EmailOtpLoginController');

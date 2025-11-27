@@ -24,10 +24,7 @@ import {
 import { UserDocument, UserRole } from 'src/user/schema/user.schema';
 import { redisClient } from 'src/utils/redis.provider';
 import { TIME } from 'src/utils/time-constant';
-import {
-  ERROR_MESSAGE as MFA_MESSAGE,
-  REFRESH_TOKEN_ERROR,
-} from '../constants/en';
+import { MFA_ERROR, ERROR_MESSAGE, REFRESH_TOKEN_ERROR } from '../constants/en';
 
 @Injectable()
 export class SocialLoginService {
@@ -174,20 +171,44 @@ export class SocialLoginService {
       throw new BadRequestException(['Invalid or expired sessionId']);
     }
     const sessionDetail = JSON.parse(sessionDetailJson);
+    if (sessionDetail?.isTwoFactorVerified) {
+      throw new BadRequestException([MFA_ERROR.MFA_ALREADY_VERIFIED]);
+    }
     const authenticatorDetail = sessionDetail.authenticators.find(
       (auth) => auth.type === authenticatorType,
     );
+    if (!authenticatorDetail) {
+      throw new BadRequestException([MFA_ERROR.INVALID_MFA_METHOD]);
+    }
+    sessionDetail.twoFactorRetryCount = sessionDetail.twoFactorRetryCount ?? 0;
     const isVerified = authenticator.verify({
       token: twoFactorAuthenticationCode,
       secret: authenticatorDetail.secret,
     });
+    const maxRetryAttempts = this.config.get<number>(
+      'MAX_MFA_RETRY_ATTEMPT',
+      3,
+    );
+
     if (!isVerified) {
-      await redisClient.del(sessionKey);
+      sessionDetail.twoFactorRetryCount++;
+      if (sessionDetail.twoFactorRetryCount > maxRetryAttempts) {
+        await redisClient.del(sessionKey);
+        throw new BadRequestException([MFA_ERROR.MFA_MAX_RETRY_EXCEEDED]);
+      }
+      await redisClient.set(
+        sessionKey,
+        JSON.stringify(sessionDetail),
+        'EX',
+        TIME.WEEK,
+      );
       return { isVerified: false };
     }
     delete sessionDetail?.authenticators;
+    delete sessionDetail.twoFactorRetryCount;
     sessionDetail.isTwoFactorVerified = true;
-    sessionDetail.isTwoFactorAuthenticated = true;
+    sessionDetail.isTwoFactorAuthenticated =
+      sessionDetail.isTwoFactorAuthenticated;
     await redisClient.set(
       sessionKey,
       JSON.stringify(sessionDetail),
@@ -251,13 +272,13 @@ export class SocialLoginService {
       const sessionDetail = await redisClient.get(sessionKey);
       if (!sessionDetail) {
         return {
-          error: MFA_MESSAGE.SESSION_NOT_FOUND,
+          error: ERROR_MESSAGE.SESSION_NOT_FOUND,
         };
       }
       const sessionJson = JSON.parse(sessionDetail);
       if (sessionJson?.mfaEnabled && !sessionJson?.mfaVerified) {
         return {
-          error: MFA_MESSAGE.MFA_NOT_VERIFIED,
+          error: MFA_ERROR.MFA_NOT_VERIFIED,
         };
       }
       sessionJson.refreshVersion += 1;
@@ -335,6 +356,7 @@ export class SocialLoginService {
       userId: user.userId,
       isTwoFactorVerified: false,
       isTwoFactorAuthenticated: isMfaRequired,
+      twoFactorRetryCount: 0,
     };
     if (isMfaRequired) {
       sessionData.authenticators = activeAuthenticators;
@@ -382,14 +404,17 @@ export class SocialLoginService {
       (auth) => auth.type === authenticatorType,
     );
     if (authenticatorDetail.isTwoFactorAuthenticated) {
-      return { isVerified: false, error: MFA_MESSAGE.MFA_ALREADY_ENABLED };
+      return {
+        isVerified: false,
+        error: MFA_ERROR.MFA_ALREADY_ENABLED,
+      };
     }
     const isVerified = authenticator.verify({
       token: twoFactorAuthenticationCode,
       secret: authenticatorDetail.secret,
     });
     if (!isVerified) {
-      return { isVerified, error: MFA_MESSAGE.INVALID_OTP };
+      return { isVerified, error: ERROR_MESSAGE.INVALID_OTP };
     }
     if (!authenticatorDetail.isTwoFactorAuthenticated && isVerified) {
       user.authenticators.map((authn) => {
@@ -408,7 +433,7 @@ export class SocialLoginService {
       if (!sessionJson) {
         return {
           isVerified,
-          error: MFA_MESSAGE.SESSION_NOT_FOUND,
+          error: ERROR_MESSAGE.SESSION_NOT_FOUND,
         };
       }
       const sessionObj = JSON.parse(sessionJson);

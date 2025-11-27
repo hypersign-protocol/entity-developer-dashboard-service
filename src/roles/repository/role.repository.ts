@@ -34,4 +34,7 @@ export class RoleRepository {
   async findOneAndDelete(roleFilterQuery: FilterQuery<Role>) {
     return this.roleModel.findOneAndDelete(roleFilterQuery);
   }
+  async findUsingAggregation(pipeline: any) {
+    return this.roleModel.aggregate(pipeline);
+  }
 }

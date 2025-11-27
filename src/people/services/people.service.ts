@@ -42,6 +42,7 @@ export class PeopleService {
     const userDetails = await this.userService.findOne({
       email: emailId,
     });
+
     // if (userDetails == null) {
     //   throw new NotFoundException(
     //     `Cannot invite an non existing user with email: ${emailId}`,
@@ -69,6 +70,30 @@ export class PeopleService {
     //   return isInvitedAlready;
     // }
     const invitecode = `${Date.now()}-${uuidv4()}`;
+    const { roleId } = createPersonDto;
+    let roleDetail;
+    if (roleId) {
+      roleDetail = await this.roleRepository.findOne({ _id: roleId });
+      if (!roleDetail) {
+        throw new BadRequestException([`Role not found for roleId: ${roleId}`]);
+      }
+    } else {
+      const roles = await this.roleRepository.findUsingAggregation([
+        { $match: { userId: adminUserData.userId } },
+        {
+          $addFields: {
+            permissionsCount: { $size: '$permissions' },
+          },
+        },
+        { $sort: { permissionsCount: 1 } },
+        { $limit: 1 },
+      ]);
+      roleDetail = roles?.[0];
+    }
+    if (!roleDetail)
+      throw new BadRequestException([
+        'Add a role first before inviting a member.',
+      ]);
     const invite = await this.adminPeopleService.create({
       adminId: adminUserData.userId,
       userId: userDetails?.userId || emailId,
@@ -77,6 +102,9 @@ export class PeopleService {
       invitationValidTill: new Date(
         Date.now() + 2 * 24 * 60 * 60 * 1000,
       ).toISOString(),
+      roleId: roleDetail._id.toString(),
+      roleName: roleDetail.roleName,
+      inviteeEmail: emailId,
     });
     this.mailNotificationService.addJobToMailQueue({
       mailName: JobNames.SEND_TEAM_MATE_INVITATION_MAIL,

@@ -7,7 +7,6 @@ import {
   UseFilters,
   Post,
   Res,
-  Query,
   Body,
   Delete,
   UnauthorizedException,
@@ -20,7 +19,6 @@ import {
   ApiBearerAuth,
   ApiExcludeEndpoint,
   ApiOkResponse,
-  ApiQuery,
   ApiResponse,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -44,8 +42,8 @@ import {
 } from '../dto/request.dto';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { UserRole } from 'src/user/schema/user.schema';
-import { ERROR_MESSAGE as MFA_MESSAGE } from '../constants/en';
-import { TOKEN_MAX_AGE, TOKEN } from 'src/utils/time-constant';
+import { ERROR_MESSAGE, ERROR_MESSAGE as MFA_MESSAGE } from '../constants/en';
+import { TOKEN } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller('api/v1')
@@ -242,6 +240,14 @@ export class SocialLoginController {
   @ApiBearerAuth('Authorization')
   @Post('auth/logout')
   async logout(@Req() req, @Res() res) {
+    const refreshToken = req.cookies[TOKEN.REFRESH.name];
+    const result = await this.socialLoginService.logout(
+      refreshToken,
+      req.session,
+    );
+    if (!result.success) {
+      throw new BadRequestException([ERROR_MESSAGE.LOGOUT_ISSUE]);
+    }
     res.clearCookie(TOKEN.AUTH.name, getCookieOptions(undefined, true));
     res.clearCookie(TOKEN.REFRESH.name, getCookieOptions(undefined, true));
     return res.status(200).json({ message: 'Logged out successfully' });

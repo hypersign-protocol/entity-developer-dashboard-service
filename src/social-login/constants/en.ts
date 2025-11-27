@@ -2,6 +2,7 @@ export const ERROR_MESSAGE = {
   SESSION_NOT_FOUND: 'Session not found or expired.',
   INVALID_OTP: 'Invalid or expired OTP code.',
   USER_NOT_FOUND: 'User not found',
+  LOGOUT_ISSUE: 'Logout failed on server',
 } as const;
 
 export const AUTH_ERRORS = {

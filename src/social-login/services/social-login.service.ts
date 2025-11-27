@@ -460,4 +460,18 @@ export class SocialLoginService {
     }
     return { isVerified };
   }
+  async logout(refreshToken, session) {
+    try {
+      const sessionId = session.sessionId;
+      if (sessionId) await redisClient.del(`session:${sessionId}`);
+      if (refreshToken) await redisClient.del(`refresh:${refreshToken}`);
+      return { success: true };
+    } catch (e) {
+      Logger.error(
+        'Inside logout() to delete data from redis',
+        'SocialLoginService',
+      );
+      return { success: false };
+    }
+  }
 }

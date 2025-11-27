@@ -43,6 +43,11 @@ export class AdminPeople {
     required: false,
   })
   roleName?: string;
+  @Prop({
+    name: 'inviteeEmail',
+    required: false,
+  })
+  inviteeEmail?: string;
 }
 
 export const AdminPeopleSchema = SchemaFactory.createForClass(AdminPeople);

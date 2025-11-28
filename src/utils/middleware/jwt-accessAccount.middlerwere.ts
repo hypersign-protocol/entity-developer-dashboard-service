@@ -13,28 +13,33 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
   async use(req: Request, res: Response, next: NextFunction) {
     try {
       // @ts-ignore
-      if (req.user?.accessAccount !== undefined) {
+      const user = req.user;
+      const session = req['session'];
+      if (!session.tenantId) {
+        return next();
+      }
+      const tenantId = req['session'].tenantId;
+
+      if (tenantId !== undefined) {
         // @ts-ignore
 
-        const userId = req.user.userId;
+        const userId = user.userId;
+        const tenantId = req['session'].tenantId;
         // @ts-ignore
-
-        const adminId = req.user.accessAccount.userId;
-        if (adminId !== userId) {
-          const member = await this.adminPeople.findOne({ adminId, userId });
-          if (member == null) {
-            throw new Error('Your access has been revoked');
-          }
+        const member = await this.adminPeople.findOne({
+          adminId: tenantId,
+          userId,
+        });
+        if (member == null) {
+          throw new Error('Your access has been revoked');
         }
         // @ts-ignore
 
-        req.user.userId = req.user.accessAccount.userId;
+        user.userId = tenantId;
         // @ts-ignore
 
-        req.user.accessList = req.user.accessAccount.accessList;
+        user.accessList = session.tenantPermissions;
         // @ts-ignore
-
-        req.user.email = req.user.accessAccount.email;
       }
 
       Logger.log(JSON.stringify(req.user), 'JWTAccessAccountMiddleware');

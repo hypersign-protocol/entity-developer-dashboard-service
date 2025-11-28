@@ -14,18 +14,17 @@ import {
 } from '@nestjs/common';
 import { PeopleService } from '../services/people.service';
 import {
-  AdminLoginDTO,
   AttachRoleDTO,
   CreateInviteDto,
   InviteListResponseDTO,
   InviteResponseDTO,
   PeopleListResponseDTO,
+  TenantLoginDTO,
 } from '../dto/create-person.dto';
 import { DeletePersonDto } from '../dto/update-person.dto';
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AllExceptionsFilter } from 'src/utils/utils';
 import { ConfigService } from '@nestjs/config';
-import { TOKEN_MAX_AGE } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('People')
 @ApiBearerAuth('Authorization')
@@ -104,32 +103,14 @@ export class PeopleController {
     const { user } = req;
     return this.peopleService.attachRole(body, user);
   }
-
-  @Post('/admin/login')
+  @Post('/access')
   @UsePipes(ValidationPipe)
-  async adminLogin(@Body() body: AdminLoginDTO, @Req() req, @Res() res) {
-    const { user } = req;
-    const data = await this.peopleService.adminLogin(body, user);
-    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
-    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
-    res.cookie('authToken', data?.authToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'None' : 'Lax',
-      maxAge: TOKEN_MAX_AGE.AUTH_TOKEN,
-      domain: isProduction ? cookieDomain : undefined,
-      path: '/',
-    });
-    res.cookie('refreshToken', data?.refreshToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'None' : 'Lax',
-      maxAge: TOKEN_MAX_AGE.REFRESH_TOKEN,
-      domain: isProduction ? cookieDomain : undefined,
-      path: '/',
-    });
-    return res.json({
-      message: `Successfully switched to the ${data.adminEmail} account`,
-    });
+  async switchTenantAccount(@Body() tenantDto: TenantLoginDTO, @Req() req) {
+    const { user, session } = req;
+    return await this.peopleService.switchTenantAccount(
+      user,
+      session,
+      tenantDto,
+    );
   }
 }

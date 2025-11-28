@@ -22,7 +22,11 @@ import { ConfigService } from '@nestjs/config';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
 import { JobNames } from 'src/utils/time-constant';
 import { redisClient } from 'src/utils/redis.provider';
-import { TENANT_ERRORS, TENANT_INVITE_ERRORS } from '../constant/en';
+import {
+  TENANT_ERRORS,
+  TENANT_INVITE_ERRORS,
+  TENANT_MESSAGES,
+} from '../constant/en';
 
 @Injectable()
 export class PeopleService {
@@ -243,7 +247,18 @@ export class PeopleService {
     tenantDto: TenantLoginDTO,
   ) {
     const { adminId } = tenantDto;
-    if (tenantDto.adminId == sessionDetail?.tenantId) {
+    // switch back to own account
+    if (userDetail.userId == adminId) {
+      if (!sessionDetail?.tenantId) {
+        throw new BadRequestException([TENANT_ERRORS.ALREADY_IN_TENANT]);
+      }
+      return this.updateSession({
+        sessionDetail,
+        message: TENANT_MESSAGES.SWITCH_BACK_SUCCESS,
+      });
+    }
+    // switching to tenant account
+    if (adminId == sessionDetail?.tenantId) {
       throw new BadRequestException([TENANT_ERRORS.ALREADY_IN_TENANT]);
     }
     const adminData = await this.userService.findOne({
@@ -264,29 +279,46 @@ export class PeopleService {
     if (!tenantDetail.accepted) {
       throw new BadRequestException([TENANT_ERRORS.INVITATION_NOT_ACCEPTED]);
     }
-    const permissionsDetail = await this.roleRepository.findOne({
+    const roleDetail = await this.roleRepository.findOne({
       _id: tenantDetail.roleId,
     });
-    if (!permissionsDetail) {
+    if (!roleDetail) {
       throw new BadRequestException([TENANT_ERRORS.ROLE_NOT_FOUND]);
     }
-    if (
-      !permissionsDetail.permissions ||
-      permissionsDetail.permissions.length <= 0
-    ) {
+    if (!roleDetail.permissions?.length) {
       throw new BadRequestException([TENANT_ERRORS.NO_PERMISSION]);
     }
-    const permissions = permissionsDetail.permissions;
-    sessionDetail.tenantId = adminId;
+
+    return this.updateSession({
+      sessionDetail,
+      message: TENANT_MESSAGES.SWITCH_SUCCESS,
+      tenantId: adminId, // tenantId
+      permissions: roleDetail.permissions, // permissions
+    });
+  }
+
+  private async updateSession({
+    sessionDetail,
+    message,
+    tenantId = null,
+    permissions = null,
+  }: {
+    sessionDetail: any;
+    tenantId?: string | null;
+    permissions?: any[] | null;
+    message: string;
+  }) {
+    sessionDetail.tenantId = tenantId;
     sessionDetail.tenantUsersPermissions = permissions;
     sessionDetail.createdAt = new Date().toISOString();
-    const ttl = await redisClient.ttl(`session: ${sessionDetail.sessionId}`);
+    const ttl = await redisClient.ttl(`session:${sessionDetail.sessionId}`);
     await redisClient.set(
-      `session: ${sessionDetail.sessionId}`,
+      `session:${sessionDetail.sessionId}`,
       JSON.stringify(sessionDetail),
       'EX',
       ttl,
     );
-    return { message: 'Switched to tenant account successfully' };
+
+    return { message };
   }
 }

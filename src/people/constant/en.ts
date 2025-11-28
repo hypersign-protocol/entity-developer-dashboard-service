@@ -16,3 +16,8 @@ export const TENANT_INVITE_ERRORS = {
     `No role found for the provided roleId: ${roleId}.`,
   NO_ROLE_ASSIGNED: 'Please add a role before inviting a member.',
 };
+
+export const TENANT_MESSAGES = {
+  SWITCH_SUCCESS: 'Switched to tenant account successfully',
+  SWITCH_BACK_SUCCESS: 'Switched back to main account successfully',
+};

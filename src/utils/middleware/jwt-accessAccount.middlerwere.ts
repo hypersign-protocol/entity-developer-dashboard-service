@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import {
+  BadRequestException,
   Injectable,
   Logger,
   NestMiddleware,
@@ -7,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import { AdminPeopleRepository } from 'src/people/repository/people.repository';
+import { AUTH_ERRORS } from 'src/social-login/constants/en';
 @Injectable()
 export class JWTAccessAccountMiddleware implements NestMiddleware {
   constructor(private readonly adminPeople: AdminPeopleRepository) {}
@@ -36,9 +38,14 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
         // @ts-ignore
 
         user.userId = tenantId;
+        if (
+          !session?.tenantUsersPermissions ||
+          session.tenantUsersPermissions.length === 0
+        ) {
+          throw new BadRequestException([AUTH_ERRORS.TENANT_PERMISSION_ISSUE]);
+        }
         // @ts-ignore
-
-        user.accessList = session.tenantPermissions;
+        user.accessList = session?.tenantUsersPermissions;
         // @ts-ignore
       }
 

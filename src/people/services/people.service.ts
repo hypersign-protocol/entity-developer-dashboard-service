@@ -309,7 +309,7 @@ export class PeopleService {
     message: string;
   }) {
     sessionDetail.tenantId = tenantId;
-    sessionDetail.tenantUsersPermissions = permissions;
+    sessionDetail.tenantUserPermissions = permissions;
     sessionDetail.createdAt = new Date().toISOString();
     const ttl = await redisClient.ttl(`session:${sessionDetail.sessionId}`);
     await redisClient.set(

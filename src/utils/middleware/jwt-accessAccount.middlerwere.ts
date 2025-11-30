@@ -39,13 +39,13 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
 
         user.userId = tenantId;
         if (
-          !session?.tenantUsersPermissions ||
-          session.tenantUsersPermissions.length === 0
+          !session?.tenantUserPermissions ||
+          session.tenantUserPermissions.length === 0
         ) {
           throw new BadRequestException([AUTH_ERRORS.TENANT_PERMISSION_ISSUE]);
         }
         // @ts-ignore
-        user.accessList = session?.tenantUsersPermissions;
+        user.accessList = session?.tenantUserPermissions;
         // @ts-ignore
       }
 

@@ -31,7 +31,6 @@ import {
   AdminPeopleSchema,
 } from 'src/people/schema/people.schema';
 import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
-import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
 import {
   CustomerOnboarding,
   CustomerOnboardingSchema,
@@ -51,7 +50,6 @@ import {
     UserModule,
     JwtModule.register({}),
     CreditModule,
-    forwardRef(() => WebpageConfigModule),
   ],
 
   providers: [

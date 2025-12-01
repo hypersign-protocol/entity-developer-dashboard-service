@@ -8,6 +8,7 @@ import {
 import {
   CreateWebpageConfigDto,
   CreateWebpageConfigResponseDto,
+  ExpiryType,
 } from '../dto/create-webpage-config.dto';
 import { UpdateWebpageConfigDto } from '../dto/update-webpage-config.dto';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
@@ -19,6 +20,7 @@ import { WebPageConfigRepository } from '../repositories/webpage-config.reposito
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { ConfigService } from '@nestjs/config';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
+import { Types } from 'mongoose';
 
 @Injectable()
 export class WebpageConfigService {
@@ -66,24 +68,24 @@ export class WebpageConfigService {
     const { appName, logoUrl, env = 'dev' } = serviceDetail;
     const tenantUrl: string = serviceDetail['tenantUrl'];
 
-    const tokenAndExpiryDetail = await this.generateTokenBasedOnExpiry(
-      serviceDetail,
-      userDetail.accessList,
+    const { expiryDate } = await this.generateExpiryDate(
       expiryType,
       customExpiryDate,
-      serviceDetail.dependentServices[0],
     );
     const veriferAppBaseUrl =
       this.config.get('KYC_VERIFIER_APP_BASE_URL') ||
       'https://verifier.hypersign.id';
-    const generatedUrl = `${urlSanitizer(veriferAppBaseUrl, true)}${serviceId}`;
+    const id = new Types.ObjectId();
+    const generatedUrl = `${urlSanitizer(
+      veriferAppBaseUrl,
+      true,
+    )}${id.toString()}`;
     const payload = {
+      _id: id,
       serviceId,
       themeColor,
-      ssiAccessToken: tokenAndExpiryDetail.ssiAccessToken,
-      kycAccessToken: tokenAndExpiryDetail.kycAccessToken,
       expiryType,
-      expiryDate: tokenAndExpiryDetail.expiryDate,
+      expiryDate,
       pageDescription,
       pageTitle,
       pageType,
@@ -96,10 +98,8 @@ export class WebpageConfigService {
       payload,
     );
     const webpageConfigObject = webpageConfigData;
-    const { ssiAccessToken, kycAccessToken, ...responseData } =
-      webpageConfigObject;
     return {
-      ...responseData,
+      ...webpageConfigObject,
       serviceName: appName,
       developmentStage: env,
       logoUrl,
@@ -178,19 +178,13 @@ export class WebpageConfigService {
         'KYC service must have a dependent SSI service linked to it.',
       ]);
     }
-    let tokenDetail;
     const dataToUpdate = { ...updateWebpageConfigDto };
     if (updateWebpageConfigDto.expiryType) {
-      tokenDetail = await this.generateTokenBasedOnExpiry(
-        serviceDetail,
-        userDetail.accessList,
+      const { expiryDate } = await this.generateExpiryDate(
         updateWebpageConfigDto.expiryType,
         updateWebpageConfigDto.customExpiryDate,
-        serviceDetail.dependentServices[0],
       );
-      dataToUpdate['expiryDate'] = tokenDetail.expiryDate;
-      dataToUpdate['ssiAccessToken'] = tokenDetail.ssiAccessToken;
-      dataToUpdate['kycAccessToken'] = tokenDetail.kycAccessToken;
+      dataToUpdate['expiryDate'] = expiryDate;
     }
     const webpageConfiguration = await this.webPageConfigRepo.findOneAndUpdate(
       { _id: id },
@@ -316,5 +310,41 @@ export class WebpageConfigService {
       kycAccessToken: kycAccessTokenDetail.access_token,
       expiryDate,
     };
+  }
+  private async generateExpiryDate(expiryType, customExpiryDate) {
+    let expiresIn: number;
+    let expiryDate: Date;
+    if (expiryType === ExpiryType.CUSTOM) {
+      if (!customExpiryDate) {
+        throw new BadRequestException([
+          'Custom expiry date is required when expiryType is "custom".',
+        ]);
+      }
+      expiryDate = new Date(customExpiryDate);
+
+      if (isNaN(expiryDate.getTime())) {
+        throw new BadRequestException(['Invalid custom expiry date format.']);
+      }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (expiryDate < today) {
+        throw new BadRequestException([
+          'Custom expiry date cannot be earlier than today.',
+        ]);
+      }
+      expiresIn = Math.floor(
+        (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60),
+      );
+    } else {
+      const monthsMap = {
+        '1month': 30,
+        '3months': 90,
+        '6months': 180,
+      };
+      const days = monthsMap[expiryType] || 30;
+      expiresIn = days * 24;
+      expiryDate = new Date(Date.now() + expiresIn * 60 * 60 * 1000);
+    }
+    return { expiryDate };
   }
 }

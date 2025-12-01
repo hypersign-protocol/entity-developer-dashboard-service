@@ -39,7 +39,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration saved successfully',
     type: CreateWebpageConfigResponseWithDetailDto,
   })
-  @Post(':appId/kyc-webpage-config')
+  @Post(':appId/verifier')
   configureWebPageDetail(
     @Param('appId') serviceId: string,
     @Body() createWebpageConfigDto: CreateWebpageConfigDto,

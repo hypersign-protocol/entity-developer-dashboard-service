@@ -17,6 +17,9 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
       // @ts-ignore
       const user = req.user;
       const session = req['session'];
+      if (!session) {
+        throw new BadRequestException([AUTH_ERRORS.SESSION_EXPIRED]);
+      }
       if (!session.tenantId) {
         return next();
       }
@@ -26,14 +29,13 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
         // @ts-ignore
 
         const userId = user.userId;
-        const tenantId = req['session'].tenantId;
         // @ts-ignore
         const member = await this.adminPeople.findOne({
           adminId: tenantId,
           userId,
         });
         if (member == null) {
-          throw new Error('Your access has been revoked');
+          throw new UnauthorizedException([AUTH_ERRORS.ACCESS_REVOKED]);
         }
         // @ts-ignore
 

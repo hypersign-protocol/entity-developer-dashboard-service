@@ -248,7 +248,7 @@ export class PeopleService {
   ) {
     const { adminId } = tenantDto;
     // switch back to own account
-    if (userDetail.userId == adminId) {
+    if (userDetail.userId === adminId) {
       if (!sessionDetail?.tenantId) {
         throw new BadRequestException([TENANT_ERRORS.ALREADY_IN_TENANT]);
       }
@@ -258,7 +258,7 @@ export class PeopleService {
       });
     }
     // switching to tenant account
-    if (adminId == sessionDetail?.tenantId) {
+    if (adminId === sessionDetail?.tenantId) {
       throw new BadRequestException([TENANT_ERRORS.ALREADY_IN_TENANT]);
     }
     const adminData = await this.userService.findOne({

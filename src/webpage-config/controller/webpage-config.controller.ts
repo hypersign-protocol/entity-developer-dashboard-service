@@ -57,7 +57,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration list',
     type: FetchWebpageConfigResponseDto,
   })
-  @Get(':appId/kyc-webpage-config')
+  @Get(':appId/verifier')
   async fetchWebPageConfigurationDetail(@Param('appId') appId: string) {
     Logger.log(
       'Inside fetchWebPageConfigurationDetail() to fetch webpageData',
@@ -70,7 +70,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration fetched successfully',
     type: FetchWebpageConfigResponseDto,
   })
-  @Get(':appId/kyc-webpage-config/:id')
+  @Get(':appId/verifier/:id')
   fetchAWebPageConfigurationDetail(
     @Param('appId') appId: string,
     @Param('id') id: string,
@@ -85,7 +85,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration updated successfully',
     type: FetchWebpageConfigResponseDto,
   })
-  @Patch(':appId/kyc-webpage-config/:id')
+  @Patch(':appId/verifier/:id')
   updateWebPageConfiguration(
     @Param('appId') appId: string,
     @Param('id') id: string,
@@ -104,7 +104,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration deleted successfully',
     type: FetchWebpageConfigResponseDto,
   })
-  @Delete(':appId/kyc-webpage-config/:id')
+  @Delete(':appId/verifier/:id')
   removeWebPageConfiguration(
     @Param('appId') appId: string,
     @Param('id') id: string,

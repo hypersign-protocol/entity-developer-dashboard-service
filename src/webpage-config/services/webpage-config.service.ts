@@ -207,7 +207,7 @@ export class WebpageConfigService {
 
   async removeWebPageConfiguration(id: string, serviceId: string) {
     const deletedConfig = await this.webPageConfigRepo.findOneAndDelete({
-      _id: id,
+      _id: new Types.ObjectId(id),
       serviceId,
     });
     if (!deletedConfig) {

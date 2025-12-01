@@ -855,7 +855,8 @@ export class CustomerOnboardingService {
           userId: user.userId,
         });
       if (!userOnboardingDetail) {
-        throw new BadRequestException([`No onboarding detail found for user with id: ${user.userId}`,
+        throw new BadRequestException([
+          `No onboarding detail found for user with id: ${user.userId}`,
         ]);
       }
       return userOnboardingDetail;

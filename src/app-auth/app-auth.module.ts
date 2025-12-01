@@ -32,12 +32,19 @@ import {
 } from 'src/people/schema/people.schema';
 import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
 import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
+import {
+  CustomerOnboarding,
+  CustomerOnboardingSchema,
+} from 'src/customer-onboarding/schemas/customer-onboarding.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: App.name, schema: AppSchema }]),
     MongooseModule.forFeature([
       { name: AdminPeople.name, schema: AdminPeopleSchema },
+    ]),
+    MongooseModule.forFeature([
+      { name: CustomerOnboarding.name, schema: CustomerOnboardingSchema },
     ]),
     HidWalletModule,
     EdvModule,
@@ -46,6 +53,7 @@ import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
     CreditModule,
     forwardRef(() => WebpageConfigModule),
   ],
+
   providers: [
     AppAuthService,
     AppRepository,

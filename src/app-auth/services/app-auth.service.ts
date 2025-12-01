@@ -30,6 +30,9 @@ import { AuthZCreditsRepository } from 'src/credits/repositories/authz.repositor
 import { EdvClientKeysManager } from 'src/edv/services/edv.singleton';
 import { UserRole } from 'src/user/schema/user.schema';
 import { WebPageConfigRepository } from 'src/webpage-config/repositories/webpage-config.repository';
+import { InjectModel } from '@nestjs/mongoose';
+import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
+import { Model } from 'mongoose';
 
 export enum GRANT_TYPES {
   access_service_kyc = 'access_service_kyc',
@@ -54,6 +57,8 @@ export class AppAuthService {
     private readonly authzCreditService: AuthzCreditService,
     private readonly authzCreditRepository: AuthZCreditsRepository,
     private readonly webpageConfigRepo: WebPageConfigRepository,
+    @InjectModel(CustomerOnboarding.name)
+    private readonly onboardModel: Model<CustomerOnboarding>,
   ) {}
 
   async createAnApp(
@@ -611,6 +616,12 @@ export class AppAuthService {
     }
     const appDbConnectionSuffix = `service:${appDetail.services[0].dBSuffix}:${appDetail.subdomain}`;
     await this.appRepository.findAndDeleteServiceDB(appDbConnectionSuffix);
+    if (
+      appDetail?.services?.length > 0 &&
+      appDetail.services[0].id === SERVICE_TYPES.CAVACH_API
+    ) {
+      await this.onboardModel.deleteOne({ kycServiceId: appId });
+    }
     this.authzCreditRepository.deleteAuthzDetail({ appId });
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });
     return { appId: appDetail.appId };

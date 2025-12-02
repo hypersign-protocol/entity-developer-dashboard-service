@@ -18,6 +18,11 @@ import {
   SERVICE_TYPES,
   SERVICES,
 } from 'src/supported-service/services/iServiceList';
+import {
+  KYC_ACCESS_MATRIX,
+  QUEST_ACCESS_MATRIX,
+  SSI_ACCESS_MATRIX,
+} from 'src/config/access-matrix';
 
 export const existDir = (dirPath) => {
   if (!dirPath) throw new Error('Directory path undefined');
@@ -173,3 +178,16 @@ export const REDIS_KEYS = {
   REFRESH_TOKEN: 'refreshToken:',
   VERIFIER_PAGE_TOKEN: 'verifierPageToken:',
 };
+export function getAccessListForModule(
+  module: 'DASHBOARD' | 'VERIFIER' | 'APP_AUTH',
+  serviceType: SERVICE_TYPES,
+) {
+  switch (serviceType) {
+    case SERVICE_TYPES.CAVACH_API:
+      return KYC_ACCESS_MATRIX[module] || [];
+    case SERVICE_TYPES.SSI_API:
+      return SSI_ACCESS_MATRIX[module] || [];
+    case SERVICE_TYPES.QUEST:
+      return QUEST_ACCESS_MATRIX[module] || [];
+  }
+}

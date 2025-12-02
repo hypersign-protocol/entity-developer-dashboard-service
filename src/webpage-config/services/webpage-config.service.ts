@@ -24,7 +24,7 @@ import { Types } from 'mongoose';
 import { WEBPAGE_CONFIG_ERRORS } from '../constant/en';
 import { redisClient } from 'src/utils/redis.provider';
 import { TOKEN } from 'src/utils/time-constant';
-import { REDIS_KEYS } from 'src/utils/utils';
+import { getAccessListForModule, REDIS_KEYS } from 'src/utils/utils';
 
 @Injectable()
 export class WebpageConfigService {
@@ -285,11 +285,9 @@ export class WebpageConfigService {
       ]);
     }
     const ssiServiceId = kycServiceDetail.dependentServices[0];
-    const [ssiServiceDetail, ssiAccessList, kycAccessList] = await Promise.all([
-      this.appRepository.findOne({ appId: ssiServiceId }),
-      this.buildAccessList(userDetail.accessList, SERVICE_TYPES.SSI_API),
-      this.buildAccessList(userDetail.accessList, SERVICE_TYPES.CAVACH_API),
-    ]);
+    const ssiServiceDetail = await this.appRepository.findOne({
+      appId: ssiServiceId,
+    });
     if (!ssiServiceDetail) {
       throw new BadRequestException([
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_SSI_SERVICE_DOES_NOT_EXIST,
@@ -302,13 +300,13 @@ export class WebpageConfigService {
         GRANT_TYPES.access_service_ssi,
         ssiServiceDetail,
         0.5,
-        ssiAccessList,
+        getAccessListForModule('VERIFIER', SERVICE_TYPES.SSI_API),
       ),
       this.appAuthService.getAccessToken(
         GRANT_TYPES.access_service_kyc,
         kycServiceDetail,
         0.5,
-        kycAccessList,
+        getAccessListForModule('VERIFIER', SERVICE_TYPES.CAVACH_API),
       ),
     ]);
     const redisPayload = {
@@ -324,14 +322,5 @@ export class WebpageConfigService {
     return {
       ...redisPayload,
     };
-  }
-  private async buildAccessList(accessList = [], serviceType) {
-    return (accessList || [])
-      .filter(
-        (x) =>
-          x.serviceType === serviceType &&
-          !this.appAuthService.checkIfDateExpired(x.expiryDate),
-      )
-      .map((x) => x.access);
   }
 }

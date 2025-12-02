@@ -33,6 +33,8 @@ import { WebPageConfigRepository } from 'src/webpage-config/repositories/webpage
 import { InjectModel } from '@nestjs/mongoose';
 import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
 import { Model } from 'mongoose';
+import { getAccessListForModule } from 'src/utils/utils';
+import { TokenModule } from 'src/config/access-matrix';
 
 export enum GRANT_TYPES {
   access_service_kyc = 'access_service_kyc',
@@ -643,7 +645,6 @@ export class AppAuthService {
     Logger.log('generateAccessToken() method: starts....', 'AppAuthService');
 
     const apikeyIndex = appSecreatKey.split('.')[0];
-
     const appDetail = await this.appRepository.findOne({
       apiKeyPrefix: apikeyIndex,
     });
@@ -684,17 +685,10 @@ export class AppAuthService {
     switch (serviceType) {
       case SERVICE_TYPES.SSI_API: {
         grant_type = GRANT_TYPES.access_service_ssi;
-        if (userDetails.accessList && userDetails.accessList.length > 0) {
-          accessList = userDetails.accessList
-            .map((x) => {
-              if (x.serviceType === SERVICE_TYPES.SSI_API) {
-                if (!this.checkIfDateExpired(x.expiryDate)) {
-                  return x.access;
-                }
-              }
-            })
-            .filter((x) => x != undefined);
-        }
+        accessList = getAccessListForModule(
+          TokenModule.VERIFIER,
+          SERVICE_TYPES.SSI_API,
+        );
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
@@ -708,32 +702,19 @@ export class AppAuthService {
           ]);
         }
         grant_type = grantType || GRANT_TYPES.access_service_kyc;
-        if (userDetails.accessList && userDetails.accessList.length > 0) {
-          accessList = userDetails.accessList
-            .map((x) => {
-              if (x.serviceType === SERVICE_TYPES.CAVACH_API) {
-                if (!this.checkIfDateExpired(x.expiryDate)) {
-                  return x.access;
-                }
-              }
-            })
-            .filter((x) => x != undefined);
-        }
+        accessList = getAccessListForModule(
+          TokenModule.VERIFIER,
+          SERVICE_TYPES.CAVACH_API,
+        );
+
         break;
       }
       case SERVICE_TYPES.QUEST: {
         grant_type = GRANT_TYPES.access_service_quest;
-        if (userDetails.accessList && userDetails.accessList.length > 0) {
-          accessList = userDetails.accessList
-            .map((x) => {
-              if (x.serviceType === SERVICE_TYPES.QUEST) {
-                if (!this.checkIfDateExpired(x.expiryDate)) {
-                  return x.access;
-                }
-              }
-            })
-            .filter((x) => x != undefined);
-        }
+        accessList = getAccessListForModule(
+          TokenModule.VERIFIER,
+          SERVICE_TYPES.QUEST,
+        );
         break;
       }
       default: {
@@ -847,15 +828,10 @@ export class AppAuthService {
             'Invalid grant type for this service ' + appId,
           ]);
         }
-        accessList = userDetails.accessList
-          .map((x) => {
-            if (x.serviceType === SERVICE_TYPES.SSI_API) {
-              if (!this.checkIfDateExpired(x.expiryDate)) {
-                return x.access;
-              }
-            }
-          })
-          .filter((x) => x != undefined);
+        accessList = getAccessListForModule(
+          TokenModule.DASHBOARD,
+          SERVICE_TYPES.SSI_API,
+        );
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
@@ -867,15 +843,10 @@ export class AppAuthService {
             'Invalid grant type for this service ' + appId,
           ]);
         }
-        accessList = userDetails.accessList
-          .map((x) => {
-            if (x.serviceType === SERVICE_TYPES.CAVACH_API) {
-              if (!this.checkIfDateExpired(x.expiryDate)) {
-                return x.access;
-              }
-            }
-          })
-          .filter((x) => x != undefined);
+        accessList = getAccessListForModule(
+          TokenModule.DASHBOARD,
+          SERVICE_TYPES.CAVACH_API,
+        );
         break;
       }
       case SERVICE_TYPES.QUEST: {
@@ -884,15 +855,10 @@ export class AppAuthService {
             'Invalid grant type for this service ' + appId,
           ]);
         }
-        accessList = userDetails.accessList
-          .map((x) => {
-            if (x.serviceType === SERVICE_TYPES.QUEST) {
-              if (!this.checkIfDateExpired(x.expiryDate)) {
-                return x.access;
-              }
-            }
-          })
-          .filter((x) => x != undefined);
+        accessList = getAccessListForModule(
+          TokenModule.DASHBOARD,
+          SERVICE_TYPES.QUEST,
+        );
         break;
       }
       default: {

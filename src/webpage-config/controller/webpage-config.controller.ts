@@ -15,9 +15,9 @@ import {
 import { WebpageConfigService } from '../services/webpage-config.service';
 import {
   CreateWebpageConfigDto,
-  CreateWebpageConfigResponseDto,
   CreateWebpageConfigResponseWithDetailDto,
   FetchWebpageConfigResponseDto,
+  VerifierPageTokenResponse,
 } from '../dto/create-webpage-config.dto';
 import { UpdateWebpageConfigDto } from '../dto/update-webpage-config.dto';
 import {
@@ -110,5 +110,21 @@ export class WebpageConfigController {
     @Param('id') id: string,
   ) {
     return this.webpageConfigService.removeWebPageConfiguration(id, appId);
+  }
+  @ApiOkResponse({
+    description: 'Verifier webpage token generated successfully',
+    type: VerifierPageTokenResponse,
+  })
+  @Post(':appId/verifier/:id/tokens')
+  generateWebpageConfigTokens(
+    @Param('appId') appId: string,
+    @Param('id') id: string,
+    @Req() req,
+  ) {
+    return this.webpageConfigService.generateWebpageConfigTokens(
+      id,
+      appId,
+      req.user,
+    );
   }
 }

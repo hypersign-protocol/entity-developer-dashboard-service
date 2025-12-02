@@ -35,6 +35,7 @@ import {
   CustomerOnboarding,
   CustomerOnboardingSchema,
 } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
+import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import {
     UserModule,
     JwtModule.register({}),
     CreditModule,
+    forwardRef(() => WebpageConfigModule),
   ],
 
   providers: [

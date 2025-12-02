@@ -160,10 +160,16 @@ export function getCookieOptions(maxAge?: number, isClear = false) {
   const isProd = process.env.NODE_ENV || 'production';
   return {
     httpOnly: true,
-    secure: isProd,
+    secure: isProd === 'production' ? true : false,
     sameSite: isProd === 'production' ? 'None' : 'Lax',
     domain: isProd ? cookieDomain : undefined,
     path: '/',
     ...(isClear ? {} : { maxAge }),
   };
 }
+
+export const REDIS_KEYS = {
+  SESSION: 'session:',
+  REFRESH_TOKEN: 'refreshToken:',
+  VERIFIER_PAGE_TOKEN: 'verifierPageToken:',
+};

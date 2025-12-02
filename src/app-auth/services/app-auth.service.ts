@@ -58,6 +58,7 @@ export class AppAuthService {
     private readonly authzCreditRepository: AuthZCreditsRepository,
     @InjectModel(CustomerOnboarding.name)
     private readonly onboardModel: Model<CustomerOnboarding>,
+    private readonly webpageConfigRepo: WebPageConfigRepository,
   ) {}
 
   async createAnApp(
@@ -609,7 +610,10 @@ export class AppAuthService {
       appDetail?.services?.length > 0 &&
       appDetail.services[0].id === SERVICE_TYPES.CAVACH_API
     ) {
+      // delete onboarding data
       await this.onboardModel.deleteOne({ kycServiceId: appId });
+      // delete webpage config data of that service
+      await this.webpageConfigRepo.findOneAndDelete({ appId });
     }
     this.authzCreditRepository.deleteAuthzDetail({ appId });
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });

@@ -21,6 +21,10 @@ import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { ConfigService } from '@nestjs/config';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { Types } from 'mongoose';
+import { WEBPAGE_CONFIG_ERRORS } from '../constant/en';
+import { redisClient } from 'src/utils/redis.provider';
+import { TOKEN } from 'src/utils/time-constant';
+import { REDIS_KEYS } from 'src/utils/utils';
 
 @Injectable()
 export class WebpageConfigService {
@@ -218,99 +222,6 @@ export class WebpageConfigService {
 
     return deletedConfig;
   }
-  private async generateTokenBasedOnExpiry(
-    serviceDetail,
-    userAccessList,
-    expiryType,
-    customExpiryDate,
-    ssiServiceId,
-  ) {
-    // Get both SSI & KYC access lists
-    Logger.log(
-      'Inside generateTokenBasedOnExpiry(): Method to generate ssi and kyc token',
-      'removeWebPageConfiguration',
-    );
-    const ssiAccessList = (userAccessList || [])
-      .filter(
-        (x) =>
-          x.serviceType === SERVICE_TYPES.SSI_API &&
-          !this.appAuthService.checkIfDateExpired(x.expiryDate),
-      )
-      .map((x) => x.access);
-
-    const kycAccessList = (userAccessList || [])
-      .filter(
-        (x) =>
-          x.serviceType === SERVICE_TYPES.CAVACH_API &&
-          !this.appAuthService.checkIfDateExpired(x.expiryDate),
-      )
-      .map((x) => x.access);
-
-    if (ssiAccessList.length <= 0 || kycAccessList.length <= 0) {
-      throw new UnauthorizedException([
-        `You are not authorized for both SSI and KYC services.`,
-      ]);
-    }
-
-    // Calculate expiresIn
-    let expiresIn: number;
-    let expiryDate: Date;
-    if (expiryType === 'custom') {
-      if (!customExpiryDate) {
-        throw new BadRequestException([
-          'Custom expiry date is required when expiryType is "custom".',
-        ]);
-      }
-      expiryDate = new Date(customExpiryDate);
-
-      if (isNaN(expiryDate.getTime())) {
-        throw new BadRequestException(['Invalid custom expiry date format.']);
-      }
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (expiryDate < today) {
-        throw new BadRequestException([
-          'Custom expiry date cannot be earlier than today.',
-        ]);
-      }
-      expiresIn = Math.floor(
-        (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60),
-      );
-    } else {
-      const monthsMap = {
-        '1month': 30,
-        '3months': 90,
-        '6months': 180,
-      };
-      const days = monthsMap[expiryType] || 30;
-      expiresIn = days * 24;
-      expiryDate = new Date(Date.now() + expiresIn * 60 * 60 * 1000);
-    }
-    const ssiServiceDetail = await this.appRepository.findOne({
-      appId: ssiServiceId,
-    });
-    if (!ssiServiceDetail) {
-      throw new BadRequestException([
-        `No service found with dependentServiceId: ${ssiServiceId}`,
-      ]);
-    }
-    // Get access tokens
-    const ssiAccessTokenDetail = await this.appAuthService.getAccessToken(
-      GRANT_TYPES.access_service_ssi,
-      ssiServiceDetail,
-      expiresIn,
-    );
-    const kycAccessTokenDetail = await this.appAuthService.getAccessToken(
-      GRANT_TYPES.access_service_kyc,
-      serviceDetail,
-      expiresIn,
-    );
-    return {
-      ssiAccessToken: ssiAccessTokenDetail.access_token,
-      kycAccessToken: kycAccessTokenDetail.access_token,
-      expiryDate,
-    };
-  }
   private async generateExpiryDate(expiryType, customExpiryDate) {
     let expiresIn: number;
     let expiryDate: Date;
@@ -346,5 +257,83 @@ export class WebpageConfigService {
       expiryDate = new Date(Date.now() + expiresIn * 60 * 60 * 1000);
     }
     return { expiryDate };
+  }
+  public async generateWebpageConfigTokens(id, appId, userDetail) {
+    const redisKey = `${REDIS_KEYS.VERIFIER_PAGE_TOKEN}${id}`;
+    const cachedData = await redisClient.get(redisKey);
+    if (cachedData) return JSON.parse(cachedData);
+    const [verifierConfig, kycServiceDetail] = await Promise.all([
+      this.webPageConfigRepo.findAWebpageConfig({
+        _id: new Types.ObjectId(id),
+      }),
+      this.appRepository.findOne({ appId }),
+    ]);
+    if (!verifierConfig || verifierConfig == null) {
+      throw new BadRequestException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_NOT_FOUND,
+      ]);
+    }
+    if (!kycServiceDetail) {
+      throw new BadRequestException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
+      ]);
+    }
+    if (
+      !kycServiceDetail.dependentServices ||
+      kycServiceDetail.dependentServices.length === 0
+    ) {
+      throw new BadRequestException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_SSI_SERVICE_NOT_FOUND,
+      ]);
+    }
+    const ssiServiceId = kycServiceDetail.dependentServices[0];
+    const [ssiServiceDetail, ssiAccessList, kycAccessList] = await Promise.all([
+      this.appRepository.findOne({ appId: ssiServiceId }),
+      this.buildAccessList(userDetail.accessList, SERVICE_TYPES.SSI_API),
+      this.buildAccessList(userDetail.accessList, SERVICE_TYPES.CAVACH_API),
+    ]);
+    if (!ssiServiceDetail) {
+      throw new BadRequestException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_SSI_SERVICE_DOES_NOT_EXIST,
+      ]);
+    }
+
+    // generate access tokens
+    const [ssiAccessTokenDetail, kycAccessTokenDetail] = await Promise.all([
+      this.appAuthService.getAccessToken(
+        GRANT_TYPES.access_service_ssi,
+        ssiServiceDetail,
+        0.5,
+        ssiAccessList,
+      ),
+      this.appAuthService.getAccessToken(
+        GRANT_TYPES.access_service_kyc,
+        kycServiceDetail,
+        0.5,
+        kycAccessList,
+      ),
+    ]);
+    const redisPayload = {
+      ssiAccessToken: ssiAccessTokenDetail.access_token,
+      kycAccessToken: kycAccessTokenDetail.access_token,
+    };
+    redisClient.set(
+      redisKey,
+      JSON.stringify(redisPayload),
+      'EX',
+      TOKEN.VERIFIER_TOKEN.expiry,
+    );
+    return {
+      ...redisPayload,
+    };
+  }
+  private async buildAccessList(accessList = [], serviceType) {
+    return (accessList || [])
+      .filter(
+        (x) =>
+          x.serviceType === serviceType &&
+          !this.appAuthService.checkIfDateExpired(x.expiryDate),
+      )
+      .map((x) => x.access);
   }
 }

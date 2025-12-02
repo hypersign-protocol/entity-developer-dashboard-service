@@ -31,7 +31,7 @@ import { AllExceptionsFilter } from 'src/utils/utils';
 @ApiTags('Webpage-config')
 @UseFilters(AllExceptionsFilter)
 @UsePipes(new ValidationPipe())
-@Controller('api/v1/app')
+@Controller('api/v1/app/:appId/verifier')
 export class WebpageConfigController {
   constructor(private readonly webpageConfigService: WebpageConfigService) {}
 
@@ -39,7 +39,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration saved successfully',
     type: CreateWebpageConfigResponseWithDetailDto,
   })
-  @Post(':appId/verifier')
+  @Post()
   configureWebPageDetail(
     @Param('appId') serviceId: string,
     @Body() createWebpageConfigDto: CreateWebpageConfigDto,
@@ -57,7 +57,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration list',
     type: FetchWebpageConfigResponseDto,
   })
-  @Get(':appId/verifier')
+  @Get()
   async fetchWebPageConfigurationDetail(@Param('appId') appId: string) {
     Logger.log(
       'Inside fetchWebPageConfigurationDetail() to fetch webpageData',
@@ -70,7 +70,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration fetched successfully',
     type: FetchWebpageConfigResponseDto,
   })
-  @Get(':appId/verifier/:id')
+  @Get(':id')
   fetchAWebPageConfigurationDetail(
     @Param('appId') appId: string,
     @Param('id') id: string,
@@ -85,7 +85,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration updated successfully',
     type: FetchWebpageConfigResponseDto,
   })
-  @Patch(':appId/verifier/:id')
+  @Patch(':id')
   updateWebPageConfiguration(
     @Param('appId') appId: string,
     @Param('id') id: string,
@@ -104,7 +104,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration deleted successfully',
     type: FetchWebpageConfigResponseDto,
   })
-  @Delete(':appId/verifier/:id')
+  @Delete(':id')
   removeWebPageConfiguration(
     @Param('appId') appId: string,
     @Param('id') id: string,
@@ -115,7 +115,7 @@ export class WebpageConfigController {
     description: 'Verifier webpage token generated successfully',
     type: VerifierPageTokenResponse,
   })
-  @Post(':appId/verifier/:id/tokens')
+  @Post(':id/tokens')
   generateWebpageConfigTokens(
     @Param('appId') appId: string,
     @Param('id') id: string,

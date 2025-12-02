@@ -702,18 +702,14 @@ export class CustomerOnboardingService {
               });
               const serviceId =
                 kycService?.appId || customerOnboardingData.kycServiceId;
-              await this.webPageConfig.storeWebPageConfigDetial(
-                serviceId,
-                {
-                  pageTitle: 'KYC Verification',
-                  pageDescription: 'Complete your KYC verification to proceed',
-                  expiryType: ExpiryType.ONE_MONTH,
-                  pageType: PageType.KYC,
-                  contactEmail: customerEmail,
-                  themeColor: 'vibrant',
-                },
-                user,
-              );
+              await this.webPageConfig.storeWebPageConfigDetial(serviceId, {
+                pageTitle: 'KYC Verification',
+                pageDescription: 'Complete your KYC verification to proceed',
+                expiryType: ExpiryType.ONE_MONTH,
+                pageType: PageType.KYC,
+                contactEmail: customerEmail,
+                themeColor: 'vibrant',
+              });
               Logger.debug(
                 'CONFIGURE_KYC_VERIFIER_PAGE step ends',
                 'CustomerOnboardingService',

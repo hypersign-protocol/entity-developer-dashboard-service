@@ -37,7 +37,6 @@ export class WebpageConfigService {
   async storeWebPageConfigDetial(
     serviceId: string,
     createWebpageConfigDto: CreateWebpageConfigDto,
-    userDetail,
   ): Promise<CreateWebpageConfigResponseDto> {
     Logger.log(
       'Inside storeWebPageConfigDetial to store webpage configuration',
@@ -149,7 +148,7 @@ export class WebpageConfigService {
   ): Promise<CreateWebpageConfigDto> {
     const webpageConfiguration =
       await this.webPageConfigRepo.findAWebpageConfig({
-        _id: id,
+        _id: new Types.ObjectId(id),
         serviceId,
       });
     if (!webpageConfiguration || webpageConfiguration == null) {
@@ -163,7 +162,6 @@ export class WebpageConfigService {
   async updateWebPageConfiguration(
     id: string,
     updateWebpageConfigDto: UpdateWebpageConfigDto,
-    userDetail,
     serviceId,
   ): Promise<CreateWebpageConfigResponseDto> {
     const serviceDetail = await this.appRepository.findOne({
@@ -191,7 +189,7 @@ export class WebpageConfigService {
       dataToUpdate['expiryDate'] = expiryDate;
     }
     const webpageConfiguration = await this.webPageConfigRepo.findOneAndUpdate(
-      { _id: id },
+      { _id: new Types.ObjectId(id) },
       dataToUpdate,
     );
     if (!webpageConfiguration || webpageConfiguration == null) {

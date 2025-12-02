@@ -43,13 +43,11 @@ export class WebpageConfigController {
   configureWebPageDetail(
     @Param('appId') serviceId: string,
     @Body() createWebpageConfigDto: CreateWebpageConfigDto,
-    @Req() req,
   ) {
     Logger.log('inside configureWebPageDetail(): to configure webpage detail');
     return this.webpageConfigService.storeWebPageConfigDetial(
       serviceId,
       createWebpageConfigDto,
-      req.user,
     );
   }
 
@@ -90,12 +88,10 @@ export class WebpageConfigController {
     @Param('appId') appId: string,
     @Param('id') id: string,
     @Body() updateWebpageConfigDto: UpdateWebpageConfigDto,
-    @Req() req,
   ) {
     return this.webpageConfigService.updateWebPageConfiguration(
       id,
       updateWebpageConfigDto,
-      req.user,
       appId,
     );
   }

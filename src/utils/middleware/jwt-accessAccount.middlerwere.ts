@@ -18,7 +18,7 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
       const user = req.user;
       const session = req['session'];
       if (!session) {
-        throw new BadRequestException([AUTH_ERRORS.SESSION_EXPIRED]);
+        throw new Error(AUTH_ERRORS.SESSION_EXPIRED);
       }
       if (!session.tenantId) {
         return next();
@@ -35,7 +35,7 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
           userId,
         });
         if (member == null) {
-          throw new UnauthorizedException([AUTH_ERRORS.ACCESS_REVOKED]);
+          throw new Error(AUTH_ERRORS.ACCESS_REVOKED);
         }
         // @ts-ignore
 
@@ -44,7 +44,7 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
           !session?.tenantUserPermissions ||
           session.tenantUserPermissions.length === 0
         ) {
-          throw new BadRequestException([AUTH_ERRORS.TENANT_PERMISSION_ISSUE]);
+          throw new Error(AUTH_ERRORS.TENANT_PERMISSION_ISSUE);
         }
         // @ts-ignore
         user.accessList = session?.tenantUserPermissions;
@@ -57,7 +57,7 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
         `JWTAccessAccountMiddleware: Error ${e}`,
         'JWTAccessAccountMiddleware',
       );
-      throw new UnauthorizedException([e]);
+      throw new UnauthorizedException([e.message]);
     }
     next();
   }

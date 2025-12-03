@@ -51,24 +51,42 @@ export class WebpageConfigModule implements NestModule {
 
     consumer
       .apply(JWTAuthorizeMiddleware)
-      .exclude({
-        path: 'api/v1/app/:appId/kyc-webpage-config',
-        method: RequestMethod.GET,
-      })
+      .exclude(
+        {
+          path: 'api/v1/app/verifier/:id',
+          method: RequestMethod.GET,
+        },
+        {
+          path: 'api/v1/app/verifier/:id/tokens',
+          method: RequestMethod.POST,
+        },
+      )
       .forRoutes(WebpageConfigController);
     consumer
       .apply(JWTAccessAccountMiddleware)
-      .exclude({
-        path: 'api/v1/app/:appId/kyc-webpage-config',
-        method: RequestMethod.GET,
-      })
+      .exclude(
+        {
+          path: 'api/v1/app/verifier/:id',
+          method: RequestMethod.GET,
+        },
+        {
+          path: 'api/v1/app/verifier/:id/tokens',
+          method: RequestMethod.POST,
+        },
+      )
       .forRoutes(WebpageConfigController);
     consumer
       .apply(RateLimitMiddleware)
-      .exclude({
-        path: 'api/v1/app/:appId/kyc-webpage-config',
-        method: RequestMethod.GET,
-      })
+      .exclude(
+        {
+          path: 'api/v1/app/verifier/:id',
+          method: RequestMethod.GET,
+        },
+        {
+          path: 'api/v1/app/verifier/:id/tokens',
+          method: RequestMethod.POST,
+        },
+      )
       .forRoutes(WebpageConfigController);
   }
 }

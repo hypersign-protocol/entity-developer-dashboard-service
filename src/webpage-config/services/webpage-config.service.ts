@@ -144,16 +144,14 @@ export class WebpageConfigService {
 
   async fetchAWebPageConfigurationDetail(
     id: string,
-    serviceId: string,
   ): Promise<CreateWebpageConfigDto> {
     const webpageConfiguration =
       await this.webPageConfigRepo.findAWebpageConfig({
         _id: new Types.ObjectId(id),
-        serviceId,
       });
     if (!webpageConfiguration || webpageConfiguration == null) {
       throw new NotFoundException([
-        `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
+        `No webpage configuration found for id: ${id}`,
       ]);
     }
     return webpageConfiguration;

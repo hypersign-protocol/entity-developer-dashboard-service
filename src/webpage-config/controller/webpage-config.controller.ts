@@ -11,6 +11,7 @@ import {
   Req,
   UsePipes,
   ValidationPipe,
+  Query,
 } from '@nestjs/common';
 import { WebpageConfigService } from '../services/webpage-config.service';
 import {
@@ -24,6 +25,7 @@ import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { AllExceptionsFilter } from 'src/utils/utils';
@@ -31,7 +33,7 @@ import { AllExceptionsFilter } from 'src/utils/utils';
 @ApiTags('Webpage-config')
 @UseFilters(AllExceptionsFilter)
 @UsePipes(new ValidationPipe())
-@Controller('api/v1/app/:appId/verifier')
+@Controller('api/v1/app/verifier')
 export class WebpageConfigController {
   constructor(private readonly webpageConfigService: WebpageConfigService) {}
 
@@ -40,8 +42,9 @@ export class WebpageConfigController {
     type: CreateWebpageConfigResponseWithDetailDto,
   })
   @Post()
+  @ApiQuery({ name: 'appId', required: true, type: String })
   configureWebPageDetail(
-    @Param('appId') serviceId: string,
+    @Query('appId') serviceId: string,
     @Body() createWebpageConfigDto: CreateWebpageConfigDto,
   ) {
     Logger.log('inside configureWebPageDetail(): to configure webpage detail');
@@ -56,7 +59,8 @@ export class WebpageConfigController {
     type: FetchWebpageConfigResponseDto,
   })
   @Get()
-  async fetchWebPageConfigurationDetail(@Param('appId') appId: string) {
+  @ApiQuery({ name: 'appId', required: true, type: String })
+  async fetchWebPageConfigurationDetail(@Query('appId') appId: string) {
     Logger.log(
       'Inside fetchWebPageConfigurationDetail() to fetch webpageData',
       'WebpageConfigController',
@@ -69,14 +73,8 @@ export class WebpageConfigController {
     type: FetchWebpageConfigResponseDto,
   })
   @Get(':id')
-  fetchAWebPageConfigurationDetail(
-    @Param('appId') appId: string,
-    @Param('id') id: string,
-  ) {
-    return this.webpageConfigService.fetchAWebPageConfigurationDetail(
-      id,
-      appId,
-    );
+  fetchAWebPageConfigurationDetail(@Param('id') id: string) {
+    return this.webpageConfigService.fetchAWebPageConfigurationDetail(id);
   }
 
   @ApiOkResponse({
@@ -84,8 +82,9 @@ export class WebpageConfigController {
     type: FetchWebpageConfigResponseDto,
   })
   @Patch(':id')
+  @ApiQuery({ name: 'appId', required: true, type: String })
   updateWebPageConfiguration(
-    @Param('appId') appId: string,
+    @Query('appId') appId: string,
     @Param('id') id: string,
     @Body() updateWebpageConfigDto: UpdateWebpageConfigDto,
   ) {
@@ -101,8 +100,9 @@ export class WebpageConfigController {
     type: FetchWebpageConfigResponseDto,
   })
   @Delete(':id')
+  @ApiQuery({ name: 'appId', required: true, type: String })
   removeWebPageConfiguration(
-    @Param('appId') appId: string,
+    @Query('appId') appId: string,
     @Param('id') id: string,
   ) {
     return this.webpageConfigService.removeWebPageConfiguration(id, appId);
@@ -112,8 +112,9 @@ export class WebpageConfigController {
     type: VerifierPageTokenResponse,
   })
   @Post(':id/tokens')
+  @ApiQuery({ name: 'appId', required: true, type: String })
   generateWebpageConfigTokens(
-    @Param('appId') appId: string,
+    @Query('appId') appId: string,
     @Param('id') id: string,
     @Req() req,
   ) {

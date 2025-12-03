@@ -92,6 +92,7 @@ export namespace SERVICES {
       WRITE_CREDIT = 'WRITE_CREDIT',
       READ_CREDIT = 'READ_CREDIT',
       CHECK_LIVE_STATUS = 'CHECK_LIVE_STATUS',
+      WRITE_AUTH='WRITE_AUTH',
     }
   }
 

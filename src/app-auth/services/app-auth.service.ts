@@ -686,7 +686,7 @@ export class AppAuthService {
       case SERVICE_TYPES.SSI_API: {
         grant_type = GRANT_TYPES.access_service_ssi;
         accessList = getAccessListForModule(
-          TokenModule.VERIFIER,
+          TokenModule.APP_AUTH,
           SERVICE_TYPES.SSI_API,
         );
         break;
@@ -703,7 +703,7 @@ export class AppAuthService {
         }
         grant_type = grantType || GRANT_TYPES.access_service_kyc;
         accessList = getAccessListForModule(
-          TokenModule.VERIFIER,
+          TokenModule.APP_AUTH,
           SERVICE_TYPES.CAVACH_API,
         );
 
@@ -712,7 +712,7 @@ export class AppAuthService {
       case SERVICE_TYPES.QUEST: {
         grant_type = GRANT_TYPES.access_service_quest;
         accessList = getAccessListForModule(
-          TokenModule.VERIFIER,
+          TokenModule.APP_AUTH,
           SERVICE_TYPES.QUEST,
         );
         break;

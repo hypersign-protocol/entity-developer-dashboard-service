@@ -33,7 +33,7 @@ import { AllExceptionsFilter } from 'src/utils/utils';
 @ApiTags('Webpage-config')
 @UseFilters(AllExceptionsFilter)
 @UsePipes(new ValidationPipe())
-@Controller('api/v1/app/verifier')
+@Controller('api/v1/app/')
 export class WebpageConfigController {
   constructor(private readonly webpageConfigService: WebpageConfigService) {}
 
@@ -41,7 +41,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration saved successfully',
     type: CreateWebpageConfigResponseWithDetailDto,
   })
-  @Post()
+  @Post('verifier')
   @ApiQuery({ name: 'appId', required: true, type: String })
   configureWebPageDetail(
     @Query('appId') serviceId: string,
@@ -58,9 +58,8 @@ export class WebpageConfigController {
     description: 'Webpage configuration list',
     type: FetchWebpageConfigResponseDto,
   })
-  @Get()
-  @ApiQuery({ name: 'appId', required: true, type: String })
-  async fetchWebPageConfigurationDetail(@Query('appId') appId: string) {
+  @Get(':appId/verifier')
+  async fetchWebPageConfigurationDetail(@Param('appId') appId: string) {
     Logger.log(
       'Inside fetchWebPageConfigurationDetail() to fetch webpageData',
       'WebpageConfigController',
@@ -72,7 +71,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration fetched successfully',
     type: FetchWebpageConfigResponseDto,
   })
-  @Get(':id')
+  @Get('verifier/:id')
   fetchAWebPageConfigurationDetail(@Param('id') id: string) {
     return this.webpageConfigService.fetchAWebPageConfigurationDetail(id);
   }
@@ -81,7 +80,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration updated successfully',
     type: FetchWebpageConfigResponseDto,
   })
-  @Patch(':id')
+  @Patch('verifier/:id')
   @ApiQuery({ name: 'appId', required: true, type: String })
   updateWebPageConfiguration(
     @Query('appId') appId: string,
@@ -99,7 +98,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration deleted successfully',
     type: FetchWebpageConfigResponseDto,
   })
-  @Delete(':id')
+  @Delete('verifier/:id')
   @ApiQuery({ name: 'appId', required: true, type: String })
   removeWebPageConfiguration(
     @Query('appId') appId: string,
@@ -111,7 +110,7 @@ export class WebpageConfigController {
     description: 'Verifier webpage token generated successfully',
     type: VerifierPageTokenResponse,
   })
-  @Post(':id/tokens')
+  @Post('verifier/:id/tokens')
   @ApiQuery({ name: 'appId', required: true, type: String })
   generateWebpageConfigTokens(
     @Query('appId') appId: string,

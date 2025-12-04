@@ -111,6 +111,10 @@ spec:
           value: '__MAX_RETRY_ATTEMPT__'  
         - name: MFA_REDIRECT_URL
           value: __MFA_REDIRECT_URL__
+        - name: CLIENT_APP_URL
+          value: __CLIENT_APP_URL__
+        - name: KYC_WIDGET_URL
+          value: __KYC_WIDGET_URL__
         - name: MAX_MFA_RETRY_ATTEMPT
           value: '__MAX_MFA_RETRY_ATTEMPT__' 
                   

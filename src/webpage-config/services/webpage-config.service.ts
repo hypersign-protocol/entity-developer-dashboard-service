@@ -322,6 +322,7 @@ export class WebpageConfigService {
           appName: ssiServiceDetail.appName,
           grantType: GRANT_TYPES.access_service_ssi,
           sessionId: ssiServiceId,
+          subdomain: ssiServiceDetail.subdomain
         },
         0.5,
       ),

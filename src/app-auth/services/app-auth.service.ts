@@ -706,7 +706,6 @@ export class AppAuthService {
           TokenModule.APP_AUTH,
           SERVICE_TYPES.CAVACH_API,
         );
-
         break;
       }
       case SERVICE_TYPES.QUEST: {
@@ -749,7 +748,6 @@ export class AppAuthService {
       env: appDetail.env ? appDetail.env : APP_ENVIRONMENT.dev,
       appName: appDetail.appName,
     };
-
     if (appDetail.issuerDid) {
       payload['issuerDid'] = appDetail.issuerDid;
     }

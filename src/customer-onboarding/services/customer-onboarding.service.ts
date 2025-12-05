@@ -541,7 +541,11 @@ export class CustomerOnboardingService {
                   appName: `${companyName}`,
                   domain: domain,
                   serviceIds: [SERVICE_TYPES.CAVACH_API],
-                  whitelistedCors: ['*'],
+                  whitelistedCors: [
+                    this.config.get<string>('KYC_WIDGET_URL'),
+                    this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
+                    this.config.get<string>('CLIENT_APP_URL'),
+                  ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
                   dependentServices: [

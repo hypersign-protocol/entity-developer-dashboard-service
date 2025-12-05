@@ -30,6 +30,11 @@ import { AuthZCreditsRepository } from 'src/credits/repositories/authz.repositor
 import { EdvClientKeysManager } from 'src/edv/services/edv.singleton';
 import { UserRole } from 'src/user/schema/user.schema';
 import { WebPageConfigRepository } from 'src/webpage-config/repositories/webpage-config.repository';
+import { InjectModel } from '@nestjs/mongoose';
+import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
+import { Model } from 'mongoose';
+import { getAccessListForModule } from 'src/utils/utils';
+import { TokenModule } from 'src/config/access-matrix';
 
 export enum GRANT_TYPES {
   access_service_kyc = 'access_service_kyc',
@@ -53,6 +58,8 @@ export class AppAuthService {
     private readonly userRepository: UserRepository,
     private readonly authzCreditService: AuthzCreditService,
     private readonly authzCreditRepository: AuthZCreditsRepository,
+    @InjectModel(CustomerOnboarding.name)
+    private readonly onboardModel: Model<CustomerOnboarding>,
     private readonly webpageConfigRepo: WebPageConfigRepository,
   ) {}
 
@@ -534,16 +541,6 @@ export class AppAuthService {
       { appId, userId },
       updataAppDto,
     );
-    // update webpage detail
-    if ((app.services[0].id = SERVICE_TYPES.CAVACH_API)) {
-      this.updateWebPageConfigDetail(app, userDetail).catch((err) => {
-        Logger.error(
-          `updateWebPageConfigDetail failed for ${appId}: ${err.message}`,
-          err.stack,
-        );
-      });
-    }
-
     return this.getAppResponse(app);
   }
 
@@ -611,6 +608,15 @@ export class AppAuthService {
     }
     const appDbConnectionSuffix = `service:${appDetail.services[0].dBSuffix}:${appDetail.subdomain}`;
     await this.appRepository.findAndDeleteServiceDB(appDbConnectionSuffix);
+    if (
+      appDetail?.services?.length > 0 &&
+      appDetail.services[0].id === SERVICE_TYPES.CAVACH_API
+    ) {
+      // delete onboarding data
+      await this.onboardModel.deleteOne({ kycServiceId: appId });
+      // delete webpage config data of that service
+      await this.webpageConfigRepo.findOneAndDelete({ appId });
+    }
     this.authzCreditRepository.deleteAuthzDetail({ appId });
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });
     return { appId: appDetail.appId };
@@ -639,7 +645,6 @@ export class AppAuthService {
     Logger.log('generateAccessToken() method: starts....', 'AppAuthService');
 
     const apikeyIndex = appSecreatKey.split('.')[0];
-
     const appDetail = await this.appRepository.findOne({
       apiKeyPrefix: apikeyIndex,
     });
@@ -680,17 +685,10 @@ export class AppAuthService {
     switch (serviceType) {
       case SERVICE_TYPES.SSI_API: {
         grant_type = GRANT_TYPES.access_service_ssi;
-        if (userDetails.accessList && userDetails.accessList.length > 0) {
-          accessList = userDetails.accessList
-            .map((x) => {
-              if (x.serviceType === SERVICE_TYPES.SSI_API) {
-                if (!this.checkIfDateExpired(x.expiryDate)) {
-                  return x.access;
-                }
-              }
-            })
-            .filter((x) => x != undefined);
-        }
+        accessList = getAccessListForModule(
+          TokenModule.APP_AUTH,
+          SERVICE_TYPES.SSI_API,
+        );
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
@@ -704,32 +702,18 @@ export class AppAuthService {
           ]);
         }
         grant_type = grantType || GRANT_TYPES.access_service_kyc;
-        if (userDetails.accessList && userDetails.accessList.length > 0) {
-          accessList = userDetails.accessList
-            .map((x) => {
-              if (x.serviceType === SERVICE_TYPES.CAVACH_API) {
-                if (!this.checkIfDateExpired(x.expiryDate)) {
-                  return x.access;
-                }
-              }
-            })
-            .filter((x) => x != undefined);
-        }
+        accessList = getAccessListForModule(
+          TokenModule.APP_AUTH,
+          SERVICE_TYPES.CAVACH_API,
+        );
         break;
       }
       case SERVICE_TYPES.QUEST: {
         grant_type = GRANT_TYPES.access_service_quest;
-        if (userDetails.accessList && userDetails.accessList.length > 0) {
-          accessList = userDetails.accessList
-            .map((x) => {
-              if (x.serviceType === SERVICE_TYPES.QUEST) {
-                if (!this.checkIfDateExpired(x.expiryDate)) {
-                  return x.access;
-                }
-              }
-            })
-            .filter((x) => x != undefined);
-        }
+        accessList = getAccessListForModule(
+          TokenModule.APP_AUTH,
+          SERVICE_TYPES.QUEST,
+        );
         break;
       }
       default: {
@@ -764,7 +748,6 @@ export class AppAuthService {
       env: appDetail.env ? appDetail.env : APP_ENVIRONMENT.dev,
       appName: appDetail.appName,
     };
-
     if (appDetail.issuerDid) {
       payload['issuerDid'] = appDetail.issuerDid;
     }
@@ -843,15 +826,10 @@ export class AppAuthService {
             'Invalid grant type for this service ' + appId,
           ]);
         }
-        accessList = userDetails.accessList
-          .map((x) => {
-            if (x.serviceType === SERVICE_TYPES.SSI_API) {
-              if (!this.checkIfDateExpired(x.expiryDate)) {
-                return x.access;
-              }
-            }
-          })
-          .filter((x) => x != undefined);
+        accessList = getAccessListForModule(
+          TokenModule.DASHBOARD,
+          SERVICE_TYPES.SSI_API,
+        );
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
@@ -863,15 +841,10 @@ export class AppAuthService {
             'Invalid grant type for this service ' + appId,
           ]);
         }
-        accessList = userDetails.accessList
-          .map((x) => {
-            if (x.serviceType === SERVICE_TYPES.CAVACH_API) {
-              if (!this.checkIfDateExpired(x.expiryDate)) {
-                return x.access;
-              }
-            }
-          })
-          .filter((x) => x != undefined);
+        accessList = getAccessListForModule(
+          TokenModule.DASHBOARD,
+          SERVICE_TYPES.CAVACH_API,
+        );
         break;
       }
       case SERVICE_TYPES.QUEST: {
@@ -880,15 +853,10 @@ export class AppAuthService {
             'Invalid grant type for this service ' + appId,
           ]);
         }
-        accessList = userDetails.accessList
-          .map((x) => {
-            if (x.serviceType === SERVICE_TYPES.QUEST) {
-              if (!this.checkIfDateExpired(x.expiryDate)) {
-                return x.access;
-              }
-            }
-          })
-          .filter((x) => x != undefined);
+        accessList = getAccessListForModule(
+          TokenModule.DASHBOARD,
+          SERVICE_TYPES.QUEST,
+        );
         break;
       }
       default: {
@@ -902,84 +870,5 @@ export class AppAuthService {
     }
 
     return this.getAccessToken(grantType, app, 12, accessList);
-  }
-
-  private async updateWebPageConfigDetail(app, userDetail) {
-    const webpageDetail = await this.webpageConfigRepo.findAWebpageConfig({
-      serviceId: app.appId,
-    });
-    if (!webpageDetail) {
-      Logger.warn(`No webpage config found for serviceId ${app.appId}`);
-      return;
-    }
-    let expiryDate = webpageDetail.expiryDate;
-    const userAccessList = userDetail.accessList;
-    Logger.log(
-      'Inside updateWebPageConfigDetail(): Method to generate ssi and kyc token',
-      'AppAuthService',
-    );
-    const ssiAccessList = (userAccessList || [])
-      .filter(
-        (x) =>
-          x.serviceType === SERVICE_TYPES.SSI_API &&
-          !this.checkIfDateExpired(x.expiryDate),
-      )
-      .map((x) => x.access);
-
-    const kycAccessList = (userAccessList || [])
-      .filter(
-        (x) =>
-          x.serviceType === SERVICE_TYPES.CAVACH_API &&
-          !this.checkIfDateExpired(x.expiryDate),
-      )
-      .map((x) => x.access);
-
-    if (ssiAccessList.length <= 0 || kycAccessList.length <= 0) {
-      throw new UnauthorizedException([
-        `You are not authorized for both SSI and KYC services.`,
-      ]);
-    }
-    expiryDate = new Date(expiryDate);
-
-    if (isNaN(expiryDate.getTime())) {
-      throw new BadRequestException(['Invalid custom expiry date format.']);
-    }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (expiryDate < today) {
-      throw new BadRequestException([
-        'Custom expiry date cannot be earlier than today.',
-      ]);
-    }
-    const expiresIn = Math.floor(
-      (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60),
-    );
-
-    const ssiServiceDetail = await this.appRepository.findOne({
-      appId: app.dependentServices[0],
-    });
-    if (!ssiServiceDetail) {
-      throw new BadRequestException([
-        `No service found with dependentServiceId: ${app.dependentServices[0]}`,
-      ]);
-    }
-    // Get access tokens
-    const ssiAccessTokenDetail = await this.getAccessToken(
-      GRANT_TYPES.access_service_ssi,
-      ssiServiceDetail,
-      expiresIn,
-    );
-    const kycAccessTokenDetail = await this.getAccessToken(
-      GRANT_TYPES.access_service_kyc,
-      app,
-      expiresIn,
-    );
-    await this.webpageConfigRepo.findOneAndUpdate(
-      { _id: webpageDetail['_id'] },
-      {
-        ssiAccessToken: ssiAccessTokenDetail.access_token,
-        kycAccessToken: kycAccessTokenDetail.access_token,
-      },
-    );
   }
 }

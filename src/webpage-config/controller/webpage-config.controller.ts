@@ -11,19 +11,21 @@ import {
   Req,
   UsePipes,
   ValidationPipe,
+  Query,
 } from '@nestjs/common';
 import { WebpageConfigService } from '../services/webpage-config.service';
 import {
   CreateWebpageConfigDto,
-  CreateWebpageConfigResponseDto,
   CreateWebpageConfigResponseWithDetailDto,
   FetchWebpageConfigResponseDto,
+  VerifierPageTokenResponse,
 } from '../dto/create-webpage-config.dto';
 import { UpdateWebpageConfigDto } from '../dto/update-webpage-config.dto';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { AllExceptionsFilter } from 'src/utils/utils';
@@ -31,7 +33,7 @@ import { AllExceptionsFilter } from 'src/utils/utils';
 @ApiTags('Webpage-config')
 @UseFilters(AllExceptionsFilter)
 @UsePipes(new ValidationPipe())
-@Controller('api/v1/app')
+@Controller('api/v1/app/')
 export class WebpageConfigController {
   constructor(private readonly webpageConfigService: WebpageConfigService) {}
 
@@ -39,17 +41,16 @@ export class WebpageConfigController {
     description: 'Webpage configuration saved successfully',
     type: CreateWebpageConfigResponseWithDetailDto,
   })
-  @Post(':appId/kyc-webpage-config')
+  @Post('verifier')
+  @ApiQuery({ name: 'appId', required: true, type: String })
   configureWebPageDetail(
-    @Param('appId') serviceId: string,
+    @Query('appId') serviceId: string,
     @Body() createWebpageConfigDto: CreateWebpageConfigDto,
-    @Req() req,
   ) {
     Logger.log('inside configureWebPageDetail(): to configure webpage detail');
     return this.webpageConfigService.storeWebPageConfigDetial(
       serviceId,
       createWebpageConfigDto,
-      req.user,
     );
   }
 
@@ -57,7 +58,7 @@ export class WebpageConfigController {
     description: 'Webpage configuration list',
     type: FetchWebpageConfigResponseDto,
   })
-  @Get(':appId/kyc-webpage-config')
+  @Get(':appId/verifier')
   async fetchWebPageConfigurationDetail(@Param('appId') appId: string) {
     Logger.log(
       'Inside fetchWebPageConfigurationDetail() to fetch webpageData',
@@ -70,32 +71,25 @@ export class WebpageConfigController {
     description: 'Webpage configuration fetched successfully',
     type: FetchWebpageConfigResponseDto,
   })
-  @Get(':appId/kyc-webpage-config/:id')
-  fetchAWebPageConfigurationDetail(
-    @Param('appId') appId: string,
-    @Param('id') id: string,
-  ) {
-    return this.webpageConfigService.fetchAWebPageConfigurationDetail(
-      id,
-      appId,
-    );
+  @Get('verifier/:id')
+  fetchAWebPageConfigurationDetail(@Param('id') id: string) {
+    return this.webpageConfigService.fetchAWebPageConfigurationDetail(id);
   }
 
   @ApiOkResponse({
     description: 'Webpage configuration updated successfully',
     type: FetchWebpageConfigResponseDto,
   })
-  @Patch(':appId/kyc-webpage-config/:id')
+  @Patch('verifier/:id')
+  @ApiQuery({ name: 'appId', required: true, type: String })
   updateWebPageConfiguration(
-    @Param('appId') appId: string,
+    @Query('appId') appId: string,
     @Param('id') id: string,
     @Body() updateWebpageConfigDto: UpdateWebpageConfigDto,
-    @Req() req,
   ) {
     return this.webpageConfigService.updateWebPageConfiguration(
       id,
       updateWebpageConfigDto,
-      req.user,
       appId,
     );
   }
@@ -104,11 +98,29 @@ export class WebpageConfigController {
     description: 'Webpage configuration deleted successfully',
     type: FetchWebpageConfigResponseDto,
   })
-  @Delete(':appId/kyc-webpage-config/:id')
+  @Delete('verifier/:id')
+  @ApiQuery({ name: 'appId', required: true, type: String })
   removeWebPageConfiguration(
-    @Param('appId') appId: string,
+    @Query('appId') appId: string,
     @Param('id') id: string,
   ) {
     return this.webpageConfigService.removeWebPageConfiguration(id, appId);
+  }
+  @ApiOkResponse({
+    description: 'Verifier webpage token generated successfully',
+    type: VerifierPageTokenResponse,
+  })
+  @Post('verifier/:id/tokens')
+  @ApiQuery({ name: 'appId', required: true, type: String })
+  generateWebpageConfigTokens(
+    @Query('appId') appId: string,
+    @Param('id') id: string,
+    @Req() req,
+  ) {
+    return this.webpageConfigService.generateWebpageConfigTokens(
+      id,
+      appId,
+      req.user,
+    );
   }
 }

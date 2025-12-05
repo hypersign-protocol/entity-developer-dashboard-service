@@ -541,7 +541,11 @@ export class CustomerOnboardingService {
                   appName: `${companyName}`,
                   domain: domain,
                   serviceIds: [SERVICE_TYPES.CAVACH_API],
-                  whitelistedCors: ['*'],
+                  whitelistedCors: [
+                    this.config.get<string>('KYC_WIDGET_URL'),
+                    this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
+                    this.config.get<string>('CLIENT_APP_URL'),
+                  ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
                   dependentServices: [
@@ -697,23 +701,16 @@ export class CustomerOnboardingService {
                 'CustomerOnboardingService',
               );
 
-              const user = await this.userRepository.findOne({
-                userId: userId,
-              });
               const serviceId =
                 kycService?.appId || customerOnboardingData.kycServiceId;
-              await this.webPageConfig.storeWebPageConfigDetial(
-                serviceId,
-                {
-                  pageTitle: 'KYC Verification',
-                  pageDescription: 'Complete your KYC verification to proceed',
-                  expiryType: ExpiryType.ONE_MONTH,
-                  pageType: PageType.KYC,
-                  contactEmail: customerEmail,
-                  themeColor: 'vibrant',
-                },
-                user,
-              );
+              await this.webPageConfig.storeWebPageConfigDetial(serviceId, {
+                pageTitle: 'KYC Verification',
+                pageDescription: 'Complete your KYC verification to proceed',
+                expiryType: ExpiryType.ONE_MONTH,
+                pageType: PageType.KYC,
+                contactEmail: customerEmail,
+                themeColor: 'vibrant',
+              });
               Logger.debug(
                 'CONFIGURE_KYC_VERIFIER_PAGE step ends',
                 'CustomerOnboardingService',
@@ -855,7 +852,8 @@ export class CustomerOnboardingService {
           userId: user.userId,
         });
       if (!userOnboardingDetail) {
-        throw new BadRequestException([`No onboarding detail found for user with id: ${user.userId}`,
+        throw new BadRequestException([
+          `No onboarding detail found for user with id: ${user.userId}`,
         ]);
       }
       return userOnboardingDetail;

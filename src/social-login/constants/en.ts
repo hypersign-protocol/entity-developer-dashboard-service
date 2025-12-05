@@ -13,6 +13,8 @@ export const AUTH_ERRORS = {
     'This token was issued for a different domain than the one making the request.',
   TOKEN_DOMAIN_MISSING: 'Token does not contain a valid domain.',
   INVALID_TOKEN: 'Invalid token',
+  TENANT_PERMISSION_ISSUE: 'Tenant does not have any assigned permissions',
+  ACCESS_REVOKED: 'Your access has been revoked',
 };
 
 export const REFRESH_TOKEN_ERROR = {

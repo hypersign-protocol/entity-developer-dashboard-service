@@ -208,7 +208,7 @@ export class AttachRoleDTO {
   userId: string;
 }
 
-export class AdminLoginDTO {
+export class TenantLoginDTO {
   @ApiProperty({
     name: 'adminId',
   })

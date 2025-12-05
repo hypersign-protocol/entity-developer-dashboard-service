@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import {
+  BadRequestException,
   Injectable,
   Logger,
   NestMiddleware,
@@ -7,34 +8,47 @@ import {
 } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import { AdminPeopleRepository } from 'src/people/repository/people.repository';
+import { AUTH_ERRORS } from 'src/social-login/constants/en';
 @Injectable()
 export class JWTAccessAccountMiddleware implements NestMiddleware {
   constructor(private readonly adminPeople: AdminPeopleRepository) {}
   async use(req: Request, res: Response, next: NextFunction) {
     try {
       // @ts-ignore
-      if (req.user?.accessAccount !== undefined) {
+      const user = req.user;
+      const session = req['session'];
+      if (!session) {
+        throw new Error(AUTH_ERRORS.SESSION_EXPIRED);
+      }
+      if (!session.tenantId) {
+        return next();
+      }
+      const tenantId = req['session'].tenantId;
+
+      if (tenantId !== undefined) {
         // @ts-ignore
 
-        const userId = req.user.userId;
+        const userId = user.userId;
         // @ts-ignore
-
-        const adminId = req.user.accessAccount.userId;
-        if (adminId !== userId) {
-          const member = await this.adminPeople.findOne({ adminId, userId });
-          if (member == null) {
-            throw new Error('Your access has been revoked');
-          }
+        const member = await this.adminPeople.findOne({
+          adminId: tenantId,
+          userId,
+        });
+        if (member == null) {
+          throw new Error(AUTH_ERRORS.ACCESS_REVOKED);
         }
         // @ts-ignore
 
-        req.user.userId = req.user.accessAccount.userId;
+        user.userId = tenantId;
+        if (
+          !session?.tenantUserPermissions ||
+          session.tenantUserPermissions.length === 0
+        ) {
+          throw new Error(AUTH_ERRORS.TENANT_PERMISSION_ISSUE);
+        }
         // @ts-ignore
-
-        req.user.accessList = req.user.accessAccount.accessList;
+        user.accessList = session?.tenantUserPermissions;
         // @ts-ignore
-
-        req.user.email = req.user.accessAccount.email;
       }
 
       Logger.log(JSON.stringify(req.user), 'JWTAccessAccountMiddleware');
@@ -43,7 +57,7 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
         `JWTAccessAccountMiddleware: Error ${e}`,
         'JWTAccessAccountMiddleware',
       );
-      throw new UnauthorizedException([e]);
+      throw new UnauthorizedException([e.message]);
     }
     next();
   }

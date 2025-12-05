@@ -64,7 +64,6 @@ export class WebPageConfigRepository {
       'findOneAndDelete() method: starts, delete  app data to db',
       'WebPageConfigRepository',
     );
-
     return this.webPageConfigModel.findOneAndDelete(appFilterQuery);
   }
 }

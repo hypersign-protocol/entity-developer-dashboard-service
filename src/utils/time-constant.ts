@@ -19,6 +19,11 @@ export const TOKEN = {
     name: 'refreshToken',
     expiry: 7 * TIME.DAY * 1000,
   },
+  VERIFIER_TOKEN: {
+    name: 'verifierPageToken',
+    expiry: 30 * TIME.MINUTE,
+    jwtExpiry: 0.5,
+  },
 };
 
 export enum JobNames {

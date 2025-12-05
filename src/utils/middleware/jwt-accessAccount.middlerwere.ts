@@ -20,7 +20,7 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
       if (!session) {
         throw new BadRequestException([AUTH_ERRORS.SESSION_EXPIRED]);
       }
-      if (!session.tenantId) {
+      if (!session || !session.tenantId) {
         return next();
       }
       const tenantId = req['session'].tenantId;

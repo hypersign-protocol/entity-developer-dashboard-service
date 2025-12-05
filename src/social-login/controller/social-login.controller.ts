@@ -7,7 +7,6 @@ import {
   UseFilters,
   Post,
   Res,
-  Query,
   Body,
   Delete,
   UnauthorizedException,
@@ -20,7 +19,6 @@ import {
   ApiBearerAuth,
   ApiExcludeEndpoint,
   ApiOkResponse,
-  ApiQuery,
   ApiResponse,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -44,8 +42,8 @@ import {
 } from '../dto/request.dto';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { UserRole } from 'src/user/schema/user.schema';
-import { ERROR_MESSAGE as MFA_MESSAGE } from '../constants/en';
-import { TOKEN_MAX_AGE, TOKEN } from 'src/utils/time-constant';
+import { ERROR_MESSAGE, ERROR_MESSAGE as MFA_MESSAGE } from '../constants/en';
+import { TOKEN } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller('api/v1')
@@ -63,15 +61,10 @@ export class SocialLoginController {
     status: 401,
     type: UnauthorizedError,
   })
-  @ApiQuery({
-    name: 'provider',
-    description: 'Authentication provider',
-    required: true,
-  })
   @Get('auth/google/authorize')
-  async socialAuthRedirect(@Res() res, @Query() loginProvider) {
+  async socialAuthRedirect(@Res() res) {
     Logger.log('socialAuthRedirect() method starts', 'SocialLoginController');
-    const { provider } = loginProvider;
+    const provider = 'google';
     Logger.log(`Looged in with ${provider}`, 'SocialLoginController');
     const { authUrl } = await this.socialLoginService.generateAuthUrlByProvider(
       provider,
@@ -135,14 +128,6 @@ export class SocialLoginController {
       status: 200,
       message: userDetail,
       error: null,
-    };
-  }
-
-  @ApiBearerAuth('Authorization')
-  @Post('auth/login/refresh')
-  async generateRefreshToken(@Req() req) {
-    return {
-      authToken: await this.socialLoginService.socialLogin(req),
     };
   }
   @ApiBearerAuth('Authorization')
@@ -255,22 +240,16 @@ export class SocialLoginController {
   @ApiBearerAuth('Authorization')
   @Post('auth/logout')
   async logout(@Req() req, @Res() res) {
-    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
-    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
-    res.clearCookie('authToken', {
-      path: '/',
-      domain: isProduction ? cookieDomain : undefined,
-      sameSite: isProduction ? 'None' : 'Lax',
-      secure: isProduction,
-      httpOnly: true,
-    });
-    res.clearCookie('refreshToken', {
-      path: '/',
-      domain: isProduction ? cookieDomain : undefined,
-      sameSite: isProduction ? 'None' : 'Lax',
-      secure: isProduction,
-      httpOnly: true,
-    });
+    const refreshToken = req.cookies[TOKEN.REFRESH.name];
+    const result = await this.socialLoginService.logout(
+      refreshToken,
+      req.session,
+    );
+    if (!result.success) {
+      throw new BadRequestException([ERROR_MESSAGE.LOGOUT_ISSUE]);
+    }
+    res.clearCookie(TOKEN.AUTH.name, getCookieOptions(undefined, true));
+    res.clearCookie(TOKEN.REFRESH.name, getCookieOptions(undefined, true));
     return res.status(200).json({ message: 'Logged out successfully' });
   }
 

@@ -29,7 +29,7 @@ import { TOKEN_MAX_AGE } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('People')
 @ApiBearerAuth('Authorization')
-@Controller('/api/v1/people')
+@Controller('/api/v1/tenants')
 export class PeopleController {
   constructor(
     private readonly peopleService: PeopleService,
@@ -41,7 +41,7 @@ export class PeopleController {
     description: 'Invite a user to your account',
     type: InviteResponseDTO,
   })
-  @Post('/invite')
+  @Post('/invitations')
   @UsePipes(ValidationPipe)
   createInvite(@Body() createInviteDto: CreateInviteDto, @Req() req) {
     const { user } = req;
@@ -53,14 +53,14 @@ export class PeopleController {
     description: 'Accept invite',
     type: InviteResponseDTO,
   })
-  @Post('/invite/accept/:inviteCode')
+  @Post('/invitations/:inviteCode/accept')
   @UsePipes(ValidationPipe)
   acceptInvite(@Param('inviteCode') inviteCode: string, @Req() req) {
     const { user } = req;
     return this.peopleService.acceptInvite(inviteCode, user);
   }
 
-  @Patch('invite/:inviteCode')
+  @Patch('invitations/:inviteCode')
   @UsePipes(ValidationPipe)
   update(@Param('inviteCode') inviteCode: string, @Req() req) {
     const { user } = req;
@@ -84,7 +84,7 @@ export class PeopleController {
     type: InviteListResponseDTO,
     isArray: true,
   })
-  @Get('/invites')
+  @Get('/invitations')
   @UsePipes(ValidationPipe)
   async getAllInvites(@Req() req) {
     const { user } = req;

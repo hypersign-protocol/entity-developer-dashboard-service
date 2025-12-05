@@ -155,7 +155,7 @@ export function mapUserAccessList(userAccessList) {
   ];
 }
 
-export function getCookieOptions(maxAge: number) {
+export function getCookieOptions(maxAge?: number, isClear = false) {
   const cookieDomain = process.env.COOKIE_DOMAIN;
   const isProd = process.env.NODE_ENV || 'production';
   return {
@@ -164,6 +164,6 @@ export function getCookieOptions(maxAge: number) {
     sameSite: isProd === 'production' ? 'None' : 'Lax',
     domain: isProd ? cookieDomain : undefined,
     path: '/',
-    maxAge,
+    ...(isClear ? {} : { maxAge }),
   };
 }

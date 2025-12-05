@@ -26,7 +26,7 @@ import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { Request } from 'express';
 import { SocialLoginService } from '../services/social-login.service';
 import { UnauthorizedError } from '../dto/response.dto';
-import { TOKEN_MAX_AGE } from 'src/utils/time-constant';
+import { TOKEN } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller('/api/v1/auth/email/otp')
@@ -79,14 +79,14 @@ export class EmailOtpLoginController {
         res.redirect(this.config.get('MFA_REDIRECT_URL'));
       }
       res.cookie(
-        'accessToken',
+        TOKEN.AUTH.name,
         result.accessToken,
-        getCookieOptions(TOKEN_MAX_AGE.AUTH_TOKEN),
+        getCookieOptions(TOKEN.AUTH.expiry),
       );
       res.cookie(
-        'refreshToken',
+        TOKEN.REFRESH.name,
         result.refreshToken,
-        getCookieOptions(TOKEN_MAX_AGE.REFRESH_TOKEN),
+        getCookieOptions(TOKEN.REFRESH.expiry),
       );
       res.redirect(`${this.config.get('REDIRECT_URL')}`);
     } catch (err) {

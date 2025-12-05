@@ -13,7 +13,7 @@ export const TOKEN_MAX_AGE = {
 export const TOKEN = {
   AUTH: {
     name: 'accessToken',
-    expiry: 4 * TIME.MINUTE * 1000,
+    expiry: 30 * TIME.MINUTE * 1000,
   },
   REFRESH: {
     name: 'refreshToken',

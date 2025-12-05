@@ -18,7 +18,6 @@ import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware'
 import { TrimMiddleware } from 'src/utils/middleware/trim.middleware';
 import { JWTAuthorizeMiddleware } from 'src/utils/middleware/jwt-authorization.middleware';
 import { JWTAccessAccountMiddleware } from 'src/utils/middleware/jwt-accessAccount.middlerwere';
-import { TwoFAAuthorizationMiddleware } from 'src/utils/middleware/2FA-jwt-authorization.middleware';
 import { UserModule } from 'src/user/user.module';
 import { JwtModule } from '@nestjs/jwt';
 import { AdminPeopleRepository } from 'src/people/repository/people.repository';
@@ -59,13 +58,6 @@ export class WebpageConfigModule implements NestModule {
       .forRoutes(WebpageConfigController);
     consumer
       .apply(JWTAccessAccountMiddleware)
-      .exclude({
-        path: 'api/v1/app/:appId/kyc-webpage-config',
-        method: RequestMethod.GET,
-      })
-      .forRoutes(WebpageConfigController);
-    consumer
-      .apply(TwoFAAuthorizationMiddleware)
       .exclude({
         path: 'api/v1/app/:appId/kyc-webpage-config',
         method: RequestMethod.GET,

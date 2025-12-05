@@ -148,6 +148,8 @@ jobs:
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MAX_RETRY_ATTEMPT__#${{ secrets.MAX_RETRY_ATTEMPT }}#" {} \;
     - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MAX_MFA_RETRY_ATTEMPT__#${{ secrets.MAX_MFA_RETRY_ATTEMPT }}#" {} \;
+    - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MFA_REDIRECT_URL__#${{ secrets.MFA_REDIRECT_URL }}#" {} \;
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

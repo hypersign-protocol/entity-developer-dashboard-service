@@ -13,6 +13,7 @@ import { redisClient } from '../redis.provider';
 import {
   AUTH_ERRORS,
   ERROR_MESSAGE,
+  MFA_ERROR,
   REFRESH_TOKEN_ERROR,
 } from 'src/social-login/constants/en';
 @Injectable()
@@ -79,7 +80,7 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
 
         if (session.isTwoFactorAuthenticated) {
           if (!session.isTwoFactorVerified) {
-            throw new UnauthorizedException([AUTH_ERRORS.TWO_FA_REQUIRED]);
+            throw new UnauthorizedException([MFA_ERROR.TWO_FA_REQUIRED]);
           }
         }
         const user = await this.userRepository.findOne({

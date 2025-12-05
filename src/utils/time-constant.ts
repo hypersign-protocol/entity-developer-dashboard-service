@@ -22,6 +22,7 @@ export const TOKEN = {
   VERIFIER_TOKEN: {
     name: 'verifierPageToken',
     expiry: 30 * TIME.MINUTE * 1000,
+    jwtExpiry: 0.5,
   },
 };
 

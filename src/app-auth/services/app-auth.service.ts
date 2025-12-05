@@ -22,6 +22,7 @@ import * as url from 'url';
 import { SupportedServiceService } from 'src/supported-service/services/supported-service.service';
 import {
   APP_ENVIRONMENT,
+  Context,
   SERVICE_TYPES,
 } from 'src/supported-service/services/iServiceList';
 import { UserRepository } from 'src/user/repository/user.repository';
@@ -35,6 +36,8 @@ import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onb
 import { Model } from 'mongoose';
 import { getAccessListForModule } from 'src/utils/utils';
 import { TokenModule } from 'src/config/access-matrix';
+import { redisClient } from 'src/utils/redis.provider';
+import { TIME } from 'src/utils/time-constant';
 
 export enum GRANT_TYPES {
   access_service_kyc = 'access_service_kyc',
@@ -643,7 +646,6 @@ export class AppAuthService {
     grantType,
   ): Promise<{ access_token; expiresIn; tokenType }> {
     Logger.log('generateAccessToken() method: starts....', 'AppAuthService');
-
     const apikeyIndex = appSecreatKey.split('.')[0];
     const appDetail = await this.appRepository.findOne({
       apiKeyPrefix: apikeyIndex,
@@ -682,6 +684,20 @@ export class AppAuthService {
     const serviceType = appDetail.services[0]?.id; // TODO: remove this later
     let grant_type = '';
     let accessList = [];
+    const redisKey = appDetail.appId;
+    const savedSession = await redisClient.get(redisKey);
+    if (savedSession) {
+      Logger.log('Using redis cached session', 'AppAuthService');
+      const sessionJson = JSON.parse(savedSession);
+      const jwtPayload = {
+        appId: sessionJson.appId,
+        appName: sessionJson.appName,
+        grantType: sessionJson.grantType,
+        subdomain: sessionJson.subdomain,
+        sessionId: redisKey,
+      };
+      return this.getAccessToken(jwtPayload, expiresin);
+    }
     switch (serviceType) {
       case SERVICE_TYPES.SSI_API: {
         grant_type = GRANT_TYPES.access_service_ssi;
@@ -726,15 +742,33 @@ export class AppAuthService {
         `You are not authorized to access service of type ${serviceType}`,
       ]);
     }
-
-    return this.getAccessToken(grant_type, appDetail, expiresin, accessList);
+    const jwtPayload = {
+      appId: appDetail.appId,
+      appName: appDetail.appName,
+      grantType: grant_type,
+      subdomain: appDetail.subdomain,
+      sessionId: redisKey,
+    };
+    await this.storeDataInRedis(grant_type, appDetail, accessList, redisKey);
+    return this.getAccessToken(jwtPayload, expiresin);
   }
 
-  public async getAccessToken(
+  public async getAccessToken(data, expiresin = 4) {
+    const secret = this.config.get('JWT_SECRET');
+    const token = await this.jwt.signAsync(data, {
+      expiresIn: expiresin.toString() + 'h',
+      secret,
+    });
+    const expiresIn = (expiresin * 1 * 60 * 60 * 1000) / 1000;
+    Logger.log('generateAccessToken() method: ends....', 'AppAuthService');
+
+    return { access_token: token, expiresIn, tokenType: 'Bearer' };
+  }
+  public async storeDataInRedis(
     grantType,
     appDetail,
-    expiresin = 4,
     accessList = [],
+    sessionId,
   ) {
     const payload = {
       appId: appDetail.appId,
@@ -763,27 +797,18 @@ export class AppAuthService {
     ) {
       payload['dependentServices'] = appDetail.dependentServices;
     }
-
-    const secret = this.config.get('JWT_SECRET');
-
-    const token = await this.jwt.signAsync(payload, {
-      expiresIn: expiresin.toString() + 'h',
-      secret,
-    });
-    const expiresIn = (expiresin * 1 * 60 * 60 * 1000) / 1000;
     Logger.log('generateAccessToken() method: ends....', 'AppAuthService');
-
-    return { access_token: token, expiresIn, tokenType: 'Bearer' };
+    redisClient.set(sessionId, JSON.stringify(payload), 'EX', TIME.WEEK);
   }
-
-  //access_service_ssi
-  //access_service_kyc
 
   async grantPermission(
     grantType: string,
     appId: string,
     user,
   ): Promise<{ access_token; expiresIn; tokenType }> {
+    const context = Context.idDashboard;
+    const sessionId = `${appId}_${context}`;
+    const savedSession = await redisClient.get(sessionId);
     switch (grantType) {
       case GRANT_TYPES.access_service_ssi:
         break;
@@ -803,13 +828,23 @@ export class AppAuthService {
       }
     }
 
+    if (savedSession) {
+      const app = JSON.parse(savedSession);
+      const dataToStore = {
+        appId,
+        appName: app.appName,
+        grantType,
+        subdomain: app.subdomain,
+        sessionId,
+      };
+      return this.getAccessToken(dataToStore, 12);
+    }
     const app = await this.getAppById(appId, user.userId);
     if (!app) {
       throw new BadRequestException([
         'Invalid service id or you do not have access of this service',
       ]);
     }
-
     const userDetails = user;
     if (!userDetails) {
       throw new UnauthorizedException([
@@ -868,7 +903,14 @@ export class AppAuthService {
         `You are not authorized to access service of type ${serviceType}`,
       ]);
     }
-
-    return this.getAccessToken(grantType, app, 12, accessList);
+    const tokenPayload = {
+      appId,
+      appName: app.appName,
+      grantType,
+      subdomain: app.subdomain,
+      sessionId,
+    };
+    await this.storeDataInRedis(grantType, app, accessList, sessionId);
+    return this.getAccessToken(tokenPayload, 12);
   }
 }

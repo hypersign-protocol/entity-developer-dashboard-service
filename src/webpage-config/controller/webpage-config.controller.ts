@@ -115,12 +115,7 @@ export class WebpageConfigController {
   generateWebpageConfigTokens(
     @Query('appId') appId: string,
     @Param('id') id: string,
-    @Req() req,
   ) {
-    return this.webpageConfigService.generateWebpageConfigTokens(
-      id,
-      appId,
-      req.user,
-    );
+    return this.webpageConfigService.generateWebpageConfigTokens(id, appId);
   }
 }

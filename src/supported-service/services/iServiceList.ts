@@ -112,3 +112,7 @@ export namespace SERVICES {
     }
   }
 }
+
+export enum Context {
+  idDashboard = 'idDashboard',
+}

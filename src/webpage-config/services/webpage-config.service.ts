@@ -254,25 +254,35 @@ export class WebpageConfigService {
     }
     return { expiryDate };
   }
-  public async generateWebpageConfigTokens(id, appId, userDetail) {
+  public async generateWebpageConfigTokens(id, appId) {
     const redisKey = `${REDIS_KEYS.VERIFIER_PAGE_TOKEN}${id}`;
     const cachedData = await redisClient.get(redisKey);
     if (cachedData) return JSON.parse(cachedData);
-    const [verifierConfig, kycServiceDetail] = await Promise.all([
-      this.webPageConfigRepo.findAWebpageConfig({
-        _id: new Types.ObjectId(id),
-      }),
-      this.appRepository.findOne({ appId }),
-    ]);
-    if (!verifierConfig || verifierConfig == null) {
+    const verifierConfig = await this.webPageConfigRepo.findAWebpageConfig({
+      _id: new Types.ObjectId(id),
+    });
+    if (!verifierConfig) {
       throw new BadRequestException([
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_NOT_FOUND,
       ]);
     }
-    if (!kycServiceDetail) {
-      throw new BadRequestException([
-        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
-      ]);
+    let kycServiceDetail;
+    const kycService = await redisClient.get(appId);
+    if (!kycService) {
+      kycServiceDetail = await this.appRepository.findOne({ appId });
+      if (!kycServiceDetail) {
+        throw new BadRequestException([
+          WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
+        ]);
+      }
+      await this.appAuthService.storeDataInRedis(
+        GRANT_TYPES.access_service_kyc,
+        kycServiceDetail,
+        getAccessListForModule('VERIFIER', SERVICE_TYPES.CAVACH_API),
+        appId,
+      );
+    } else {
+      kycServiceDetail = JSON.parse(kycService);
     }
     if (
       !kycServiceDetail.dependentServices ||
@@ -282,29 +292,47 @@ export class WebpageConfigService {
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_SSI_SERVICE_NOT_FOUND,
       ]);
     }
-    const ssiServiceId = kycServiceDetail.dependentServices[0];
-    const ssiServiceDetail = await this.appRepository.findOne({
-      appId: ssiServiceId,
-    });
-    if (!ssiServiceDetail) {
-      throw new BadRequestException([
-        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_SSI_SERVICE_DOES_NOT_EXIST,
-      ]);
+    const ssiServiceId = kycServiceDetail?.dependentServices?.[0];
+    let ssiServiceDetail;
+    const ssiService = await redisClient.get(ssiServiceId);
+    if (!ssiService) {
+      ssiServiceDetail = await this.appRepository.findOne({
+        appId: ssiServiceId,
+      });
+      if (!ssiServiceDetail) {
+        throw new BadRequestException([
+          WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_SSI_SERVICE_DOES_NOT_EXIST,
+        ]);
+      }
+      await this.appAuthService.storeDataInRedis(
+        GRANT_TYPES.access_service_ssi,
+        ssiServiceDetail,
+        getAccessListForModule('VERIFIER', SERVICE_TYPES.SSI_API),
+        ssiServiceId,
+      );
+    } else {
+      ssiServiceDetail = JSON.parse(ssiService);
     }
 
     // generate access tokens
     const [ssiAccessTokenDetail, kycAccessTokenDetail] = await Promise.all([
       this.appAuthService.getAccessToken(
-        GRANT_TYPES.access_service_ssi,
-        ssiServiceDetail,
+        {
+          appId: ssiServiceId,
+          appName: ssiServiceDetail.appName,
+          grantType: GRANT_TYPES.access_service_ssi,
+          sessionId: ssiServiceId,
+        },
         0.5,
-        getAccessListForModule('VERIFIER', SERVICE_TYPES.SSI_API),
       ),
       this.appAuthService.getAccessToken(
-        GRANT_TYPES.access_service_kyc,
-        kycServiceDetail,
+        {
+          appId,
+          appName: kycServiceDetail.appName,
+          grantType: GRANT_TYPES.access_service_kyc,
+          sessionId: appId,
+        },
         0.5,
-        getAccessListForModule('VERIFIER', SERVICE_TYPES.CAVACH_API),
       ),
     ]);
     const redisPayload = {

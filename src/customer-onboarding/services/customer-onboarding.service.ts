@@ -450,8 +450,17 @@ export class CustomerOnboardingService {
               }
 
               ssiAccessToken = await this.appAuthService.getAccessToken(
-                GRANT_TYPES.access_service_ssi,
-                ssiService,
+                {
+                  appId:
+                    ssiService?.appId || customerOnboardingData.ssiServiceId,
+                  grantType: GRANT_TYPES.access_service_ssi,
+                  appname: ssiService?.appName,
+                  subdomain:
+                    ssiService?.subdomain ||
+                    customerOnboardingData.ssiSubdomain,
+                  sessionId:
+                    ssiService?.appId || customerOnboardingData.ssiServiceId,
+                },
                 4,
               );
 
@@ -483,8 +492,17 @@ export class CustomerOnboardingService {
               ssiAccessToken =
                 ssiAccessToken ||
                 (await this.appAuthService.getAccessToken(
-                  GRANT_TYPES.access_service_ssi,
-                  ssiService,
+                  {
+                    appId:
+                      ssiService?.appId || customerOnboardingData.ssiServiceId,
+                    grantType: GRANT_TYPES.access_service_ssi,
+                    appname: ssiService?.appName,
+                    subdomain:
+                      ssiService?.subdomain ||
+                      customerOnboardingData.ssiSubdomain,
+                    sessionId:
+                      ssiService?.appId || customerOnboardingData.ssiServiceId,
+                  },
                   4,
                 ));
 
@@ -642,8 +660,17 @@ export class CustomerOnboardingService {
                 });
               }
               kycAccessToken = await this.appAuthService.getAccessToken(
-                GRANT_TYPES.access_service_kyc,
-                kycService,
+                {
+                  appId:
+                    kycService?.appId || customerOnboardingData.kycServiceId,
+                  appName: kycService.appName,
+                  grantType: GRANT_TYPES.access_service_kyc,
+                  subdomain:
+                    kycService?.subdomain ||
+                    customerOnboardingData.kycSubdomain,
+                  sessionId:
+                    kycService?.appId || customerOnboardingData.kycServiceId,
+                },
                 4,
               );
               const requestBody = {

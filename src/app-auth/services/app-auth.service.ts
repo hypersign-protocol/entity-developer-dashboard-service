@@ -735,7 +735,6 @@ export class AppAuthService {
     appDetail,
     expiresin = 4,
     accessList = [],
-    aud?,
   ) {
     const payload = {
       appId: appDetail.appId,
@@ -749,9 +748,6 @@ export class AppAuthService {
       env: appDetail.env ? appDetail.env : APP_ENVIRONMENT.dev,
       appName: appDetail.appName,
     };
-    if (aud) {
-      payload['aud'] = aud;
-    }
     if (appDetail.issuerDid) {
       payload['issuerDid'] = appDetail.issuerDid;
     }

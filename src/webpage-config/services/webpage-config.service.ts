@@ -299,12 +299,14 @@ export class WebpageConfigService {
         ssiServiceDetail,
         0.5,
         getAccessListForModule('VERIFIER', SERVICE_TYPES.SSI_API),
+        this.config.get('SSI_API_DOMAIN')
       ),
       this.appAuthService.getAccessToken(
         GRANT_TYPES.access_service_kyc,
         kycServiceDetail,
         0.5,
         getAccessListForModule('VERIFIER', SERVICE_TYPES.CAVACH_API),
+        this.config.get('CAVACH_API_DOMAIN')
       ),
     ]);
     const redisPayload = {

@@ -690,7 +690,7 @@ export class AppAuthService {
           TokenModule.VERIFIER,
           SERVICE_TYPES.SSI_API,
         );
-        audiance = this.config.get('SSI_API_DOMAIN')
+        audiance = this.config.get('SSI_API_DOMAIN');
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
@@ -708,7 +708,7 @@ export class AppAuthService {
           TokenModule.VERIFIER,
           SERVICE_TYPES.CAVACH_API,
         );
-        audiance = this.config.get('CAVACH_API_DOMAIN')
+        audiance = this.config.get('CAVACH_API_DOMAIN');
         break;
       }
       case SERVICE_TYPES.QUEST: {
@@ -730,7 +730,13 @@ export class AppAuthService {
       ]);
     }
 
-    return this.getAccessToken(grant_type, appDetail, expiresin, accessList, audiance);
+    return this.getAccessToken(
+      grant_type,
+      appDetail,
+      expiresin,
+      accessList,
+      audiance,
+    );
   }
 
   public async getAccessToken(
@@ -738,7 +744,7 @@ export class AppAuthService {
     appDetail,
     expiresin = 4,
     accessList = [],
-    aud?
+    aud?,
   ) {
     const payload = {
       appId: appDetail.appId,
@@ -753,7 +759,7 @@ export class AppAuthService {
       appName: appDetail.appName,
     };
     if (aud) {
-      payload['aud'] = aud
+      payload['aud'] = aud;
     }
     if (appDetail.issuerDid) {
       payload['issuerDid'] = appDetail.issuerDid;
@@ -838,7 +844,7 @@ export class AppAuthService {
           TokenModule.DASHBOARD,
           SERVICE_TYPES.SSI_API,
         );
-        audiance = this.config.get('SSI_API_DOMAIN')
+        audiance = this.config.get('SSI_API_DOMAIN');
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
@@ -854,7 +860,7 @@ export class AppAuthService {
           TokenModule.DASHBOARD,
           SERVICE_TYPES.CAVACH_API,
         );
-        audiance = this.config.get('CAVACH_API_DOMAIN')
+        audiance = this.config.get('CAVACH_API_DOMAIN');
         break;
       }
       case SERVICE_TYPES.QUEST: {

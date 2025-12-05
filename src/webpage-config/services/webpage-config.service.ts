@@ -25,6 +25,7 @@ import { WEBPAGE_CONFIG_ERRORS } from '../constant/en';
 import { redisClient } from 'src/utils/redis.provider';
 import { TOKEN } from 'src/utils/time-constant';
 import { getAccessListForModule, REDIS_KEYS } from 'src/utils/utils';
+import { TokenModule } from 'src/config/access-matrix';
 
 @Injectable()
 export class WebpageConfigService {
@@ -297,14 +298,14 @@ export class WebpageConfigService {
       this.appAuthService.getAccessToken(
         GRANT_TYPES.access_service_ssi,
         ssiServiceDetail,
-        0.5,
-        getAccessListForModule('VERIFIER', SERVICE_TYPES.SSI_API),
+         TOKEN.VERIFIER_TOKEN.jwtExpiry,
+        getAccessListForModule(TokenModule.VERIFIER, SERVICE_TYPES.SSI_API),
       ),
       this.appAuthService.getAccessToken(
         GRANT_TYPES.access_service_kyc,
         kycServiceDetail,
-        0.5,
-        getAccessListForModule('VERIFIER', SERVICE_TYPES.CAVACH_API),
+        TOKEN.VERIFIER_TOKEN.jwtExpiry,
+        getAccessListForModule(TokenModule.VERIFIER, SERVICE_TYPES.CAVACH_API),
       ),
     ]);
     const redisPayload = {

@@ -682,7 +682,6 @@ export class AppAuthService {
     const serviceType = appDetail.services[0]?.id; // TODO: remove this later
     let grant_type = '';
     let accessList = [];
-    let audiance;
     switch (serviceType) {
       case SERVICE_TYPES.SSI_API: {
         grant_type = GRANT_TYPES.access_service_ssi;
@@ -690,7 +689,6 @@ export class AppAuthService {
           TokenModule.VERIFIER,
           SERVICE_TYPES.SSI_API,
         );
-        audiance = this.config.get('SSI_API_DOMAIN');
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
@@ -708,7 +706,6 @@ export class AppAuthService {
           TokenModule.VERIFIER,
           SERVICE_TYPES.CAVACH_API,
         );
-        audiance = this.config.get('CAVACH_API_DOMAIN');
         break;
       }
       case SERVICE_TYPES.QUEST: {
@@ -730,13 +727,7 @@ export class AppAuthService {
       ]);
     }
 
-    return this.getAccessToken(
-      grant_type,
-      appDetail,
-      expiresin,
-      accessList,
-      audiance,
-    );
+    return this.getAccessToken(grant_type, appDetail, expiresin, accessList);
   }
 
   public async getAccessToken(
@@ -832,7 +823,6 @@ export class AppAuthService {
 
     const serviceType = app.services[0]?.id; // TODO: remove this later
     let accessList = [];
-    let audiance;
     switch (serviceType) {
       case SERVICE_TYPES.SSI_API: {
         if (grantType != 'access_service_ssi') {
@@ -844,7 +834,6 @@ export class AppAuthService {
           TokenModule.DASHBOARD,
           SERVICE_TYPES.SSI_API,
         );
-        audiance = this.config.get('SSI_API_DOMAIN');
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
@@ -860,7 +849,6 @@ export class AppAuthService {
           TokenModule.DASHBOARD,
           SERVICE_TYPES.CAVACH_API,
         );
-        audiance = this.config.get('CAVACH_API_DOMAIN');
         break;
       }
       case SERVICE_TYPES.QUEST: {
@@ -885,6 +873,6 @@ export class AppAuthService {
       ]);
     }
 
-    return this.getAccessToken(grantType, app, 12, accessList, audiance);
+    return this.getAccessToken(grantType, app, 12, accessList);
   }
 }

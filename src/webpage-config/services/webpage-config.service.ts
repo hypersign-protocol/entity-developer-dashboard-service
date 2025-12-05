@@ -300,13 +300,13 @@ export class WebpageConfigService {
       this.appAuthService.getAccessToken(
         GRANT_TYPES.access_service_ssi,
         ssiServiceDetail,
-        0.5,
+         TOKEN.VERIFIER_TOKEN.jwtExpiry,
         getAccessListForModule(TokenModule.VERIFIER, SERVICE_TYPES.SSI_API),
       ),
       this.appAuthService.getAccessToken(
         GRANT_TYPES.access_service_kyc,
         kycServiceDetail,
-        0.5,
+        TOKEN.VERIFIER_TOKEN.jwtExpiry,
         getAccessListForModule(TokenModule.VERIFIER, SERVICE_TYPES.CAVACH_API),
       ),
     ]);

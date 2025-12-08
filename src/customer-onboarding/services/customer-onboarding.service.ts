@@ -20,7 +20,9 @@ import {
 } from 'src/app-auth/services/app-auth.service';
 import {
   APP_ENVIRONMENT,
+  Context,
   SERVICE_TYPES,
+  SERVICES,
 } from 'src/supported-service/services/iServiceList';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -35,7 +37,7 @@ import {
   LogDetail,
 } from '../schemas/customer-onboarding.schema';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
-import { sanitizeUrl } from 'src/utils/utils';
+import { getAccessListForModule, sanitizeUrl } from 'src/utils/utils';
 import { RoleRepository } from 'src/roles/repository/role.repository';
 import { ONBORDING_CONSTANT_DATA } from '../constants/en';
 import { WebpageConfigService } from 'src/webpage-config/services/webpage-config.service';
@@ -44,6 +46,9 @@ import {
   PageType,
 } from 'src/webpage-config/dto/create-webpage-config.dto';
 import getOnboardingRetryNotificationMail from 'src/mail-notification/constants/templates/request-retry-onboarding';
+import { redisClient } from 'src/utils/redis.provider';
+import { TIME } from 'src/utils/time-constant';
+import { TokenModule } from 'src/config/access-matrix';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -241,12 +246,14 @@ export class CustomerOnboardingService {
     tenantUrl: string,
     secret: string,
     whitelistedCors: string[] = ['*'],
+    accessList: string[],
   ) {
     Logger.debug(tenantUrl);
     Logger.log(
       `Inside handleCreditService() to fund credit to the service with tenantUrl ${tenantUrl}`,
       'CustomerOnboardingService',
     );
+    const sessionId = `credit:${serviceInfo.appId}:${Date.now()}`;
     const creditPayload = {
       serviceId: serviceInfo.appId,
       purpose: 'CreditRecharge',
@@ -257,9 +264,21 @@ export class CustomerOnboardingService {
       subdomain: serviceInfo.subdomain,
       grantType,
       whitelistedCors,
+      accessList,
     };
-
-    const creditToken = await this.generateCreditToken(creditPayload, secret);
+    await redisClient.set(
+      sessionId,
+      JSON.stringify(creditPayload),
+      'EX',
+      5 * TIME.MINUTE,
+    );
+    const tokenPayload = {
+      appId: serviceInfo.appId,
+      sessionId,
+      subdomain: serviceInfo.subdomain,
+      grantType,
+    };
+    const creditToken = await this.generateCreditToken(tokenPayload, secret);
     let headers: Record<string, string> = {
       authorization: `Bearer ${creditToken}`,
       'Content-Type': 'application/json',
@@ -333,6 +352,8 @@ export class CustomerOnboardingService {
       let kycSubdomain = customerOnboardingData?.kycSubdomain;
       let ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
       let kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
+      let ssiRedisKey = `${customerOnboardingData?.ssiServiceId}_${Context.idDashboard}`;
+      let kycRedisKey = `${customerOnboardingData?.kycServiceId}_${Context.idDashboard}`;
 
       // Get remaining steps
       const lastStep =
@@ -409,6 +430,7 @@ export class CustomerOnboardingService {
                 'CREATE_SSI_SERVICE step ends',
                 'CustomerOnboardingService',
               );
+              ssiRedisKey = `${ssiService.appId}_${Context.idDashboard}`;
               break;
             }
 
@@ -430,6 +452,7 @@ export class CustomerOnboardingService {
                 ssiTenantUrl,
                 secret,
                 ssiService?.whitelistedCors,
+                [SERVICES.SSI_API.ACCESS_TYPES.WRITE_CREDIT],
               );
               Logger.debug(
                 'CREDIT_SSI_SERVICE step ends',
@@ -448,7 +471,18 @@ export class CustomerOnboardingService {
                   appId: customerOnboardingData.ssiServiceId,
                 });
               }
-
+              const ssiServiceDetail = await redisClient.get(ssiRedisKey);
+              if (!ssiServiceDetail) {
+                await this.appAuthService.storeDataInRedis(
+                  GRANT_TYPES.access_service_ssi,
+                  ssiService,
+                  getAccessListForModule(
+                    TokenModule.DASHBOARD,
+                    SERVICE_TYPES.SSI_API,
+                  ),
+                  ssiRedisKey,
+                );
+              }
               ssiAccessToken = await this.appAuthService.getAccessToken(
                 {
                   appId:
@@ -458,8 +492,7 @@ export class CustomerOnboardingService {
                   subdomain:
                     ssiService?.subdomain ||
                     customerOnboardingData.ssiSubdomain,
-                  sessionId:
-                    ssiService?.appId || customerOnboardingData.ssiServiceId,
+                  sessionId: ssiRedisKey,
                 },
                 4,
               );
@@ -471,6 +504,7 @@ export class CustomerOnboardingService {
                   headers: {
                     authorization: `Bearer ${ssiAccessToken.access_token}`,
                     'Content-Type': 'application/json',
+                    origin: ssiService.whitelistedCors[0],
                   },
                   body: JSON.stringify({ namespace: 'testnet' }),
                 },
@@ -489,6 +523,18 @@ export class CustomerOnboardingService {
                 'REGISTER_DID step started',
                 'CustomerOnboardingService',
               );
+              const ssiServiceDetail = await redisClient.get(ssiRedisKey);
+              if (!ssiServiceDetail) {
+                await this.appAuthService.storeDataInRedis(
+                  GRANT_TYPES.access_service_ssi,
+                  ssiService,
+                  getAccessListForModule(
+                    TokenModule.DASHBOARD,
+                    SERVICE_TYPES.SSI_API,
+                  ),
+                  ssiRedisKey,
+                );
+              }
               ssiAccessToken =
                 ssiAccessToken ||
                 (await this.appAuthService.getAccessToken(
@@ -500,8 +546,7 @@ export class CustomerOnboardingService {
                     subdomain:
                       ssiService?.subdomain ||
                       customerOnboardingData.ssiSubdomain,
-                    sessionId:
-                      ssiService?.appId || customerOnboardingData.ssiServiceId,
+                    sessionId: ssiRedisKey,
                   },
                   4,
                 ));
@@ -520,6 +565,7 @@ export class CustomerOnboardingService {
                     headers: {
                       authorization: `Bearer ${ssiAccessToken.access_token}`,
                       'Content-Type': 'application/json',
+                      origin: ssiService.whitelistedCors[0],
                     },
                   },
                   'Failed to resolve DID',
@@ -583,6 +629,7 @@ export class CustomerOnboardingService {
               onboardingUpdateData.kycSubdomain = kycService.subdomain;
               onboardingUpdateData.kycServiceId = kycService.appId;
               kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
+              kycRedisKey = `${kycService?.appId}_${Context.idDashboard}`;
               Logger.debug(
                 'CREATE_KYC_SERVICE step ends',
                 'CustomerOnboardingService',
@@ -642,6 +689,7 @@ export class CustomerOnboardingService {
                 kycTenantUrl,
                 secret,
                 kycService?.whitelistedCors,
+                [SERVICES.CAVACH_API.ACCESS_TYPES.WRITE_CREDIT],
               );
               Logger.debug(
                 'CREDIT_KYC_SERVICE step ends',
@@ -659,6 +707,18 @@ export class CustomerOnboardingService {
                   appId: customerOnboardingData.kycServiceId,
                 });
               }
+              const kycServiceDetail = await redisClient.get(kycRedisKey);
+              if (!kycServiceDetail) {
+                await this.appAuthService.storeDataInRedis(
+                  GRANT_TYPES.access_service_kyc,
+                  kycService,
+                  getAccessListForModule(
+                    TokenModule.DASHBOARD,
+                    SERVICE_TYPES.CAVACH_API,
+                  ),
+                  kycRedisKey,
+                );
+              }
               kycAccessToken = await this.appAuthService.getAccessToken(
                 {
                   appId:
@@ -668,8 +728,7 @@ export class CustomerOnboardingService {
                   subdomain:
                     kycService?.subdomain ||
                     customerOnboardingData.kycSubdomain,
-                  sessionId:
-                    kycService?.appId || customerOnboardingData.kycServiceId,
+                  sessionId: kycRedisKey,
                 },
                 4,
               );
@@ -710,7 +769,7 @@ export class CustomerOnboardingService {
                   headers: {
                     'x-kyc-access-token': kycAccessToken.access_token,
                     'Content-Type': 'application/json',
-                    origin: '*',
+                    origin: kycService.whitelistedCors[0],
                   },
                   body: JSON.stringify(requestBody),
                 },

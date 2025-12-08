@@ -20,7 +20,7 @@ import { WebPageConfigRepository } from '../repositories/webpage-config.reposito
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { ConfigService } from '@nestjs/config';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
-import { Types } from 'mongoose';
+import { isValidObjectId, Types } from 'mongoose';
 import { WEBPAGE_CONFIG_ERRORS } from '../constant/en';
 import { redisClient } from 'src/utils/redis.provider';
 import { TOKEN } from 'src/utils/time-constant';
@@ -146,10 +146,15 @@ export class WebpageConfigService {
   async fetchAWebPageConfigurationDetail(
     id: string,
   ): Promise<CreateWebpageConfigDto> {
+    const isValidId = isValidObjectId(id);
+    const query: any = {
+      $or: [{ serviceId: id }]
+    };
+    if (isValidId) {
+      query.$or.push({ _id: new Types.ObjectId(id) });
+    }
     const webpageConfiguration =
-      await this.webPageConfigRepo.findAWebpageConfig({
-        _id: new Types.ObjectId(id),
-      });
+      await this.webPageConfigRepo.findAWebpageConfig(query);
     if (!webpageConfiguration || webpageConfiguration == null) {
       throw new NotFoundException([
         `No webpage configuration found for id: ${id}`,

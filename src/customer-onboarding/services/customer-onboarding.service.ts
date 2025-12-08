@@ -728,9 +728,6 @@ export class CustomerOnboardingService {
                 'CustomerOnboardingService',
               );
 
-              const user = await this.userRepository.findOne({
-                userId: userId,
-              });
               const serviceId =
                 kycService?.appId || customerOnboardingData.kycServiceId;
               await this.webPageConfig.storeWebPageConfigDetial(serviceId, {

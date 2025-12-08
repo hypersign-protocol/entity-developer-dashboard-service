@@ -25,6 +25,7 @@ import { WEBPAGE_CONFIG_ERRORS } from '../constant/en';
 import { redisClient } from 'src/utils/redis.provider';
 import { TOKEN } from 'src/utils/time-constant';
 import { getAccessListForModule, REDIS_KEYS } from 'src/utils/utils';
+import { TokenModule } from 'src/config/access-matrix';
 
 @Injectable()
 export class WebpageConfigService {

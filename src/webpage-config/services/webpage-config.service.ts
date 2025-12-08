@@ -322,7 +322,7 @@ export class WebpageConfigService {
           appName: ssiServiceDetail.appName,
           grantType: GRANT_TYPES.access_service_ssi,
           sessionId: ssiServiceId,
-          subdomain: ssiServiceDetail.subdomain
+          subdomain: ssiServiceDetail.subdomain,
         },
         0.5,
       ),
@@ -332,6 +332,7 @@ export class WebpageConfigService {
           appName: kycServiceDetail.appName,
           grantType: GRANT_TYPES.access_service_kyc,
           sessionId: appId,
+          subdomain: kycServiceDetail.subdomain,
         },
         0.5,
       ),

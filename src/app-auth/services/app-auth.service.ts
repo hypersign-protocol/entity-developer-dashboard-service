@@ -64,7 +64,7 @@ export class AppAuthService {
     @InjectModel(CustomerOnboarding.name)
     private readonly onboardModel: Model<CustomerOnboarding>,
     private readonly webpageConfigRepo: WebPageConfigRepository,
-  ) {}
+  ) { }
 
   async createAnApp(
     createAppDto: CreateAppDto,
@@ -544,7 +544,49 @@ export class AppAuthService {
       { appId, userId },
       updataAppDto,
     );
-    return this.getAppResponse(app);
+    const updatedapp = await this.getAppResponse(app);
+    // update redis
+
+    const baseKey = appId;
+    const dashboardRedisKey = `${appId}_${Context.idDashboard}`;
+
+    const updatedFields = {
+      whitelistedCors: updatedapp.whitelistedCors,
+      env: updatedapp.env ?? APP_ENVIRONMENT.dev,
+      appName: updatedapp.appName,
+    };
+
+    const [baseDataString, dashboardDataString] = await Promise.all([
+      redisClient.get(baseKey),
+      redisClient.get(dashboardRedisKey),
+    ]);
+
+    const updatePromises = [];
+
+    if (baseDataString) {
+      const baseData = JSON.parse(baseDataString);
+      const updatedBase = { ...baseData, ...updatedFields };
+      updatePromises.push(
+        redisClient.set(baseKey, JSON.stringify(updatedBase), 'KEEPTTL'),
+      );
+    }
+
+    if (dashboardDataString) {
+      const dashboardData = JSON.parse(dashboardDataString);
+      const updatedDashboard = { ...dashboardData, ...updatedFields };
+      updatePromises.push(
+        redisClient.set(
+          dashboardRedisKey,
+          JSON.stringify(updatedDashboard),
+          'KEEPTTL',
+        ),
+      );
+    }
+
+    if (updatePromises.length > 0) {
+      await Promise.all(updatePromises);
+    }
+    return updatedapp;
   }
 
   async deleteApp(appId: string, userId: string): Promise<DeleteAppResponse> {
@@ -622,6 +664,12 @@ export class AppAuthService {
     }
     this.authzCreditRepository.deleteAuthzDetail({ appId });
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });
+    // delete from redis
+    await Promise.all([
+      redisClient.del(appId),
+      redisClient.del(`${appId}_${Context.idDashboard}`),
+    ]);
+    Logger.debug(`Redis cache cleaned for appId: ${appId}`);
     return { appId: appDetail.appId };
   }
 

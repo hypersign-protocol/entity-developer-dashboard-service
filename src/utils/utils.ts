@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { Did } from 'hs-ssi-sdk';
 import {
+  Context,
   SERVICE_TYPES,
   SERVICES,
 } from 'src/supported-service/services/iServiceList';
@@ -191,3 +192,38 @@ export function getAccessListForModule(
       return QUEST_ACCESS_MATRIX[module] || [];
   }
 }
+export const evaluateAccessPolicy = (
+  defaultAccessList: string[],
+  serviceType: SERVICE_TYPES,
+  userAccessList?: {
+    serviceType: SERVICE_TYPES;
+    access: string;
+    expiryDate?: Date;
+  }[],
+  context?: string,
+): string[] => {
+  if (!context) {
+    return defaultAccessList;
+  }
+  // will remove it once access lsit in fixed in ssi service
+  if (serviceType !== SERVICE_TYPES.CAVACH_API) {
+    return defaultAccessList;
+  }
+  if (context === Context.idDashboard) {
+    // No user access info → Return NO access
+    if (!userAccessList?.length) {
+      return [];
+    }
+    const userServiceAccess = userAccessList
+      .filter((a) => a.serviceType === serviceType)
+      .map((a) => a.access);
+
+    // User With ALL access
+    if (userServiceAccess.includes('ALL')) {
+      return defaultAccessList;
+    }
+    // Intersection rule
+    return defaultAccessList.filter((p) => userServiceAccess.includes(p));
+  }
+  return defaultAccessList;
+};

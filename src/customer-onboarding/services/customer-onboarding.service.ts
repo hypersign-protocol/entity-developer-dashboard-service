@@ -37,7 +37,11 @@ import {
   LogDetail,
 } from '../schemas/customer-onboarding.schema';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
-import { getAccessListForModule, sanitizeUrl } from 'src/utils/utils';
+import {
+  evaluateAccessPolicy,
+  getAccessListForModule,
+  sanitizeUrl,
+} from 'src/utils/utils';
 import { RoleRepository } from 'src/roles/repository/role.repository';
 import { ONBORDING_CONSTANT_DATA } from '../constants/en';
 import { WebpageConfigService } from 'src/webpage-config/services/webpage-config.service';
@@ -316,6 +320,7 @@ export class CustomerOnboardingService {
   async processCustomerOnboarding(
     id: string,
     customerOnboardingProcessDto: CustomerOnboardingProcessDto,
+    user,
   ) {
     const onboardingLogs: LogDetail[] = [];
     const onboardingUpdateData: Partial<CustomerOnboarding> = {};
@@ -472,14 +477,21 @@ export class CustomerOnboardingService {
                 });
               }
               const ssiServiceDetail = await redisClient.get(ssiRedisKey);
+              const defaultAccessList = getAccessListForModule(
+                TokenModule.DASHBOARD,
+                SERVICE_TYPES.SSI_API,
+              );
+              const accessList = evaluateAccessPolicy(
+                defaultAccessList,
+                SERVICE_TYPES.SSI_API,
+                user.accessList,
+                Context.idDashboard,
+              );
               if (!ssiServiceDetail) {
                 await this.appAuthService.storeDataInRedis(
                   GRANT_TYPES.access_service_ssi,
                   ssiService,
-                  getAccessListForModule(
-                    TokenModule.DASHBOARD,
-                    SERVICE_TYPES.SSI_API,
-                  ),
+                  accessList,
                   ssiRedisKey,
                 );
               }
@@ -524,14 +536,21 @@ export class CustomerOnboardingService {
                 'CustomerOnboardingService',
               );
               const ssiServiceDetail = await redisClient.get(ssiRedisKey);
+              const defaultAccessList = getAccessListForModule(
+                TokenModule.DASHBOARD,
+                SERVICE_TYPES.SSI_API,
+              );
+              const accessList = evaluateAccessPolicy(
+                defaultAccessList,
+                SERVICE_TYPES.SSI_API,
+                user.accessList,
+                Context.idDashboard,
+              );
               if (!ssiServiceDetail) {
                 await this.appAuthService.storeDataInRedis(
                   GRANT_TYPES.access_service_ssi,
                   ssiService,
-                  getAccessListForModule(
-                    TokenModule.DASHBOARD,
-                    SERVICE_TYPES.SSI_API,
-                  ),
+                  accessList,
                   ssiRedisKey,
                 );
               }
@@ -707,15 +726,22 @@ export class CustomerOnboardingService {
                   appId: customerOnboardingData.kycServiceId,
                 });
               }
+              const defaultAccessList = getAccessListForModule(
+                TokenModule.DASHBOARD,
+                SERVICE_TYPES.CAVACH_API,
+              );
+              const accessList = evaluateAccessPolicy(
+                defaultAccessList,
+                SERVICE_TYPES.CAVACH_API,
+                user.accessList,
+                Context.idDashboard,
+              );
               const kycServiceDetail = await redisClient.get(kycRedisKey);
               if (!kycServiceDetail) {
                 await this.appAuthService.storeDataInRedis(
                   GRANT_TYPES.access_service_kyc,
                   kycService,
-                  getAccessListForModule(
-                    TokenModule.DASHBOARD,
-                    SERVICE_TYPES.CAVACH_API,
-                  ),
+                  accessList,
                   kycRedisKey,
                 );
               }

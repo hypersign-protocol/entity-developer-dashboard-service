@@ -34,7 +34,7 @@ import { WebPageConfigRepository } from 'src/webpage-config/repositories/webpage
 import { InjectModel } from '@nestjs/mongoose';
 import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
 import { Model } from 'mongoose';
-import { getAccessListForModule } from 'src/utils/utils';
+import { evaluateAccessPolicy, getAccessListForModule } from 'src/utils/utils';
 import { TokenModule } from 'src/config/access-matrix';
 import { redisClient } from 'src/utils/redis.provider';
 import { TIME } from 'src/utils/time-constant';
@@ -64,7 +64,7 @@ export class AppAuthService {
     @InjectModel(CustomerOnboarding.name)
     private readonly onboardModel: Model<CustomerOnboarding>,
     private readonly webpageConfigRepo: WebPageConfigRepository,
-  ) { }
+  ) {}
 
   async createAnApp(
     createAppDto: CreateAppDto,
@@ -749,9 +749,14 @@ export class AppAuthService {
     switch (serviceType) {
       case SERVICE_TYPES.SSI_API: {
         grant_type = GRANT_TYPES.access_service_ssi;
-        accessList = getAccessListForModule(
+        const defaultAccessList = getAccessListForModule(
           TokenModule.APP_AUTH,
           SERVICE_TYPES.SSI_API,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.SSI_API,
+          [],
         );
         break;
       }
@@ -766,17 +771,28 @@ export class AppAuthService {
           ]);
         }
         grant_type = grantType || GRANT_TYPES.access_service_kyc;
-        accessList = getAccessListForModule(
+        const defaultAccessList = getAccessListForModule(
           TokenModule.APP_AUTH,
           SERVICE_TYPES.CAVACH_API,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.CAVACH_API,
+          [],
+
         );
         break;
       }
       case SERVICE_TYPES.QUEST: {
         grant_type = GRANT_TYPES.access_service_quest;
-        accessList = getAccessListForModule(
+        const defaultAccessList = getAccessListForModule(
           TokenModule.APP_AUTH,
           SERVICE_TYPES.QUEST,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.QUEST,
+          [],
         );
         break;
       }
@@ -853,9 +869,13 @@ export class AppAuthService {
     grantType: string,
     appId: string,
     user,
+    session?,
   ): Promise<{ access_token; expiresIn; tokenType }> {
     const context = Context.idDashboard;
-    const sessionId = `${appId}_${context}`;
+    let sessionId = `${appId}_${context}_${session.userId}`;
+    if (session && session.tenantId) {
+      sessionId = `${sessionId}_tenant`;
+    }
     const savedSession = await redisClient.get(sessionId);
     switch (grantType) {
       case GRANT_TYPES.access_service_ssi:
@@ -909,9 +929,15 @@ export class AppAuthService {
             'Invalid grant type for this service ' + appId,
           ]);
         }
-        accessList = getAccessListForModule(
+        const defaultAccessList = getAccessListForModule(
           TokenModule.DASHBOARD,
           SERVICE_TYPES.SSI_API,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.SSI_API,
+          user.accessList,
+          context,
         );
         break;
       }
@@ -924,9 +950,15 @@ export class AppAuthService {
             'Invalid grant type for this service ' + appId,
           ]);
         }
-        accessList = getAccessListForModule(
+        const defaultAccessList = getAccessListForModule(
           TokenModule.DASHBOARD,
           SERVICE_TYPES.CAVACH_API,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.CAVACH_API,
+          user.accessList,
+          context,
         );
         break;
       }
@@ -936,9 +968,15 @@ export class AppAuthService {
             'Invalid grant type for this service ' + appId,
           ]);
         }
-        accessList = getAccessListForModule(
+        const defaultAccessList = getAccessListForModule(
           TokenModule.DASHBOARD,
           SERVICE_TYPES.QUEST,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.QUEST,
+          user.accessList,
+          context,
         );
         break;
       }

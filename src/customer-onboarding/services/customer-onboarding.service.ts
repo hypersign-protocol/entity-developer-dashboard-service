@@ -662,23 +662,22 @@ export class CustomerOnboardingService {
                 'CustomerOnboardingService',
               );
               await this.userRepository.findOneUpdate(
-                {
-                  userId,
-                  accessList: {
-                    $not: {
-                      $elemMatch: {
-                        serviceType: 'CAVACH_API',
-                        access: 'ALL',
-                      },
-                    },
-                  },
-                },
+                { userId },
                 {
                   $push: {
                     accessList: {
-                      serviceType: 'CAVACH_API',
-                      access: 'ALL',
-                      expiryDate: null,
+                      $each: [
+                        {
+                          serviceType: SERVICE_TYPES.CAVACH_API,
+                          access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
+                          expiryDate: null,
+                        },
+                        {
+                          serviceType: SERVICE_TYPES.SSI_API,
+                          access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
+                          expiryDate: null,
+                        },
+                      ],
                     },
                   },
                 },

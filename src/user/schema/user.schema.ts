@@ -38,9 +38,9 @@ export class User {
   name?: string;
   @Prop({ required: false })
   profileIcon?: string;
-  @Prop({ required: false })
+  @Prop({ required: false, default: [] })
   @Optional()
-  accessList: Array<UserAccess>;
+  accessList?: Array<UserAccess>;
   @Prop({ default: [] })
   authenticators?: Authenticator[];
   @Prop({

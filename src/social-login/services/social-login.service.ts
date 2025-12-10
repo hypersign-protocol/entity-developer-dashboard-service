@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
 import { Providers } from '../strategy/social.strategy';
-import { sanitizeUrl } from 'src/utils/utils';
+import { generateHash, sanitizeUrl } from 'src/utils/utils';
 import { SupportedServiceList } from 'src/supported-service/services/service-list';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { authenticator } from 'otplib';
@@ -334,7 +334,7 @@ export class SocialLoginService {
     isMfaRequired: boolean;
     refreshVersion: number;
   }> {
-    const sessionId = `${Date.now()}-${uuidv4()}`;
+    const sessionId = generateHash(`${Date.now()}-${uuidv4()}`);
     const role = user?.role || UserRole.ADMIN;
     const activeAuthenticators =
       user.authenticators?.filter(

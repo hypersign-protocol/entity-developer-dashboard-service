@@ -39,6 +39,7 @@ import {
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
 import {
   evaluateAccessPolicy,
+  generateHash,
   getAccessListForModule,
   sanitizeUrl,
 } from 'src/utils/utils';
@@ -257,7 +258,7 @@ export class CustomerOnboardingService {
       `Inside handleCreditService() to fund credit to the service with tenantUrl ${tenantUrl}`,
       'CustomerOnboardingService',
     );
-    const sessionId = `credit:${serviceInfo.appId}:${Date.now()}`;
+    const sessionId = generateHash(`credit:${serviceInfo.appId}:${Date.now()}`);
     const creditPayload = {
       serviceId: serviceInfo.appId,
       purpose: 'CreditRecharge',
@@ -354,8 +355,12 @@ export class CustomerOnboardingService {
       let kycSubdomain = customerOnboardingData?.kycSubdomain;
       let ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
       let kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
-      let ssiRedisKey = `${customerOnboardingData?.ssiServiceId}_${Context.idDashboard}`;
-      let kycRedisKey = `${customerOnboardingData?.kycServiceId}_${Context.idDashboard}`;
+      let ssiRedisKey = generateHash(
+        `${customerOnboardingData?.ssiServiceId}_${Context.idDashboard}`,
+      );
+      let kycRedisKey = generateHash(
+        `${customerOnboardingData?.kycServiceId}_${Context.idDashboard}`,
+      );
 
       // Get remaining steps
       const lastStep =
@@ -465,7 +470,9 @@ export class CustomerOnboardingService {
                 'CREATE_SSI_SERVICE step ends',
                 'CustomerOnboardingService',
               );
-              ssiRedisKey = `${ssiService.appId}_${Context.idDashboard}`;
+              ssiRedisKey = generateHash(
+                `${ssiService.appId}_${Context.idDashboard}`,
+              );
               break;
             }
 
@@ -681,7 +688,9 @@ export class CustomerOnboardingService {
               onboardingUpdateData.kycSubdomain = kycService.subdomain;
               onboardingUpdateData.kycServiceId = kycService.appId;
               kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
-              kycRedisKey = `${kycService?.appId}_${Context.idDashboard}`;
+              kycRedisKey = generateHash(
+                `${kycService?.appId}_${Context.idDashboard}`,
+              );
               Logger.debug(
                 'CREATE_KYC_SERVICE step ends',
                 'CustomerOnboardingService',

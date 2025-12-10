@@ -26,6 +26,7 @@ import { redisClient } from 'src/utils/redis.provider';
 import { TOKEN } from 'src/utils/time-constant';
 import {
   evaluateAccessPolicy,
+  generateHash,
   getAccessListForModule,
   REDIS_KEYS,
 } from 'src/utils/utils';
@@ -265,7 +266,7 @@ export class WebpageConfigService {
     return { expiryDate };
   }
   public async generateWebpageConfigTokens(id, appId) {
-    const redisKey = `${REDIS_KEYS.VERIFIER_PAGE_TOKEN}${id}`;
+    const redisKey = generateHash(`${REDIS_KEYS.VERIFIER_PAGE_TOKEN}${id}`);
     const cachedData = await redisClient.get(redisKey);
     if (cachedData) return JSON.parse(cachedData);
     const verifierConfig = await this.webPageConfigRepo.findAWebpageConfig({
@@ -340,7 +341,7 @@ export class WebpageConfigService {
     grantType: GRANT_TYPES,
     tokenModule,
   ) {
-    const cached = await redisClient.get(appId);
+    const cached = await redisClient.get(generateHash(appId));
     if (cached) return JSON.parse(cached);
     const serviceDetail = await this.appRepository.findOne({ appId });
     if (!serviceDetail) {

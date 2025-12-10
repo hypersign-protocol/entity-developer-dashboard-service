@@ -854,8 +854,7 @@ export class AppAuthService {
     appId: string,
     user,
   ): Promise<{ access_token; expiresIn; tokenType }> {
-    const context = Context.idDashboard;
-    const sessionId = `${appId}_${context}`;
+    const sessionId = `${appId}_${Context.idDashboard}`;
     const savedSession = await redisClient.get(sessionId);
     switch (grantType) {
       case GRANT_TYPES.access_service_ssi:

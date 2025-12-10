@@ -34,7 +34,11 @@ import { WebPageConfigRepository } from 'src/webpage-config/repositories/webpage
 import { InjectModel } from '@nestjs/mongoose';
 import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
 import { Model } from 'mongoose';
-import { evaluateAccessPolicy, getAccessListForModule } from 'src/utils/utils';
+import {
+  evaluateAccessPolicy,
+  generateHash,
+  getAccessListForModule,
+} from 'src/utils/utils';
 import { TokenModule } from 'src/config/access-matrix';
 import { redisClient } from 'src/utils/redis.provider';
 import { TIME } from 'src/utils/time-constant';
@@ -546,10 +550,8 @@ export class AppAuthService {
     );
     const updatedapp = await this.getAppResponse(app);
     // update redis
-
-    const baseKey = appId;
-    const dashboardRedisKey = `${appId}_${Context.idDashboard}`;
-
+    const baseKey = generateHash(appId);
+    const dashboardRedisKey = generateHash(`${appId}_${Context.idDashboard}`);
     const updatedFields = {
       whitelistedCors: updatedapp.whitelistedCors,
       env: updatedapp.env ?? APP_ENVIRONMENT.dev,
@@ -732,7 +734,7 @@ export class AppAuthService {
     const serviceType = appDetail.services[0]?.id; // TODO: remove this later
     let grant_type = '';
     let accessList = [];
-    const redisKey = appDetail.appId;
+    const redisKey = generateHash(appDetail.appId);
     const savedSession = await redisClient.get(redisKey);
     if (savedSession) {
       Logger.log('Using redis cached session', 'AppAuthService');

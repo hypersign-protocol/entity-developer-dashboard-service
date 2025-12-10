@@ -25,7 +25,7 @@ import {
   SSI_ACCESS_MATRIX,
   TokenModule,
 } from 'src/config/access-matrix';
-
+import { createHash } from 'crypto';
 export const existDir = (dirPath) => {
   if (!dirPath) throw new Error('Directory path undefined');
   return fs.existsSync(dirPath);
@@ -224,3 +224,7 @@ export const evaluateAccessPolicy = (
   }
   return defaultAccessList;
 };
+
+export function generateHash(input: string): string {
+  return createHash('sha256').update(input).digest('hex');
+}

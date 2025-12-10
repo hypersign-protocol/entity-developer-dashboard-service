@@ -43,7 +43,7 @@ import {
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { UserRole } from 'src/user/schema/user.schema';
 import { ERROR_MESSAGE, ERROR_MESSAGE as MFA_MESSAGE } from '../constants/en';
-import { TOKEN } from 'src/utils/time-constant';
+import { COOKIE_CONFIG as TOKEN } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller('api/v1')

@@ -6,7 +6,6 @@ export const TIME = {
   WEEK: 7 * 24 * 60 * 60 * 1,
 };
 
-
 export const TOKEN = {
   AUTH: {
     name: 'accessToken',

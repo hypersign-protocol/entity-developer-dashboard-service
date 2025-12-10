@@ -64,7 +64,7 @@ export class AppAuthService {
     @InjectModel(CustomerOnboarding.name)
     private readonly onboardModel: Model<CustomerOnboarding>,
     private readonly webpageConfigRepo: WebPageConfigRepository,
-  ) { }
+  ) {}
 
   async createAnApp(
     createAppDto: CreateAppDto,
@@ -811,7 +811,7 @@ export class AppAuthService {
       expiresIn: `${time}${unit}`,
       secret,
     });
-    const expiresIn = getSecondsFromUnit(time, unit)
+    const expiresIn = getSecondsFromUnit(time, unit);
     Logger.log('generateAccessToken() method: ends....', 'AppAuthService');
 
     return { access_token: token, expiresIn, tokenType: 'Bearer' };

@@ -23,6 +23,7 @@ import {
   KYC_ACCESS_MATRIX,
   QUEST_ACCESS_MATRIX,
   SSI_ACCESS_MATRIX,
+  TokenModule,
 } from 'src/config/access-matrix';
 
 export const existDir = (dirPath) => {
@@ -180,7 +181,7 @@ export const REDIS_KEYS = {
   VERIFIER_PAGE_TOKEN: 'verifierPageToken:',
 };
 export function getAccessListForModule(
-  module: 'DASHBOARD' | 'VERIFIER' | 'APP_AUTH',
+  module: TokenModule,
   serviceType: SERVICE_TYPES,
 ) {
   switch (serviceType) {
@@ -203,10 +204,6 @@ export const evaluateAccessPolicy = (
   context?: string,
 ): string[] => {
   if (!context) {
-    return defaultAccessList;
-  }
-  // will remove it once access lsit in fixed in ssi service
-  if (serviceType !== SERVICE_TYPES.CAVACH_API) {
     return defaultAccessList;
   }
   if (context === Context.idDashboard) {

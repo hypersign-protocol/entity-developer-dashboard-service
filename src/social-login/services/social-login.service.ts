@@ -74,18 +74,11 @@ export class SocialLoginService {
     });
     if (!user) {
       const userId = `${Date.now()}-${uuidv4()}`;
-      const ssiAccessList = this.supportedServiceList.getDefaultServicesAccess(
-        SERVICE_TYPES.SSI_API,
-      );
-      const kycAccessList = this.supportedServiceList.getDefaultServicesAccess(
-        SERVICE_TYPES.CAVACH_API,
-      );
       user = await this.userRepository.create({
         email,
         userId,
         name,
         profileIcon,
-        accessList: [...ssiAccessList, ...kycAccessList],
       });
     }
     const updates: Partial<UserDocument> = {};

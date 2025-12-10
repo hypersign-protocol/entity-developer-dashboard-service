@@ -23,7 +23,7 @@ import {
 } from '../dto/request.dto';
 import { UserDocument, UserRole } from 'src/user/schema/user.schema';
 import { redisClient } from 'src/utils/redis.provider';
-import { TIME } from 'src/utils/time-constant';
+import { COOKIE_CONFIG, EXPIRY_CONFIG, TIME } from 'src/utils/time-constant';
 import { MFA_ERROR, ERROR_MESSAGE, REFRESH_TOKEN_ERROR } from '../constants/en';
 
 @Injectable()
@@ -193,7 +193,7 @@ export class SocialLoginService {
         sessionKey,
         JSON.stringify(sessionDetail),
         'EX',
-        TIME.WEEK,
+        EXPIRY_CONFIG.LOGIN.redisExpiryTime,
       );
       return { isVerified: false };
     }
@@ -437,14 +437,14 @@ export class SocialLoginService {
         sessionKey,
         JSON.stringify(sessionObj),
         'EX',
-        TIME.WEEK,
+        COOKIE_CONFIG.AUTH.redisExpiryTime,
       );
       const newRefreshToken = uuidv4();
       await redisClient.set(
         `refresh:${newRefreshToken}`,
         session.sid,
         'EX',
-        TIME.WEEK,
+        COOKIE_CONFIG.REFRESH.redisExpiryTime,
       );
       return {
         isVerified,

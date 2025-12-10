@@ -51,7 +51,7 @@ import {
 } from 'src/webpage-config/dto/create-webpage-config.dto';
 import getOnboardingRetryNotificationMail from 'src/mail-notification/constants/templates/request-retry-onboarding';
 import { redisClient } from 'src/utils/redis.provider';
-import { TIME } from 'src/utils/time-constant';
+import { EXPIRY_CONFIG, TIME } from 'src/utils/time-constant';
 import { TokenModule } from 'src/config/access-matrix';
 
 @Injectable()
@@ -230,8 +230,10 @@ export class CustomerOnboardingService {
     payload: any,
     secret: string,
   ): Promise<string> {
+    const config = EXPIRY_CONFIG.CREDIT_TOKEN;
+    const expiresIn = `${config.jwtTime}${config.jwtUnit}`; // e.g. "5m"
     Logger.log('inside generateCreditToken method', 'generateCreditToken');
-    return this.jwt.signAsync(payload, { expiresIn: '5m', secret });
+    return this.jwt.signAsync(payload, { expiresIn, secret });
   }
 
   /**
@@ -274,7 +276,7 @@ export class CustomerOnboardingService {
       sessionId,
       JSON.stringify(creditPayload),
       'EX',
-      5 * TIME.MINUTE,
+      EXPIRY_CONFIG.CREDIT_TOKEN.redisExpiryTime,
     );
     const tokenPayload = {
       appId: serviceInfo.appId,
@@ -539,7 +541,8 @@ export class CustomerOnboardingService {
                     customerOnboardingData.ssiSubdomain,
                   sessionId: ssiRedisKey,
                 },
-                4,
+                EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
+                EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
               );
 
               const didData = await this.makeExternalRequest(
@@ -600,7 +603,8 @@ export class CustomerOnboardingService {
                       customerOnboardingData.ssiSubdomain,
                     sessionId: ssiRedisKey,
                   },
-                  4,
+                  EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
+                  EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
                 ));
 
               const didToRegister =
@@ -757,7 +761,8 @@ export class CustomerOnboardingService {
                     customerOnboardingData.kycSubdomain,
                   sessionId: kycRedisKey,
                 },
-                4,
+                EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
+                EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
               );
               const requestBody = {
                 faceRecog: true,

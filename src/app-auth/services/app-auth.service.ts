@@ -37,7 +37,11 @@ import { Model } from 'mongoose';
 import { evaluateAccessPolicy, getAccessListForModule } from 'src/utils/utils';
 import { TokenModule } from 'src/config/access-matrix';
 import { redisClient } from 'src/utils/redis.provider';
-import { TIME } from 'src/utils/time-constant';
+import {
+  EXPIRY_CONFIG,
+  getSecondsFromUnit,
+  TIME_UNIT,
+} from 'src/utils/time-constant';
 
 export enum GRANT_TYPES {
   access_service_kyc = 'access_service_kyc',
@@ -396,9 +400,8 @@ export class AppAuthService {
   }
 
   private async verifyDNS01(domain: URL, txt: string) {
-    const resolveDNSURL = `https://dns.google/resolve?name=${
-      new URL(domain).host
-    }&type=TXT`;
+    const resolveDNSURL = `https://dns.google/resolve?name=${new URL(domain).host
+      }&type=TXT`;
     const actuaTxt = txt;
     const res = await fetch(resolveDNSURL, {
       headers: {
@@ -438,7 +441,7 @@ export class AppAuthService {
     if (fetchedTxtRecord && fetchedTxtRecord.error) {
       throw new BadRequestException([
         fetchedTxtRecord.error?.message +
-          '. If you have already added then it may take a while to complete. Please try again in sometime.',
+        '. If you have already added then it may take a while to complete. Please try again in sometime.',
       ]);
     }
     if (fetchedTxtRecord.verified) {
@@ -816,13 +819,17 @@ export class AppAuthService {
     return this.getAccessToken(jwtPayload, expiresin);
   }
 
-  public async getAccessToken(data, expiresin = 4) {
+  public async getAccessToken(
+    data,
+    time = 4,
+    unit: TIME_UNIT = TIME_UNIT.HOUR,
+  ) {
     const secret = this.config.get('JWT_SECRET');
     const token = await this.jwt.signAsync(data, {
-      expiresIn: expiresin.toString() + 'h',
+      expiresIn: `${time}${unit}`,
       secret,
     });
-    const expiresIn = (expiresin * 1 * 60 * 60 * 1000) / 1000;
+    const expiresIn = getSecondsFromUnit(time, unit);
     Logger.log('generateAccessToken() method: ends....', 'AppAuthService');
 
     return { access_token: token, expiresIn, tokenType: 'Bearer' };
@@ -860,8 +867,13 @@ export class AppAuthService {
     ) {
       payload['dependentServices'] = appDetail.dependentServices;
     }
-    Logger.log('generateAccessToken() method: ends....', 'AppAuthService');
-    redisClient.set(sessionId, JSON.stringify(payload), 'EX', TIME.WEEK);
+    Logger.log('storeDataInRedis() method: ends....', 'AppAuthService');
+    redisClient.set(
+      sessionId,
+      JSON.stringify(payload),
+      'EX',
+      EXPIRY_CONFIG.SERVICE_ACCESS.redisExpiryTime,
+    );
   }
 
   async grantPermission(
@@ -888,9 +900,9 @@ export class AppAuthService {
       default: {
         throw new BadRequestException([
           'Grant type not supported, supported grant types are: ' +
-            GRANT_TYPES.access_service_kyc +
-            ',' +
-            GRANT_TYPES.access_service_ssi,
+          GRANT_TYPES.access_service_kyc +
+          ',' +
+          GRANT_TYPES.access_service_ssi,
         ]);
       }
     }
@@ -904,7 +916,11 @@ export class AppAuthService {
         subdomain: app.subdomain,
         sessionId,
       };
-      return this.getAccessToken(dataToStore, 12);
+      return this.getAccessToken(
+        dataToStore,
+        EXPIRY_CONFIG.SERVICE_ACCESS.jwtTime,
+        EXPIRY_CONFIG.SERVICE_ACCESS.jwtUnit,
+      );
     }
     const app = await this.getAppById(appId, user.userId);
     if (!app) {
@@ -996,6 +1012,10 @@ export class AppAuthService {
       sessionId,
     };
     await this.storeDataInRedis(grantType, app, accessList, sessionId);
-    return this.getAccessToken(tokenPayload, 12);
+    return this.getAccessToken(
+      tokenPayload,
+      EXPIRY_CONFIG.SERVICE_ACCESS.jwtTime,
+      EXPIRY_CONFIG.SERVICE_ACCESS.jwtUnit,
+    );
   }
 }

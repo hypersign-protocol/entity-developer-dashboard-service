@@ -27,3 +27,13 @@ export enum JobNames {
   SEND_EMAIL_LOGIN_OTP = 'send-email-login-otp',
   SEND_TEAM_MATE_INVITATION_MAIL = 'sendTeamMatemail',
 }
+
+export enum TIME_UNIT {
+  SECOND = 's',
+  MINUTE = 'm',
+  HOUR = 'h',
+  DAY = 'd',
+}
+export const getSecondsFromUnit = (time: number, unit: TIME_UNIT) => {
+  return time * TIME[unit.toUpperCase()];
+};

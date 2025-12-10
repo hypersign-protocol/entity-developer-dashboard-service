@@ -109,7 +109,6 @@ export class CustomerOnboardingController {
     return this.customerOnboardingService.processCustomerOnboarding(
       id,
       customerOnboardingProcessDto,
-      req['user'],
     );
   }
 }

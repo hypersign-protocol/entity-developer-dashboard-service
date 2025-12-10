@@ -320,7 +320,6 @@ export class CustomerOnboardingService {
   async processCustomerOnboarding(
     id: string,
     customerOnboardingProcessDto: CustomerOnboardingProcessDto,
-    user,
   ) {
     const onboardingLogs: LogDetail[] = [];
     const onboardingUpdateData: Partial<CustomerOnboarding> = {};
@@ -374,6 +373,7 @@ export class CustomerOnboardingService {
         throw new BadRequestException(['Customer onboarding is already done']);
       }
       let onboardingStatus;
+      const userDetail = await this.userRepository.findOne({ userId });
       // Process each step
       for (const step of remainingSteps) {
         try {
@@ -484,7 +484,7 @@ export class CustomerOnboardingService {
               const accessList = evaluateAccessPolicy(
                 defaultAccessList,
                 SERVICE_TYPES.SSI_API,
-                user.accessList,
+                userDetail.accessList,
                 Context.idDashboard,
               );
               if (!ssiServiceDetail) {
@@ -543,7 +543,7 @@ export class CustomerOnboardingService {
               const accessList = evaluateAccessPolicy(
                 defaultAccessList,
                 SERVICE_TYPES.SSI_API,
-                user.accessList,
+                userDetail.accessList,
                 Context.idDashboard,
               );
               if (!ssiServiceDetail) {
@@ -733,7 +733,7 @@ export class CustomerOnboardingService {
               const accessList = evaluateAccessPolicy(
                 defaultAccessList,
                 SERVICE_TYPES.CAVACH_API,
-                user.accessList,
+                userDetail.accessList,
                 Context.idDashboard,
               );
               const kycServiceDetail = await redisClient.get(kycRedisKey);

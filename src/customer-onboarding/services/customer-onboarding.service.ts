@@ -258,7 +258,7 @@ export class CustomerOnboardingService {
       `Inside handleCreditService() to fund credit to the service with tenantUrl ${tenantUrl}`,
       'CustomerOnboardingService',
     );
-    const sessionId = `credit:${serviceInfo.appId}:${Date.now()}`;
+    const sessionId = generateHash(`credit:${serviceInfo.appId}:${Date.now()}`);
     const creditPayload = {
       serviceId: serviceInfo.appId,
       purpose: 'CreditRecharge',

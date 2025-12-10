@@ -668,8 +668,8 @@ export class AppAuthService {
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });
     // delete from redis
     await Promise.all([
-      redisClient.del(appId),
-      redisClient.del(`${appId}_${Context.idDashboard}`),
+      redisClient.del(generateHash(appId)),
+      redisClient.del(generateHash(`${appId}_${Context.idDashboard}`)),
     ]);
     Logger.debug(`Redis cache cleaned for appId: ${appId}`);
     return { appId: appDetail.appId };
@@ -873,10 +873,11 @@ export class AppAuthService {
     session?,
   ): Promise<{ access_token; expiresIn; tokenType }> {
     const context = Context.idDashboard;
-    let sessionId = `${appId}_${context}_${session.userId}`;
+    let rawRedisKey = `${appId}_${context}_${session.userId}`;
     if (session && session.tenantId) {
-      sessionId = `${sessionId}_tenant`;
+      rawRedisKey = `${rawRedisKey}_tenant`;
     }
+    const sessionId = generateHash(rawRedisKey);
     const savedSession = await redisClient.get(sessionId);
     switch (grantType) {
       case GRANT_TYPES.access_service_ssi:

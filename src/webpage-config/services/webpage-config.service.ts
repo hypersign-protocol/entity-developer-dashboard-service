@@ -341,7 +341,7 @@ export class WebpageConfigService {
     grantType: GRANT_TYPES,
     tokenModule,
   ) {
-    const cached = await redisClient.get(appId);
+    const cached = await redisClient.get(generateHash(appId));
     if (cached) return JSON.parse(cached);
     const serviceDetail = await this.appRepository.findOne({ appId });
     if (!serviceDetail) {

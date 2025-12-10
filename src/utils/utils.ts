@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { Did } from 'hs-ssi-sdk';
 import {
+  Context,
   SERVICE_TYPES,
   SERVICES,
 } from 'src/supported-service/services/iServiceList';
@@ -22,8 +23,9 @@ import {
   KYC_ACCESS_MATRIX,
   QUEST_ACCESS_MATRIX,
   SSI_ACCESS_MATRIX,
+  TokenModule,
 } from 'src/config/access-matrix';
-
+import { createHash } from 'crypto';
 export const existDir = (dirPath) => {
   if (!dirPath) throw new Error('Directory path undefined');
   return fs.existsSync(dirPath);
@@ -179,7 +181,7 @@ export const REDIS_KEYS = {
   VERIFIER_PAGE_TOKEN: 'verifierPageToken:',
 };
 export function getAccessListForModule(
-  module: 'DASHBOARD' | 'VERIFIER' | 'APP_AUTH',
+  module: TokenModule,
   serviceType: SERVICE_TYPES,
 ) {
   switch (serviceType) {
@@ -190,4 +192,39 @@ export function getAccessListForModule(
     case SERVICE_TYPES.QUEST:
       return QUEST_ACCESS_MATRIX[module] || [];
   }
+}
+export const evaluateAccessPolicy = (
+  defaultAccessList: string[],
+  serviceType: SERVICE_TYPES,
+  userAccessList?: {
+    serviceType: SERVICE_TYPES;
+    access: string;
+    expiryDate?: Date;
+  }[],
+  context?: string,
+): string[] => {
+  if (!context) {
+    return defaultAccessList;
+  }
+  if (context === Context.idDashboard) {
+    // No user access info → Return NO access
+    if (!userAccessList?.length) {
+      return [];
+    }
+    const userServiceAccess = userAccessList
+      .filter((a) => a.serviceType === serviceType)
+      .map((a) => a.access);
+
+    // User With ALL access
+    if (userServiceAccess.includes('ALL')) {
+      return defaultAccessList;
+    }
+    // Intersection rule
+    return defaultAccessList.filter((p) => userServiceAccess.includes(p));
+  }
+  return defaultAccessList;
+};
+
+export function generateHash(input: string): string {
+  return createHash('sha256').update(input).digest('hex');
 }

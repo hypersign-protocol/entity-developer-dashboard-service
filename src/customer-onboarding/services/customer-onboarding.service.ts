@@ -37,7 +37,12 @@ import {
   LogDetail,
 } from '../schemas/customer-onboarding.schema';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
-import { getAccessListForModule, sanitizeUrl } from 'src/utils/utils';
+import {
+  evaluateAccessPolicy,
+  generateHash,
+  getAccessListForModule,
+  sanitizeUrl,
+} from 'src/utils/utils';
 import { RoleRepository } from 'src/roles/repository/role.repository';
 import { ONBORDING_CONSTANT_DATA } from '../constants/en';
 import { WebpageConfigService } from 'src/webpage-config/services/webpage-config.service';
@@ -255,7 +260,7 @@ export class CustomerOnboardingService {
       `Inside handleCreditService() to fund credit to the service with tenantUrl ${tenantUrl}`,
       'CustomerOnboardingService',
     );
-    const sessionId = `credit:${serviceInfo.appId}:${Date.now()}`;
+    const sessionId = generateHash(`credit:${serviceInfo.appId}:${Date.now()}`);
     const creditPayload = {
       serviceId: serviceInfo.appId,
       purpose: 'CreditRecharge',
@@ -342,20 +347,22 @@ export class CustomerOnboardingService {
           `Customer onboarding detail not found for id: ${id}`,
         ]);
       }
-
       // Initialize configuration
       const { companyName, domain, userId, companyLogo, customerEmail } =
         customerOnboardingData;
       const ssiBaseDomain = this.config.get<string>('SSI_API_DOMAIN');
       const cavachBaseDomain = this.config.get<string>('CAVACH_API_DOMAIN');
       const secret = this.config.get('JWT_SECRET');
-
       let ssiSubdomain = customerOnboardingData?.ssiSubdomain;
       let kycSubdomain = customerOnboardingData?.kycSubdomain;
       let ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
       let kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
-      let ssiRedisKey = `${customerOnboardingData?.ssiServiceId}_${Context.idDashboard}`;
-      let kycRedisKey = `${customerOnboardingData?.kycServiceId}_${Context.idDashboard}`;
+      let ssiRedisKey = generateHash(
+        `${customerOnboardingData?.ssiServiceId}_${Context.idDashboard}`,
+      );
+      let kycRedisKey = generateHash(
+        `${customerOnboardingData?.kycServiceId}_${Context.idDashboard}`,
+      );
 
       // Get remaining steps
       const lastStep =
@@ -371,10 +378,43 @@ export class CustomerOnboardingService {
         throw new BadRequestException(['Customer onboarding is already done']);
       }
       let onboardingStatus;
+      let userDetail = await this.userRepository.findOne({ userId });
       // Process each step
       for (const step of remainingSteps) {
         try {
           switch (step) {
+            case OnboardingStep.GIVE_DASHBOARD_ACCESS: {
+              Logger.log(
+                'GIVE_DASHBOARD_ACCESS step started',
+                'CustomerOnboardingService',
+              );
+              userDetail = await this.userRepository.findOneUpdate(
+                { userId },
+                {
+                  $push: {
+                    accessList: {
+                      $each: [
+                        {
+                          serviceType: SERVICE_TYPES.CAVACH_API,
+                          access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
+                          expiryDate: null,
+                        },
+                        {
+                          serviceType: SERVICE_TYPES.SSI_API,
+                          access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
+                          expiryDate: null,
+                        },
+                      ],
+                    },
+                  },
+                },
+              );
+              Logger.debug(
+                'GIVE_DASHBOARD_ACCESS step ends',
+                'CustomerOnboardingService',
+              );
+              break;
+            }
             case OnboardingStep.CREATE_TEAM_ROLE: {
               Logger.log(
                 'CREATE_TEAM_ROLE step started',
@@ -432,7 +472,9 @@ export class CustomerOnboardingService {
                 'CREATE_SSI_SERVICE step ends',
                 'CustomerOnboardingService',
               );
-              ssiRedisKey = `${ssiService.appId}_${Context.idDashboard}`;
+              ssiRedisKey = generateHash(
+                `${ssiService.appId}_${Context.idDashboard}`,
+              );
               break;
             }
 
@@ -454,7 +496,10 @@ export class CustomerOnboardingService {
                 ssiTenantUrl,
                 secret,
                 ssiService?.whitelistedCors,
-                [SERVICES.SSI_API.ACCESS_TYPES.WRITE_CREDIT],
+                getAccessListForModule(
+                  TokenModule.SUPER_ADMIN,
+                  SERVICE_TYPES.SSI_API,
+                ),
               );
               Logger.debug(
                 'CREDIT_SSI_SERVICE step ends',
@@ -474,14 +519,21 @@ export class CustomerOnboardingService {
                 });
               }
               const ssiServiceDetail = await redisClient.get(ssiRedisKey);
+              const defaultAccessList = getAccessListForModule(
+                TokenModule.DASHBOARD,
+                SERVICE_TYPES.SSI_API,
+              );
+              const accessList = evaluateAccessPolicy(
+                defaultAccessList,
+                SERVICE_TYPES.SSI_API,
+                userDetail.accessList,
+                Context.idDashboard,
+              );
               if (!ssiServiceDetail) {
                 await this.appAuthService.storeDataInRedis(
                   GRANT_TYPES.access_service_ssi,
                   ssiService,
-                  getAccessListForModule(
-                    TokenModule.DASHBOARD,
-                    SERVICE_TYPES.SSI_API,
-                  ),
+                  accessList,
                   ssiRedisKey,
                 );
               }
@@ -527,14 +579,21 @@ export class CustomerOnboardingService {
                 'CustomerOnboardingService',
               );
               const ssiServiceDetail = await redisClient.get(ssiRedisKey);
+              const defaultAccessList = getAccessListForModule(
+                TokenModule.DASHBOARD,
+                SERVICE_TYPES.SSI_API,
+              );
+              const accessList = evaluateAccessPolicy(
+                defaultAccessList,
+                SERVICE_TYPES.SSI_API,
+                userDetail.accessList,
+                Context.idDashboard,
+              );
               if (!ssiServiceDetail) {
                 await this.appAuthService.storeDataInRedis(
                   GRANT_TYPES.access_service_ssi,
                   ssiService,
-                  getAccessListForModule(
-                    TokenModule.DASHBOARD,
-                    SERVICE_TYPES.SSI_API,
-                  ),
+                  accessList,
                   ssiRedisKey,
                 );
               }
@@ -633,48 +692,15 @@ export class CustomerOnboardingService {
               onboardingUpdateData.kycSubdomain = kycService.subdomain;
               onboardingUpdateData.kycServiceId = kycService.appId;
               kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
-              kycRedisKey = `${kycService?.appId}_${Context.idDashboard}`;
+              kycRedisKey = generateHash(
+                `${kycService?.appId}_${Context.idDashboard}`,
+              );
               Logger.debug(
                 'CREATE_KYC_SERVICE step ends',
                 'CustomerOnboardingService',
               );
               break;
             }
-
-            case OnboardingStep.GIVE_KYC_DASHBOARD_ACCESS: {
-              Logger.log(
-                'GIVE_KYC_DASHBOARD_ACCESS step started',
-                'CustomerOnboardingService',
-              );
-              await this.userRepository.findOneUpdate(
-                {
-                  userId,
-                  accessList: {
-                    $not: {
-                      $elemMatch: {
-                        serviceType: 'CAVACH_API',
-                        access: 'ALL',
-                      },
-                    },
-                  },
-                },
-                {
-                  $push: {
-                    accessList: {
-                      serviceType: 'CAVACH_API',
-                      access: 'ALL',
-                      expiryDate: null,
-                    },
-                  },
-                },
-              );
-              Logger.debug(
-                'GIVE_KYC_DASHBOARD_ACCESS step ends',
-                'CustomerOnboardingService',
-              );
-              break;
-            }
-
             case OnboardingStep.CREDIT_KYC_SERVICE: {
               Logger.log(
                 'CREDIT_KYC_SERVICE step started',
@@ -693,7 +719,10 @@ export class CustomerOnboardingService {
                 kycTenantUrl,
                 secret,
                 kycService?.whitelistedCors,
-                [SERVICES.CAVACH_API.ACCESS_TYPES.WRITE_CREDIT],
+                getAccessListForModule(
+                  TokenModule.SUPER_ADMIN,
+                  SERVICE_TYPES.CAVACH_API,
+                ),
               );
               Logger.debug(
                 'CREDIT_KYC_SERVICE step ends',
@@ -711,15 +740,22 @@ export class CustomerOnboardingService {
                   appId: customerOnboardingData.kycServiceId,
                 });
               }
+              const defaultAccessList = getAccessListForModule(
+                TokenModule.DASHBOARD,
+                SERVICE_TYPES.CAVACH_API,
+              );
+              const accessList = evaluateAccessPolicy(
+                defaultAccessList,
+                SERVICE_TYPES.CAVACH_API,
+                userDetail.accessList,
+                Context.idDashboard,
+              );
               const kycServiceDetail = await redisClient.get(kycRedisKey);
               if (!kycServiceDetail) {
                 await this.appAuthService.storeDataInRedis(
                   GRANT_TYPES.access_service_kyc,
                   kycService,
-                  getAccessListForModule(
-                    TokenModule.DASHBOARD,
-                    SERVICE_TYPES.CAVACH_API,
-                  ),
+                  accessList,
                   kycRedisKey,
                 );
               }

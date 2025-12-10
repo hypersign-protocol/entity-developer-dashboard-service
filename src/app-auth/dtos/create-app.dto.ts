@@ -19,6 +19,7 @@ import {
   SERVICE_TYPES,
   APP_ENVIRONMENT,
 } from 'src/supported-service/services/iServiceList';
+import { IsUrlOrBase64Image } from 'src/utils/customDecorator/IsUrlOrBase64Image.decorator';
 
 export class CreateAppDto {
   @ApiProperty({
@@ -60,7 +61,7 @@ export class CreateAppDto {
   })
   @IsOptional()
   @IsString()
-  @IsUrlEmpty()
+  @IsUrlOrBase64Image()
   logoUrl?: string;
   @ApiProperty({
     description: 'services',

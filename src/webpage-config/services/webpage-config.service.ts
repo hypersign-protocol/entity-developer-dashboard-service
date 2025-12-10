@@ -280,6 +280,7 @@ export class WebpageConfigService {
       appId,
       SERVICE_TYPES.CAVACH_API,
       GRANT_TYPES.access_service_kyc,
+      TokenModule.VERIFIER,
     );
     if (
       !kycServiceDetail.dependentServices ||
@@ -294,6 +295,7 @@ export class WebpageConfigService {
       ssiServiceId,
       SERVICE_TYPES.SSI_API,
       GRANT_TYPES.access_service_ssi,
+      TokenModule.ID_SERVICE,
     );
     // generate access tokens
     const [ssiAccessTokenDetail, kycAccessTokenDetail] = await Promise.all([
@@ -336,6 +338,7 @@ export class WebpageConfigService {
     appId: string,
     serviceType: SERVICE_TYPES,
     grantType: GRANT_TYPES,
+    tokenModule,
   ) {
     const cached = await redisClient.get(appId);
     if (cached) return JSON.parse(cached);
@@ -345,10 +348,7 @@ export class WebpageConfigService {
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
       ]);
     }
-    const defaultAccessList = getAccessListForModule(
-      TokenModule.VERIFIER,
-      serviceType,
-    );
+    const defaultAccessList = getAccessListForModule(tokenModule, serviceType);
     const validateAccessList = evaluateAccessPolicy(
       defaultAccessList,
       serviceType,

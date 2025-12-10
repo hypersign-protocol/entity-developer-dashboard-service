@@ -779,7 +779,6 @@ export class AppAuthService {
           defaultAccessList,
           SERVICE_TYPES.CAVACH_API,
           [],
-
         );
         break;
       }

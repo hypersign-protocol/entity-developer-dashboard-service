@@ -320,7 +320,6 @@ export class CustomerOnboardingService {
   async processCustomerOnboarding(
     id: string,
     customerOnboardingProcessDto: CustomerOnboardingProcessDto,
-    user,
   ) {
     const onboardingLogs: LogDetail[] = [];
     const onboardingUpdateData: Partial<CustomerOnboarding> = {};
@@ -345,14 +344,12 @@ export class CustomerOnboardingService {
           `Customer onboarding detail not found for id: ${id}`,
         ]);
       }
-
       // Initialize configuration
       const { companyName, domain, userId, companyLogo, customerEmail } =
         customerOnboardingData;
       const ssiBaseDomain = this.config.get<string>('SSI_API_DOMAIN');
       const cavachBaseDomain = this.config.get<string>('CAVACH_API_DOMAIN');
       const secret = this.config.get('JWT_SECRET');
-
       let ssiSubdomain = customerOnboardingData?.ssiSubdomain;
       let kycSubdomain = customerOnboardingData?.kycSubdomain;
       let ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
@@ -374,10 +371,43 @@ export class CustomerOnboardingService {
         throw new BadRequestException(['Customer onboarding is already done']);
       }
       let onboardingStatus;
+      let userDetail = await this.userRepository.findOne({ userId });
       // Process each step
       for (const step of remainingSteps) {
         try {
           switch (step) {
+            case OnboardingStep.GIVE_DASHBOARD_ACCESS: {
+              Logger.log(
+                'GIVE_DASHBOARD_ACCESS step started',
+                'CustomerOnboardingService',
+              );
+              userDetail = await this.userRepository.findOneUpdate(
+                { userId },
+                {
+                  $push: {
+                    accessList: {
+                      $each: [
+                        {
+                          serviceType: SERVICE_TYPES.CAVACH_API,
+                          access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
+                          expiryDate: null,
+                        },
+                        {
+                          serviceType: SERVICE_TYPES.SSI_API,
+                          access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
+                          expiryDate: null,
+                        },
+                      ],
+                    },
+                  },
+                },
+              );
+              Logger.debug(
+                'GIVE_DASHBOARD_ACCESS step ends',
+                'CustomerOnboardingService',
+              );
+              break;
+            }
             case OnboardingStep.CREATE_TEAM_ROLE: {
               Logger.log(
                 'CREATE_TEAM_ROLE step started',
@@ -457,7 +487,10 @@ export class CustomerOnboardingService {
                 ssiTenantUrl,
                 secret,
                 ssiService?.whitelistedCors,
-                [SERVICES.SSI_API.ACCESS_TYPES.WRITE_CREDIT],
+                getAccessListForModule(
+                  TokenModule.SUPER_ADMIN,
+                  SERVICE_TYPES.SSI_API,
+                ),
               );
               Logger.debug(
                 'CREDIT_SSI_SERVICE step ends',
@@ -484,7 +517,7 @@ export class CustomerOnboardingService {
               const accessList = evaluateAccessPolicy(
                 defaultAccessList,
                 SERVICE_TYPES.SSI_API,
-                user.accessList,
+                userDetail.accessList,
                 Context.idDashboard,
               );
               if (!ssiServiceDetail) {
@@ -543,7 +576,7 @@ export class CustomerOnboardingService {
               const accessList = evaluateAccessPolicy(
                 defaultAccessList,
                 SERVICE_TYPES.SSI_API,
-                user.accessList,
+                userDetail.accessList,
                 Context.idDashboard,
               );
               if (!ssiServiceDetail) {
@@ -655,40 +688,6 @@ export class CustomerOnboardingService {
               );
               break;
             }
-
-            case OnboardingStep.GIVE_KYC_DASHBOARD_ACCESS: {
-              Logger.log(
-                'GIVE_KYC_DASHBOARD_ACCESS step started',
-                'CustomerOnboardingService',
-              );
-              await this.userRepository.findOneUpdate(
-                { userId },
-                {
-                  $push: {
-                    accessList: {
-                      $each: [
-                        {
-                          serviceType: SERVICE_TYPES.CAVACH_API,
-                          access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
-                          expiryDate: null,
-                        },
-                        {
-                          serviceType: SERVICE_TYPES.SSI_API,
-                          access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
-                          expiryDate: null,
-                        },
-                      ],
-                    },
-                  },
-                },
-              );
-              Logger.debug(
-                'GIVE_KYC_DASHBOARD_ACCESS step ends',
-                'CustomerOnboardingService',
-              );
-              break;
-            }
-
             case OnboardingStep.CREDIT_KYC_SERVICE: {
               Logger.log(
                 'CREDIT_KYC_SERVICE step started',
@@ -707,7 +706,10 @@ export class CustomerOnboardingService {
                 kycTenantUrl,
                 secret,
                 kycService?.whitelistedCors,
-                [SERVICES.CAVACH_API.ACCESS_TYPES.WRITE_CREDIT],
+                getAccessListForModule(
+                  TokenModule.SUPER_ADMIN,
+                  SERVICE_TYPES.CAVACH_API,
+                ),
               );
               Logger.debug(
                 'CREDIT_KYC_SERVICE step ends',
@@ -732,7 +734,7 @@ export class CustomerOnboardingService {
               const accessList = evaluateAccessPolicy(
                 defaultAccessList,
                 SERVICE_TYPES.CAVACH_API,
-                user.accessList,
+                userDetail.accessList,
                 Context.idDashboard,
               );
               const kycServiceDetail = await redisClient.get(kycRedisKey);

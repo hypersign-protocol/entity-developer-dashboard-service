@@ -34,30 +34,28 @@ export const getSecondsFromUnit = (time: number, unit: TIME_UNIT) => {
   return time * TIME[unit.toUpperCase()];
 };
 
-/***
- *  EXPIRY_CONFIG defines the expiry times for different types of tokens
- *  and Redis cache entries used across the system.
- *  */
-
+/**
+ *  EXPIRY_CONFIG defines the expiry times for different types of tokens and Redis cache entries used across the system.
+ */
 export const EXPIRY_CONFIG = {
-  // Token generated for kyc verifier page
-  VERIFIER_ACCESS: {
+  // KYC and SSI Token for context - verifier Page ad Customer App
+  VERIFIER_CUSTOMER_APP_ACCESS: {
     jwtTime: 30,
     jwtUnit: TIME_UNIT.MINUTE,
     redisExpiryTime: 30 * TIME.MINUTE,
   },
-  // Token generated during onboarding to provide credit access
+  // All Tokens generated during onboarding flow
   ONBOARDING_ACCESS: {
     jwtTime: 10,
     jwtUnit: TIME_UNIT.MINUTE,
   },
-  // Token used to access KYC and SSI services.
-  SERVICE_ACCESS: {
+  // KYC and SSI tokens for context - ID and SSI Dashboard
+  DASHBOARD_ACCESS: {
     jwtTime: 12,
     jwtUnit: TIME_UNIT.HOUR,
     redisExpiryTime: TIME.WEEK,
   },
-  // Token generated for providing credit
+  // Token generated for providing credit for SSI and KYC service
   CREDIT_TOKEN: {
     jwtTime: 5,
     jwtUnit: TIME_UNIT.MINUTE,

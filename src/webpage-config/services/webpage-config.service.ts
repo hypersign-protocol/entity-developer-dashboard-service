@@ -23,7 +23,7 @@ import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { isValidObjectId, Types } from 'mongoose';
 import { WEBPAGE_CONFIG_ERRORS } from '../constant/en';
 import { redisClient } from 'src/utils/redis.provider';
-import { TOKEN } from 'src/utils/time-constant';
+import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 import {
   evaluateAccessPolicy,
   generateHash,
@@ -308,7 +308,8 @@ export class WebpageConfigService {
           sessionId: ssiServiceId,
           subdomain: ssiServiceDetail.subdomain,
         },
-        0.5,
+        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtTime,
+        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtUnit,
       ),
       this.appAuthService.getAccessToken(
         {
@@ -318,7 +319,8 @@ export class WebpageConfigService {
           sessionId: appId,
           subdomain: kycServiceDetail.subdomain,
         },
-        0.5,
+        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtTime,
+        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtUnit,
       ),
     ]);
     const redisPayload = {
@@ -329,7 +331,7 @@ export class WebpageConfigService {
       redisKey,
       JSON.stringify(redisPayload),
       'EX',
-      TOKEN.VERIFIER_TOKEN.expiry,
+      EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.redisExpiryTime,
     );
     return {
       ...redisPayload,

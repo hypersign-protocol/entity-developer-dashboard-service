@@ -24,7 +24,13 @@ import { isValidObjectId, Types } from 'mongoose';
 import { WEBPAGE_CONFIG_ERRORS } from '../constant/en';
 import { redisClient } from 'src/utils/redis.provider';
 import { EXPIRY_CONFIG } from 'src/utils/time-constant';
-import { getAccessListForModule, REDIS_KEYS } from 'src/utils/utils';
+import {
+  evaluateAccessPolicy,
+  generateHash,
+  getAccessListForModule,
+  REDIS_KEYS,
+} from 'src/utils/utils';
+import { TokenModule } from 'src/config/access-matrix';
 
 @Injectable()
 export class WebpageConfigService {
@@ -260,7 +266,7 @@ export class WebpageConfigService {
     return { expiryDate };
   }
   public async generateWebpageConfigTokens(id, appId) {
-    const redisKey = `${REDIS_KEYS.VERIFIER_PAGE_TOKEN}${id}`;
+    const redisKey = generateHash(`${REDIS_KEYS.VERIFIER_PAGE_TOKEN}${id}`);
     const cachedData = await redisClient.get(redisKey);
     if (cachedData) return JSON.parse(cachedData);
     const verifierConfig = await this.webPageConfigRepo.findAWebpageConfig({
@@ -271,24 +277,12 @@ export class WebpageConfigService {
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_NOT_FOUND,
       ]);
     }
-    let kycServiceDetail;
-    const kycService = await redisClient.get(appId);
-    if (!kycService) {
-      kycServiceDetail = await this.appRepository.findOne({ appId });
-      if (!kycServiceDetail) {
-        throw new BadRequestException([
-          WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
-        ]);
-      }
-      await this.appAuthService.storeDataInRedis(
-        GRANT_TYPES.access_service_kyc,
-        kycServiceDetail,
-        getAccessListForModule('VERIFIER', SERVICE_TYPES.CAVACH_API),
-        appId,
-      );
-    } else {
-      kycServiceDetail = JSON.parse(kycService);
-    }
+    const kycServiceDetail = await this.getServiceAndCache(
+      appId,
+      SERVICE_TYPES.CAVACH_API,
+      GRANT_TYPES.access_service_kyc,
+      TokenModule.VERIFIER,
+    );
     if (
       !kycServiceDetail.dependentServices ||
       kycServiceDetail.dependentServices.length === 0
@@ -298,27 +292,12 @@ export class WebpageConfigService {
       ]);
     }
     const ssiServiceId = kycServiceDetail?.dependentServices?.[0];
-    let ssiServiceDetail;
-    const ssiService = await redisClient.get(ssiServiceId);
-    if (!ssiService) {
-      ssiServiceDetail = await this.appRepository.findOne({
-        appId: ssiServiceId,
-      });
-      if (!ssiServiceDetail) {
-        throw new BadRequestException([
-          WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_SSI_SERVICE_DOES_NOT_EXIST,
-        ]);
-      }
-      await this.appAuthService.storeDataInRedis(
-        GRANT_TYPES.access_service_ssi,
-        ssiServiceDetail,
-        getAccessListForModule('VERIFIER', SERVICE_TYPES.SSI_API),
-        ssiServiceId,
-      );
-    } else {
-      ssiServiceDetail = JSON.parse(ssiService);
-    }
-
+    const ssiServiceDetail = await this.getServiceAndCache(
+      ssiServiceId,
+      SERVICE_TYPES.SSI_API,
+      GRANT_TYPES.access_service_ssi,
+      TokenModule.ID_SERVICE,
+    );
     // generate access tokens
     const [ssiAccessTokenDetail, kycAccessTokenDetail] = await Promise.all([
       this.appAuthService.getAccessToken(
@@ -357,5 +336,33 @@ export class WebpageConfigService {
     return {
       ...redisPayload,
     };
+  }
+  public async getServiceAndCache(
+    appId: string,
+    serviceType: SERVICE_TYPES,
+    grantType: GRANT_TYPES,
+    tokenModule,
+  ) {
+    const cached = await redisClient.get(generateHash(appId));
+    if (cached) return JSON.parse(cached);
+    const serviceDetail = await this.appRepository.findOne({ appId });
+    if (!serviceDetail) {
+      throw new BadRequestException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
+      ]);
+    }
+    const defaultAccessList = getAccessListForModule(tokenModule, serviceType);
+    const validateAccessList = evaluateAccessPolicy(
+      defaultAccessList,
+      serviceType,
+      [],
+    );
+    await this.appAuthService.storeDataInRedis(
+      grantType,
+      serviceDetail,
+      validateAccessList,
+      appId,
+    );
+    return serviceDetail;
   }
 }

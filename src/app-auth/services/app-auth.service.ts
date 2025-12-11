@@ -34,7 +34,11 @@ import { WebPageConfigRepository } from 'src/webpage-config/repositories/webpage
 import { InjectModel } from '@nestjs/mongoose';
 import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
 import { Model } from 'mongoose';
-import { getAccessListForModule } from 'src/utils/utils';
+import {
+  evaluateAccessPolicy,
+  generateHash,
+  getAccessListForModule,
+} from 'src/utils/utils';
 import { TokenModule } from 'src/config/access-matrix';
 import { redisClient } from 'src/utils/redis.provider';
 import {
@@ -68,7 +72,7 @@ export class AppAuthService {
     @InjectModel(CustomerOnboarding.name)
     private readonly onboardModel: Model<CustomerOnboarding>,
     private readonly webpageConfigRepo: WebPageConfigRepository,
-  ) { }
+  ) {}
 
   async createAnApp(
     createAppDto: CreateAppDto,
@@ -549,10 +553,8 @@ export class AppAuthService {
     );
     const updatedapp = await this.getAppResponse(app);
     // update redis
-
-    const baseKey = appId;
-    const dashboardRedisKey = `${appId}_${Context.idDashboard}`;
-
+    const baseKey = generateHash(appId);
+    const dashboardRedisKey = generateHash(`${appId}_${Context.idDashboard}`);
     const updatedFields = {
       whitelistedCors: updatedapp.whitelistedCors,
       env: updatedapp.env ?? APP_ENVIRONMENT.dev,
@@ -669,8 +671,8 @@ export class AppAuthService {
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });
     // delete from redis
     await Promise.all([
-      redisClient.del(appId),
-      redisClient.del(`${appId}_${Context.idDashboard}`),
+      redisClient.del(generateHash(appId)),
+      redisClient.del(generateHash(`${appId}_${Context.idDashboard}`)),
     ]);
     Logger.debug(`Redis cache cleaned for appId: ${appId}`);
     return { appId: appDetail.appId };
@@ -735,7 +737,7 @@ export class AppAuthService {
     const serviceType = appDetail.services[0]?.id; // TODO: remove this later
     let grant_type = '';
     let accessList = [];
-    const redisKey = appDetail.appId;
+    const redisKey = generateHash(appDetail.appId);
     const savedSession = await redisClient.get(redisKey);
     if (savedSession) {
       Logger.log('Using redis cached session', 'AppAuthService');
@@ -752,9 +754,14 @@ export class AppAuthService {
     switch (serviceType) {
       case SERVICE_TYPES.SSI_API: {
         grant_type = GRANT_TYPES.access_service_ssi;
-        accessList = getAccessListForModule(
+        const defaultAccessList = getAccessListForModule(
           TokenModule.APP_AUTH,
           SERVICE_TYPES.SSI_API,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.SSI_API,
+          [],
         );
         break;
       }
@@ -769,17 +776,27 @@ export class AppAuthService {
           ]);
         }
         grant_type = grantType || GRANT_TYPES.access_service_kyc;
-        accessList = getAccessListForModule(
+        const defaultAccessList = getAccessListForModule(
           TokenModule.APP_AUTH,
           SERVICE_TYPES.CAVACH_API,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.CAVACH_API,
+          [],
         );
         break;
       }
       case SERVICE_TYPES.QUEST: {
         grant_type = GRANT_TYPES.access_service_quest;
-        accessList = getAccessListForModule(
+        const defaultAccessList = getAccessListForModule(
           TokenModule.APP_AUTH,
           SERVICE_TYPES.QUEST,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.QUEST,
+          [],
         );
         break;
       }
@@ -865,8 +882,15 @@ export class AppAuthService {
     grantType: string,
     appId: string,
     user,
+    session?,
   ): Promise<{ access_token; expiresIn; tokenType }> {
-    const sessionId = `${appId}_${Context.idDashboard}`;
+
+    const context = Context.idDashboard;
+    let rawRedisKey = `${appId}_${context}_${session.userId}`;
+    if (session && session.tenantId) {
+      rawRedisKey = `${rawRedisKey}_tenant`;
+    }
+    const sessionId = generateHash(rawRedisKey);
     const savedSession = await redisClient.get(sessionId);
     switch (grantType) {
       case GRANT_TYPES.access_service_ssi:
@@ -924,9 +948,15 @@ export class AppAuthService {
             'Invalid grant type for this service ' + appId,
           ]);
         }
-        accessList = getAccessListForModule(
+        const defaultAccessList = getAccessListForModule(
           TokenModule.DASHBOARD,
           SERVICE_TYPES.SSI_API,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.SSI_API,
+          user.accessList,
+          context,
         );
         break;
       }
@@ -939,9 +969,15 @@ export class AppAuthService {
             'Invalid grant type for this service ' + appId,
           ]);
         }
-        accessList = getAccessListForModule(
+        const defaultAccessList = getAccessListForModule(
           TokenModule.DASHBOARD,
           SERVICE_TYPES.CAVACH_API,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.CAVACH_API,
+          user.accessList,
+          context,
         );
         break;
       }
@@ -951,9 +987,15 @@ export class AppAuthService {
             'Invalid grant type for this service ' + appId,
           ]);
         }
-        accessList = getAccessListForModule(
+        const defaultAccessList = getAccessListForModule(
           TokenModule.DASHBOARD,
           SERVICE_TYPES.QUEST,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.QUEST,
+          user.accessList,
+          context,
         );
         break;
       }

@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
 import { Providers } from '../strategy/social.strategy';
-import { sanitizeUrl } from 'src/utils/utils';
+import { generateHash, sanitizeUrl } from 'src/utils/utils';
 import { SupportedServiceList } from 'src/supported-service/services/service-list';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { authenticator } from 'otplib';
@@ -74,18 +74,11 @@ export class SocialLoginService {
     });
     if (!user) {
       const userId = `${Date.now()}-${uuidv4()}`;
-      const ssiAccessList = this.supportedServiceList.getDefaultServicesAccess(
-        SERVICE_TYPES.SSI_API,
-      );
-      const kycAccessList = this.supportedServiceList.getDefaultServicesAccess(
-        SERVICE_TYPES.CAVACH_API,
-      );
       user = await this.userRepository.create({
         email,
         userId,
         name,
         profileIcon,
-        accessList: [...ssiAccessList, ...kycAccessList],
       });
     }
     const updates: Partial<UserDocument> = {};
@@ -341,7 +334,7 @@ export class SocialLoginService {
     isMfaRequired: boolean;
     refreshVersion: number;
   }> {
-    const sessionId = `${Date.now()}-${uuidv4()}`;
+    const sessionId = generateHash(`${Date.now()}-${uuidv4()}`);
     const role = user?.role || UserRole.ADMIN;
     const activeAuthenticators =
       user.authenticators?.filter(

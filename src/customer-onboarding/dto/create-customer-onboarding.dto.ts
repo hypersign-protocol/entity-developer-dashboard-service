@@ -26,6 +26,7 @@ import {
 } from '../constants/enum';
 import { IsPhoneNumberByCountry } from 'src/utils/customDecorator/validate-phone-no-country.decorator';
 import { Type } from 'class-transformer';
+import { IsUrlOrBase64Image } from 'src/utils/customDecorator/IsUrlOrBase64Image.decorator';
 
 export class CustomerOnboardingBasicDto {
   @ApiProperty({
@@ -47,9 +48,7 @@ export class CustomerOnboardingBasicDto {
   @IsOptional()
   @IsNotEmpty()
   @IsString()
-  @IsUrl({
-    require_protocol: true,
-  })
+  @IsUrlOrBase64Image()
   companyLogo?: string;
   @ApiProperty({
     name: 'customerEmail',

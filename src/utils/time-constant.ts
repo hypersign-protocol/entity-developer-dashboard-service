@@ -10,6 +10,21 @@ export const TOKEN_MAX_AGE = {
   AUTH_TOKEN: 4 * TIME.HOUR * 1000, // 4 hours
   REFRESH_TOKEN: 7 * TIME.DAY * 1000, // 7 days
 };
+export const TOKEN = {
+  AUTH: {
+    name: 'accessToken',
+    expiry: 30 * TIME.MINUTE * 1000,
+  },
+  REFRESH: {
+    name: 'refreshToken',
+    expiry: 7 * TIME.DAY * 1000,
+  },
+  VERIFIER_TOKEN: {
+    name: 'verifierPageToken',
+    expiry: 30 * TIME.MINUTE,
+    jwtExpiry: 0.5,
+  },
+};
 
 export enum JobNames {
   SEND_EMAIL_LOGIN_OTP = 'send-email-login-otp',

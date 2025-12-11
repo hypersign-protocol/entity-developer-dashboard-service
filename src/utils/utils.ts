@@ -15,10 +15,17 @@ import {
 } from '@nestjs/common';
 import { Did } from 'hs-ssi-sdk';
 import {
+  Context,
   SERVICE_TYPES,
   SERVICES,
 } from 'src/supported-service/services/iServiceList';
-
+import {
+  KYC_ACCESS_MATRIX,
+  QUEST_ACCESS_MATRIX,
+  SSI_ACCESS_MATRIX,
+  TokenModule,
+} from 'src/config/access-matrix';
+import { createHash } from 'crypto';
 export const existDir = (dirPath) => {
   if (!dirPath) throw new Error('Directory path undefined');
   return fs.existsSync(dirPath);
@@ -153,4 +160,71 @@ export function mapUserAccessList(userAccessList) {
       access: SERVICES[SERVICE_TYPES.SSI_API].ACCESS_TYPES.ALL,
     },
   ];
+}
+
+export function getCookieOptions(maxAge?: number, isClear = false) {
+  const cookieDomain = process.env.COOKIE_DOMAIN;
+  const isProd = process.env.NODE_ENV || 'production';
+  return {
+    httpOnly: true,
+    secure: isProd === 'production' ? true : false,
+    sameSite: isProd === 'production' ? 'None' : 'Lax',
+    domain: isProd ? cookieDomain : undefined,
+    path: '/',
+    ...(isClear ? {} : { maxAge }),
+  };
+}
+
+export const REDIS_KEYS = {
+  SESSION: 'session:',
+  REFRESH_TOKEN: 'refreshToken:',
+  VERIFIER_PAGE_TOKEN: 'verifierPageToken:',
+};
+export function getAccessListForModule(
+  module: TokenModule,
+  serviceType: SERVICE_TYPES,
+) {
+  switch (serviceType) {
+    case SERVICE_TYPES.CAVACH_API:
+      return KYC_ACCESS_MATRIX[module] || [];
+    case SERVICE_TYPES.SSI_API:
+      return SSI_ACCESS_MATRIX[module] || [];
+    case SERVICE_TYPES.QUEST:
+      return QUEST_ACCESS_MATRIX[module] || [];
+  }
+}
+export const evaluateAccessPolicy = (
+  defaultAccessList: string[],
+  serviceType: SERVICE_TYPES,
+  userAccessList?: {
+    serviceType: SERVICE_TYPES;
+    access: string;
+    expiryDate?: Date;
+  }[],
+  context?: string,
+): string[] => {
+  if (!context) {
+    return defaultAccessList;
+  }
+  if (context === Context.idDashboard) {
+    // No user access info → Return NO access
+    if (!userAccessList?.length) {
+      return [];
+    }
+    const userServiceAccess = userAccessList
+      .filter((a) => a.serviceType === serviceType)
+      .map((a) => a.access);
+
+    // User With ALL access
+    if (userServiceAccess.includes('ALL')) {
+      return defaultAccessList;
+    }
+    // Intersection rule
+    return defaultAccessList.filter((p) => userServiceAccess.includes(p));
+  }
+  return defaultAccessList;
+};
+
+export function generateHash(input: string): string {
+  return createHash('sha256').update(input).digest('hex');
 }

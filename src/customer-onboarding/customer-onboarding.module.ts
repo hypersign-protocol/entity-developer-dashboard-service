@@ -16,7 +16,6 @@ import { TrimMiddleware } from 'src/utils/middleware/trim.middleware';
 import { JWTAuthorizeMiddleware } from 'src/utils/middleware/jwt-authorization.middleware';
 import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
 import { JWTAccessAccountMiddleware } from 'src/utils/middleware/jwt-accessAccount.middlerwere';
-import { TwoFAAuthorizationMiddleware } from 'src/utils/middleware/2FA-jwt-authorization.middleware';
 import { UserModule } from 'src/user/user.module';
 import { PeopleModule } from 'src/people/people.module';
 import { MailNotificationModule } from 'src/mail-notification/mail-notification.module';
@@ -59,9 +58,6 @@ export class CustomerOnboardingModule implements NestModule {
       .forRoutes(CustomerOnboardingController);
     consumer
       .apply(JWTAccessAccountMiddleware)
-      .forRoutes(CustomerOnboardingController);
-    consumer
-      .apply(TwoFAAuthorizationMiddleware)
       .forRoutes(CustomerOnboardingController);
     consumer.apply(RateLimitMiddleware).forRoutes(CustomerOnboardingController);
   }

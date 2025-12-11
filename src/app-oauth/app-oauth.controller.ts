@@ -134,9 +134,15 @@ export class AppOauthController {
     @Req() request,
   ): Promise<{ access_token; expiresIn; tokenType }> {
     const { user } = request;
+    const { session } = request;
     //
     Logger.log('reGenerateAppSecretKey() method: starts', 'AppOAuthController');
 
-    return this.appAuthService.grantPermission(grantType, serviceId, user);
+    return this.appAuthService.grantPermission(
+      grantType,
+      serviceId,
+      user,
+      session,
+    );
   }
 }

@@ -23,7 +23,6 @@ import { SupportedServiceService } from 'src/supported-service/services/supporte
 import { SupportedServiceList } from 'src/supported-service/services/service-list';
 import { JWTAuthorizeMiddleware } from 'src/utils/middleware/jwt-authorization.middleware';
 import { UserModule } from 'src/user/user.module';
-import { TwoFAAuthorizationMiddleware } from 'src/utils/middleware/2FA-jwt-authorization.middleware';
 import { CreditModule } from 'src/credits/credits.module';
 import { JWTAccessAccountMiddleware } from 'src/utils/middleware/jwt-accessAccount.middlerwere';
 import { AdminPeopleRepository } from 'src/people/repository/people.repository';
@@ -32,6 +31,10 @@ import {
   AdminPeopleSchema,
 } from 'src/people/schema/people.schema';
 import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
+import {
+  CustomerOnboarding,
+  CustomerOnboardingSchema,
+} from 'src/customer-onboarding/schemas/customer-onboarding.schema';
 import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
 
 @Module({
@@ -40,6 +43,9 @@ import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
     MongooseModule.forFeature([
       { name: AdminPeople.name, schema: AdminPeopleSchema },
     ]),
+    MongooseModule.forFeature([
+      { name: CustomerOnboarding.name, schema: CustomerOnboardingSchema },
+    ]),
     HidWalletModule,
     EdvModule,
     UserModule,
@@ -47,6 +53,7 @@ import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
     CreditModule,
     forwardRef(() => WebpageConfigModule),
   ],
+
   providers: [
     AppAuthService,
     AppRepository,
@@ -78,10 +85,6 @@ export class AppAuthModule implements NestModule {
       .forRoutes(AppAuthController);
     consumer
       .apply(JWTAccessAccountMiddleware)
-      .exclude({ path: '/api/v1/app/marketplace', method: RequestMethod.GET })
-      .forRoutes(AppAuthController);
-    consumer
-      .apply(TwoFAAuthorizationMiddleware)
       .exclude({ path: '/api/v1/app/marketplace', method: RequestMethod.GET })
       .forRoutes(AppAuthController);
     consumer.apply(RateLimitMiddleware).forRoutes(AppAuthController);

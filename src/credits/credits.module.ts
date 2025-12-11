@@ -55,7 +55,13 @@ export class CreditModule implements NestModule {
         method: RequestMethod.GET,
       })
       .forRoutes(CreditsController);
-    consumer.apply(JWTAccessAccountMiddleware).forRoutes(CreditsController);
+    consumer
+      .apply(JWTAccessAccountMiddleware)
+      .exclude({
+        path: '/api/v1/credits/authz/:appId',
+        method: RequestMethod.GET,
+      })
+      .forRoutes(CreditsController);
     consumer.apply(RateLimitMiddleware).forRoutes(CreditsController);
   }
 }

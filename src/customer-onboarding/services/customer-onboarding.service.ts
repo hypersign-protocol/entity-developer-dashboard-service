@@ -20,7 +20,9 @@ import {
 } from 'src/app-auth/services/app-auth.service';
 import {
   APP_ENVIRONMENT,
+  Context,
   SERVICE_TYPES,
+  SERVICES,
 } from 'src/supported-service/services/iServiceList';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -35,7 +37,12 @@ import {
   LogDetail,
 } from '../schemas/customer-onboarding.schema';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
-import { sanitizeUrl } from 'src/utils/utils';
+import {
+  evaluateAccessPolicy,
+  generateHash,
+  getAccessListForModule,
+  sanitizeUrl,
+} from 'src/utils/utils';
 import { RoleRepository } from 'src/roles/repository/role.repository';
 import { ONBORDING_CONSTANT_DATA } from '../constants/en';
 import { WebpageConfigService } from 'src/webpage-config/services/webpage-config.service';
@@ -44,6 +51,9 @@ import {
   PageType,
 } from 'src/webpage-config/dto/create-webpage-config.dto';
 import getOnboardingRetryNotificationMail from 'src/mail-notification/constants/templates/request-retry-onboarding';
+import { redisClient } from 'src/utils/redis.provider';
+import { TIME } from 'src/utils/time-constant';
+import { TokenModule } from 'src/config/access-matrix';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -241,12 +251,14 @@ export class CustomerOnboardingService {
     tenantUrl: string,
     secret: string,
     whitelistedCors: string[] = ['*'],
+    accessList: string[],
   ) {
     Logger.debug(tenantUrl);
     Logger.log(
       `Inside handleCreditService() to fund credit to the service with tenantUrl ${tenantUrl}`,
       'CustomerOnboardingService',
     );
+    const sessionId = generateHash(`credit:${serviceInfo.appId}:${Date.now()}`);
     const creditPayload = {
       serviceId: serviceInfo.appId,
       purpose: 'CreditRecharge',
@@ -257,9 +269,21 @@ export class CustomerOnboardingService {
       subdomain: serviceInfo.subdomain,
       grantType,
       whitelistedCors,
+      accessList,
     };
-
-    const creditToken = await this.generateCreditToken(creditPayload, secret);
+    await redisClient.set(
+      sessionId,
+      JSON.stringify(creditPayload),
+      'EX',
+      5 * TIME.MINUTE,
+    );
+    const tokenPayload = {
+      appId: serviceInfo.appId,
+      sessionId,
+      subdomain: serviceInfo.subdomain,
+      grantType,
+    };
+    const creditToken = await this.generateCreditToken(tokenPayload, secret);
     let headers: Record<string, string> = {
       authorization: `Bearer ${creditToken}`,
       'Content-Type': 'application/json',
@@ -321,18 +345,22 @@ export class CustomerOnboardingService {
           `Customer onboarding detail not found for id: ${id}`,
         ]);
       }
-
       // Initialize configuration
       const { companyName, domain, userId, companyLogo, customerEmail } =
         customerOnboardingData;
       const ssiBaseDomain = this.config.get<string>('SSI_API_DOMAIN');
       const cavachBaseDomain = this.config.get<string>('CAVACH_API_DOMAIN');
       const secret = this.config.get('JWT_SECRET');
-
       let ssiSubdomain = customerOnboardingData?.ssiSubdomain;
       let kycSubdomain = customerOnboardingData?.kycSubdomain;
       let ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
       let kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
+      let ssiRedisKey = generateHash(
+        `${customerOnboardingData?.ssiServiceId}_${Context.idDashboard}`,
+      );
+      let kycRedisKey = generateHash(
+        `${customerOnboardingData?.kycServiceId}_${Context.idDashboard}`,
+      );
 
       // Get remaining steps
       const lastStep =
@@ -348,10 +376,43 @@ export class CustomerOnboardingService {
         throw new BadRequestException(['Customer onboarding is already done']);
       }
       let onboardingStatus;
+      let userDetail = await this.userRepository.findOne({ userId });
       // Process each step
       for (const step of remainingSteps) {
         try {
           switch (step) {
+            case OnboardingStep.GIVE_DASHBOARD_ACCESS: {
+              Logger.log(
+                'GIVE_DASHBOARD_ACCESS step started',
+                'CustomerOnboardingService',
+              );
+              userDetail = await this.userRepository.findOneUpdate(
+                { userId },
+                {
+                  $push: {
+                    accessList: {
+                      $each: [
+                        {
+                          serviceType: SERVICE_TYPES.CAVACH_API,
+                          access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
+                          expiryDate: null,
+                        },
+                        {
+                          serviceType: SERVICE_TYPES.SSI_API,
+                          access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
+                          expiryDate: null,
+                        },
+                      ],
+                    },
+                  },
+                },
+              );
+              Logger.debug(
+                'GIVE_DASHBOARD_ACCESS step ends',
+                'CustomerOnboardingService',
+              );
+              break;
+            }
             case OnboardingStep.CREATE_TEAM_ROLE: {
               Logger.log(
                 'CREATE_TEAM_ROLE step started',
@@ -409,6 +470,9 @@ export class CustomerOnboardingService {
                 'CREATE_SSI_SERVICE step ends',
                 'CustomerOnboardingService',
               );
+              ssiRedisKey = generateHash(
+                `${ssiService.appId}_${Context.idDashboard}`,
+              );
               break;
             }
 
@@ -430,6 +494,10 @@ export class CustomerOnboardingService {
                 ssiTenantUrl,
                 secret,
                 ssiService?.whitelistedCors,
+                getAccessListForModule(
+                  TokenModule.SUPER_ADMIN,
+                  SERVICE_TYPES.SSI_API,
+                ),
               );
               Logger.debug(
                 'CREDIT_SSI_SERVICE step ends',
@@ -448,10 +516,36 @@ export class CustomerOnboardingService {
                   appId: customerOnboardingData.ssiServiceId,
                 });
               }
-
+              const ssiServiceDetail = await redisClient.get(ssiRedisKey);
+              const defaultAccessList = getAccessListForModule(
+                TokenModule.DASHBOARD,
+                SERVICE_TYPES.SSI_API,
+              );
+              const accessList = evaluateAccessPolicy(
+                defaultAccessList,
+                SERVICE_TYPES.SSI_API,
+                userDetail.accessList,
+                Context.idDashboard,
+              );
+              if (!ssiServiceDetail) {
+                await this.appAuthService.storeDataInRedis(
+                  GRANT_TYPES.access_service_ssi,
+                  ssiService,
+                  accessList,
+                  ssiRedisKey,
+                );
+              }
               ssiAccessToken = await this.appAuthService.getAccessToken(
-                GRANT_TYPES.access_service_ssi,
-                ssiService,
+                {
+                  appId:
+                    ssiService?.appId || customerOnboardingData.ssiServiceId,
+                  grantType: GRANT_TYPES.access_service_ssi,
+                  appname: ssiService?.appName,
+                  subdomain:
+                    ssiService?.subdomain ||
+                    customerOnboardingData.ssiSubdomain,
+                  sessionId: ssiRedisKey,
+                },
                 4,
               );
 
@@ -462,6 +556,7 @@ export class CustomerOnboardingService {
                   headers: {
                     authorization: `Bearer ${ssiAccessToken.access_token}`,
                     'Content-Type': 'application/json',
+                    origin: ssiService.whitelistedCors[0],
                   },
                   body: JSON.stringify({ namespace: 'testnet' }),
                 },
@@ -480,11 +575,38 @@ export class CustomerOnboardingService {
                 'REGISTER_DID step started',
                 'CustomerOnboardingService',
               );
+              const ssiServiceDetail = await redisClient.get(ssiRedisKey);
+              const defaultAccessList = getAccessListForModule(
+                TokenModule.DASHBOARD,
+                SERVICE_TYPES.SSI_API,
+              );
+              const accessList = evaluateAccessPolicy(
+                defaultAccessList,
+                SERVICE_TYPES.SSI_API,
+                userDetail.accessList,
+                Context.idDashboard,
+              );
+              if (!ssiServiceDetail) {
+                await this.appAuthService.storeDataInRedis(
+                  GRANT_TYPES.access_service_ssi,
+                  ssiService,
+                  accessList,
+                  ssiRedisKey,
+                );
+              }
               ssiAccessToken =
                 ssiAccessToken ||
                 (await this.appAuthService.getAccessToken(
-                  GRANT_TYPES.access_service_ssi,
-                  ssiService,
+                  {
+                    appId:
+                      ssiService?.appId || customerOnboardingData.ssiServiceId,
+                    grantType: GRANT_TYPES.access_service_ssi,
+                    appname: ssiService?.appName,
+                    subdomain:
+                      ssiService?.subdomain ||
+                      customerOnboardingData.ssiSubdomain,
+                    sessionId: ssiRedisKey,
+                  },
                   4,
                 ));
 
@@ -502,6 +624,7 @@ export class CustomerOnboardingService {
                     headers: {
                       authorization: `Bearer ${ssiAccessToken.access_token}`,
                       'Content-Type': 'application/json',
+                      origin: ssiService.whitelistedCors[0],
                     },
                   },
                   'Failed to resolve DID',
@@ -541,7 +664,11 @@ export class CustomerOnboardingService {
                   appName: `${companyName}`,
                   domain: domain,
                   serviceIds: [SERVICE_TYPES.CAVACH_API],
-                  whitelistedCors: ['*'],
+                  whitelistedCors: [
+                    this.config.get<string>('KYC_WIDGET_URL'),
+                    this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
+                    this.config.get<string>('CLIENT_APP_URL'),
+                  ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
                   dependentServices: [
@@ -561,47 +688,15 @@ export class CustomerOnboardingService {
               onboardingUpdateData.kycSubdomain = kycService.subdomain;
               onboardingUpdateData.kycServiceId = kycService.appId;
               kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
+              kycRedisKey = generateHash(
+                `${kycService?.appId}_${Context.idDashboard}`,
+              );
               Logger.debug(
                 'CREATE_KYC_SERVICE step ends',
                 'CustomerOnboardingService',
               );
               break;
             }
-
-            case OnboardingStep.GIVE_KYC_DASHBOARD_ACCESS: {
-              Logger.log(
-                'GIVE_KYC_DASHBOARD_ACCESS step started',
-                'CustomerOnboardingService',
-              );
-              await this.userRepository.findOneUpdate(
-                {
-                  userId,
-                  accessList: {
-                    $not: {
-                      $elemMatch: {
-                        serviceType: 'CAVACH_API',
-                        access: 'ALL',
-                      },
-                    },
-                  },
-                },
-                {
-                  $push: {
-                    accessList: {
-                      serviceType: 'CAVACH_API',
-                      access: 'ALL',
-                      expiryDate: null,
-                    },
-                  },
-                },
-              );
-              Logger.debug(
-                'GIVE_KYC_DASHBOARD_ACCESS step ends',
-                'CustomerOnboardingService',
-              );
-              break;
-            }
-
             case OnboardingStep.CREDIT_KYC_SERVICE: {
               Logger.log(
                 'CREDIT_KYC_SERVICE step started',
@@ -620,6 +715,10 @@ export class CustomerOnboardingService {
                 kycTenantUrl,
                 secret,
                 kycService?.whitelistedCors,
+                getAccessListForModule(
+                  TokenModule.SUPER_ADMIN,
+                  SERVICE_TYPES.CAVACH_API,
+                ),
               );
               Logger.debug(
                 'CREDIT_KYC_SERVICE step ends',
@@ -637,9 +736,36 @@ export class CustomerOnboardingService {
                   appId: customerOnboardingData.kycServiceId,
                 });
               }
+              const defaultAccessList = getAccessListForModule(
+                TokenModule.DASHBOARD,
+                SERVICE_TYPES.CAVACH_API,
+              );
+              const accessList = evaluateAccessPolicy(
+                defaultAccessList,
+                SERVICE_TYPES.CAVACH_API,
+                userDetail.accessList,
+                Context.idDashboard,
+              );
+              const kycServiceDetail = await redisClient.get(kycRedisKey);
+              if (!kycServiceDetail) {
+                await this.appAuthService.storeDataInRedis(
+                  GRANT_TYPES.access_service_kyc,
+                  kycService,
+                  accessList,
+                  kycRedisKey,
+                );
+              }
               kycAccessToken = await this.appAuthService.getAccessToken(
-                GRANT_TYPES.access_service_kyc,
-                kycService,
+                {
+                  appId:
+                    kycService?.appId || customerOnboardingData.kycServiceId,
+                  appName: kycService.appName,
+                  grantType: GRANT_TYPES.access_service_kyc,
+                  subdomain:
+                    kycService?.subdomain ||
+                    customerOnboardingData.kycSubdomain,
+                  sessionId: kycRedisKey,
+                },
                 4,
               );
               const requestBody = {
@@ -679,7 +805,7 @@ export class CustomerOnboardingService {
                   headers: {
                     'x-kyc-access-token': kycAccessToken.access_token,
                     'Content-Type': 'application/json',
-                    origin: '*',
+                    origin: kycService.whitelistedCors[0],
                   },
                   body: JSON.stringify(requestBody),
                 },
@@ -697,23 +823,16 @@ export class CustomerOnboardingService {
                 'CustomerOnboardingService',
               );
 
-              const user = await this.userRepository.findOne({
-                userId: userId,
-              });
               const serviceId =
                 kycService?.appId || customerOnboardingData.kycServiceId;
-              await this.webPageConfig.storeWebPageConfigDetial(
-                serviceId,
-                {
-                  pageTitle: 'KYC Verification',
-                  pageDescription: 'Complete your KYC verification to proceed',
-                  expiryType: ExpiryType.ONE_MONTH,
-                  pageType: PageType.KYC,
-                  contactEmail: customerEmail,
-                  themeColor: 'vibrant',
-                },
-                user,
-              );
+              await this.webPageConfig.storeWebPageConfigDetial(serviceId, {
+                pageTitle: 'KYC Verification',
+                pageDescription: 'Complete your KYC verification to proceed',
+                expiryType: ExpiryType.ONE_MONTH,
+                pageType: PageType.KYC,
+                contactEmail: customerEmail,
+                themeColor: 'vibrant',
+              });
               Logger.debug(
                 'CONFIGURE_KYC_VERIFIER_PAGE step ends',
                 'CustomerOnboardingService',
@@ -855,7 +974,8 @@ export class CustomerOnboardingService {
           userId: user.userId,
         });
       if (!userOnboardingDetail) {
-        throw new BadRequestException([`No onboarding detail found for user with id: ${user.userId}`,
+        throw new BadRequestException([
+          `No onboarding detail found for user with id: ${user.userId}`,
         ]);
       }
       return userOnboardingDetail;

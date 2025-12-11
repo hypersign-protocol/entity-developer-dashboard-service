@@ -1,4 +1,5 @@
 import {
+  HttpException,
   Injectable,
   Logger,
   NestMiddleware,
@@ -8,16 +9,21 @@ import * as jwt from 'jsonwebtoken';
 import { NextFunction, Request, Response } from 'express';
 import { UserRepository } from 'src/user/repository/user.repository';
 import { sanitizeUrl } from '../utils';
+import { redisClient } from '../redis.provider';
+import {
+  AUTH_ERRORS,
+  ERROR_MESSAGE,
+  MFA_ERROR,
+  REFRESH_TOKEN_ERROR,
+} from 'src/social-login/constants/en';
 @Injectable()
 export class JWTAuthorizeMiddleware implements NestMiddleware {
   constructor(private readonly userRepository: UserRepository) {}
   async use(req: Request, res: Response, next: NextFunction) {
     Logger.log('Inside JWTAuthorizeMiddleware', 'JWTAuthorizeMiddleware');
-    const authToken: string = req?.cookies?.authToken;
+    const authToken: string = req?.cookies?.accessToken;
     if (!authToken) {
-      throw new UnauthorizedException([
-        'Please pass authorization token in cookie',
-      ]);
+      throw new UnauthorizedException([AUTH_ERRORS.EMPTY_TOKEN]);
     }
     let decoded;
     try {
@@ -48,42 +54,52 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
               sanitizeUrl(decoded.aud, false),
             );
             if (!ifDomainValid) {
-              throw new Error(
-                'This token was issued for a different domain than the one making the request.',
-              );
+              throw new Error(AUTH_ERRORS.TOKEN_DOMAIN_MISMATCH);
             }
           } else {
-            throw new Error('Token does not contain a valid domain.');
+            throw new Error(AUTH_ERRORS.TOKEN_DOMAIN_MISSING);
+          }
+        }
+        const { sid, sub } = decoded;
+        if (!sid || !sub) {
+          throw new UnauthorizedException([AUTH_ERRORS.INVALID_TOKEN]);
+        }
+        const sessionRaw = await redisClient.get(`session:${sid}`);
+        if (!sessionRaw) {
+          throw new UnauthorizedException([AUTH_ERRORS.SESSION_EXPIRED]);
+        }
+        const session = JSON.parse(sessionRaw);
+        if (session.userId !== decoded.sub) {
+          throw new UnauthorizedException([AUTH_ERRORS.SESSION_MISMATCH]);
+        }
+        if (session.refreshVersion !== decoded.refreshVersion) {
+          throw new UnauthorizedException([
+            REFRESH_TOKEN_ERROR.REFRESH_VERSION_MISMATCH,
+          ]);
+        }
+
+        if (session.isTwoFactorAuthenticated) {
+          if (!session.isTwoFactorVerified) {
+            throw new UnauthorizedException([MFA_ERROR.TWO_FA_REQUIRED]);
           }
         }
         const user = await this.userRepository.findOne({
-          userId: decoded.appUserID,
+          userId: decoded.sub,
         });
         if (!user) {
-          throw new Error('User not found');
+          throw new Error(ERROR_MESSAGE.USER_NOT_FOUND);
         }
         req['user'] = user;
-
-        if (decoded.isTwoFactorEnabled !== undefined) {
-          req['user']['isTwoFactorEnabled'] = decoded.isTwoFactorEnabled;
-        }
-
-        if (decoded.isTwoFactorAuthenticated !== undefined) {
-          req['user']['isTwoFactorAuthenticated'] =
-            decoded.isTwoFactorAuthenticated;
-        }
-
-        if (decoded.accessAccount !== undefined) {
-          req['user']['accessAccount'] = decoded.accessAccount;
-        }
-
-        Logger.log(JSON.stringify(req.user), 'JWTAuthorizeMiddleware');
+        req['session'] = session;
       }
     } catch (e) {
       Logger.error(
         `JWTAuthorizeMiddleware: Error ${e}`,
         'JWTAuthorizeMiddleware',
       );
+      if (e instanceof HttpException) {
+        throw e;
+      }
       throw new UnauthorizedException([e.message]);
     }
     next();

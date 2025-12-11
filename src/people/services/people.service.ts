@@ -3,13 +3,14 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 
 import {
-  AdminLoginDTO,
   AttachRoleDTO,
   CreateInviteDto,
+  TenantLoginDTO,
 } from '../dto/create-person.dto';
 import { DeletePersonDto } from '../dto/update-person.dto';
 import { UserRepository } from 'src/user/repository/user.repository';
@@ -19,9 +20,13 @@ import { SocialLoginService } from 'src/social-login/services/social-login.servi
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
-import { UserRole } from 'src/user/schema/user.schema';
 import { JobNames } from 'src/utils/time-constant';
-import { mapUserAccessList } from 'src/utils/utils';
+import { redisClient } from 'src/utils/redis.provider';
+import {
+  TENANT_ERRORS,
+  TENANT_INVITE_ERRORS,
+  TENANT_MESSAGES,
+} from '../constant/en';
 
 @Injectable()
 export class PeopleService {
@@ -37,11 +42,14 @@ export class PeopleService {
   async createInvitation(createPersonDto: CreateInviteDto, adminUserData) {
     const { emailId } = createPersonDto;
     if (emailId === adminUserData?.email) {
-      throw new BadRequestException(['Self invitation is not available']);
+      throw new BadRequestException([
+        TENANT_INVITE_ERRORS.SELF_INVITATION_NOT_ALLOWED,
+      ]);
     }
     const userDetails = await this.userService.findOne({
       email: emailId,
     });
+
     // if (userDetails == null) {
     //   throw new NotFoundException(
     //     `Cannot invite an non existing user with email: ${emailId}`,
@@ -54,21 +62,33 @@ export class PeopleService {
       adminId: adminUserData.userId,
     });
     if (adminPeople != null) {
-      throw new ConflictException([
-        'User already exists to your account',
-        'Already Invited',
-      ]);
+      throw new ConflictException([TENANT_INVITE_ERRORS.ALREADY_INVITED]);
     }
-
-    // const isInvitedAlready = await this.inviteRepository.findOne({
-    //   invitor: adminUserData.userId,
-    //   invitee: userDetails.userId,
-    // });
-
-    // if (isInvitedAlready !== null) {
-    //   return isInvitedAlready;
-    // }
     const invitecode = `${Date.now()}-${uuidv4()}`;
+    const { roleId } = createPersonDto;
+    let roleDetail;
+    if (roleId) {
+      roleDetail = await this.roleRepository.findOne({ _id: roleId });
+      if (!roleDetail) {
+        throw new BadRequestException([
+          TENANT_INVITE_ERRORS.ROLE_NOT_FOUND(roleId),
+        ]);
+      }
+    } else {
+      const roles = await this.roleRepository.findUsingAggregation([
+        { $match: { userId: adminUserData.userId } },
+        {
+          $addFields: {
+            permissionsCount: { $size: '$permissions' },
+          },
+        },
+        { $sort: { permissionsCount: 1 } },
+        { $limit: 1 },
+      ]);
+      roleDetail = roles?.[0];
+    }
+    if (!roleDetail)
+      throw new BadRequestException([TENANT_INVITE_ERRORS.NO_ROLE_ASSIGNED]);
     const invite = await this.adminPeopleService.create({
       adminId: adminUserData.userId,
       userId: userDetails?.userId || emailId,
@@ -77,6 +97,9 @@ export class PeopleService {
       invitationValidTill: new Date(
         Date.now() + 2 * 24 * 60 * 60 * 1000,
       ).toISOString(),
+      roleId: roleDetail._id.toString(),
+      roleName: roleDetail.roleName,
+      inviteeEmail: emailId,
     });
     this.mailNotificationService.addJobToMailQueue({
       mailName: JobNames.SEND_TEAM_MATE_INVITATION_MAIL,
@@ -218,77 +241,84 @@ export class PeopleService {
       },
     );
   }
-  async adminLogin(body: AdminLoginDTO, user: any) {
-    const rawUrl = this.configService.get('INVITATIONURL');
-    const url = new URL(rawUrl);
-    const domain = url.origin;
-    const { adminId } = body;
+  async switchTenantAccount(
+    userDetail,
+    sessionDetail,
+    tenantDto: TenantLoginDTO,
+  ) {
+    const { adminId } = tenantDto;
+    // switch back to own account
+    if (userDetail.userId === adminId) {
+      if (!sessionDetail?.tenantId) {
+        throw new BadRequestException([TENANT_ERRORS.ALREADY_IN_TENANT]);
+      }
+      return this.updateSession({
+        sessionDetail,
+        message: TENANT_MESSAGES.SWITCH_BACK_SUCCESS,
+      });
+    }
+    // switching to tenant account
+    if (adminId === sessionDetail?.tenantId) {
+      throw new BadRequestException([TENANT_ERRORS.ALREADY_IN_TENANT]);
+    }
     const adminData = await this.userService.findOne({
       userId: adminId,
     });
     if (adminData == null) {
-      throw new BadRequestException(['Admin user not found']);
+      throw new BadRequestException([TENANT_ERRORS.ADMIN_NOT_FOUND]);
     }
-    const userId = user.userId;
-    let adminPeople = user;
-    let role;
-    if (userId !== adminId) {
-      adminPeople = await this.adminPeopleService.findOne({
-        adminId,
-        userId,
-      });
-
-      if (adminPeople == null) {
-        throw new NotFoundException([
-          'You are not the member of ' + adminData.email,
-        ]);
-      }
-
-      if (adminPeople.roleId == null) {
-        throw new BadRequestException([
-          'You do not have any role to access admin account',
-        ]);
-      }
-
-      role = await this.roleRepository.findOne({
-        _id: adminPeople.roleId,
-      });
+    const tenantDetail = await this.adminPeopleService.findOne({
+      adminId,
+      userId: userDetail.userId,
+    });
+    if (!tenantDetail) {
+      throw new UnauthorizedException([
+        TENANT_ERRORS.NOT_A_MEMBER(adminData.email),
+      ]);
     }
-    // const jwt = await this.socialLoginService.socialLogin({
-    //   user: {
-    //     email: adminData.email,
-    //   },
-    // });
+    if (!tenantDetail.accepted) {
+      throw new BadRequestException([TENANT_ERRORS.INVITATION_NOT_ACCEPTED]);
+    }
+    const roleDetail = await this.roleRepository.findOne({
+      _id: tenantDetail.roleId,
+    });
+    if (!roleDetail) {
+      throw new BadRequestException([TENANT_ERRORS.ROLE_NOT_FOUND]);
+    }
+    if (!roleDetail.permissions?.length) {
+      throw new BadRequestException([TENANT_ERRORS.NO_PERMISSION]);
+    }
 
-    delete adminData.accessList;
-    delete adminData['_id'];
-    delete adminData.authenticators;
-    const accessAccount = {
-      ...adminData,
-      accessList: mapUserAccessList(
-        role?.permissions || adminPeople.accessList,
-      ),
-    };
-    const payload = {
-      appUserID: user.userId,
-      ...user,
-      accessList: mapUserAccessList(user.accessList),
-      aud: domain,
-    };
-    delete payload._id;
+    return this.updateSession({
+      sessionDetail,
+      message: TENANT_MESSAGES.SWITCH_SUCCESS,
+      tenantId: adminId, // tenantId
+      permissions: roleDetail.permissions, // permissions
+    });
+  }
 
-    delete payload.userId;
-
-    payload.accessAccount = accessAccount;
-    payload.role = adminData?.role || UserRole.ADMIN;
-    const token = await this.socialLoginService.generateAuthToken(payload);
-    const refreshToken = await this.socialLoginService.generateRefreshToken(
-      payload,
+  private async updateSession({
+    sessionDetail,
+    message,
+    tenantId = null,
+    permissions = null,
+  }: {
+    sessionDetail: any;
+    tenantId?: string | null;
+    permissions?: any[] | null;
+    message: string;
+  }) {
+    sessionDetail.tenantId = tenantId;
+    sessionDetail.tenantUserPermissions = permissions;
+    sessionDetail.createdAt = new Date().toISOString();
+    const ttl = await redisClient.ttl(`session:${sessionDetail.sessionId}`);
+    await redisClient.set(
+      `session:${sessionDetail.sessionId}`,
+      JSON.stringify(sessionDetail),
+      'EX',
+      ttl,
     );
-    return {
-      authToken: token,
-      refreshToken,
-      adminEmail: adminData.email,
-    };
+
+    return { message };
   }
 }

@@ -87,6 +87,8 @@ spec:
           value: __MAIL_QUEUE__
         - name: SERVER_NAME
           value: __SERVER_NAME__
+        - name: NODE_ENV
+          value: __NODE_ENV__
         - name: ALLOWED_ORIGIN
           value: "__ALLOWED_ORIGIN__"
         - name: JWT_REFRESH_SECRET
@@ -106,7 +108,16 @@ spec:
         - name: OTP_EXPIRY_MINUTES
           value: '__OTP_EXPIRY_MINUTES__'  
         - name: MAX_RETRY_ATTEMPT
-          value: '__MAX_RETRY_ATTEMPT__'          
+          value: '__MAX_RETRY_ATTEMPT__'  
+        - name: MFA_REDIRECT_URL
+          value: __MFA_REDIRECT_URL__
+        - name: CLIENT_APP_URL
+          value: __CLIENT_APP_URL__
+        - name: KYC_WIDGET_URL
+          value: __KYC_WIDGET_URL__
+        - name: MAX_MFA_RETRY_ATTEMPT
+          value: '__MAX_MFA_RETRY_ATTEMPT__' 
+                  
         volumeMounts:
         - name: mongo
           mountPath: "/data"

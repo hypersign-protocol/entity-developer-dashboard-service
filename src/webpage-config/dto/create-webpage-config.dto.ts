@@ -147,6 +147,25 @@ export class CreateWebpageConfigResponseWithDetailDto extends CreateWebpageConfi
 
 export class FetchWebpageConfigResponseDto extends CreateWebpageConfigResponseWithDetailDto {
   @ApiProperty({
+    name: 'createdAt',
+    description: 'Document creation date',
+    example: '2025-08-14T11:48:37.389Z',
+  })
+  @IsString()
+  @IsNotEmpty()
+  createdAt: string;
+  @ApiProperty({
+    name: 'updatedAt',
+    description: 'Document updation date',
+    example: '2025-08-14T12:48:37.389Z',
+  })
+  @IsString()
+  @IsNotEmpty()
+  updatedAt: string;
+}
+
+export class VerifierPageTokenResponse {
+  @ApiProperty({
     name: 'ssiAccessToken',
     description: 'ssiToken',
     example: 'eyJhbGciOiJIUzI1Ni.......',
@@ -162,20 +181,4 @@ export class FetchWebpageConfigResponseDto extends CreateWebpageConfigResponseWi
   @IsString()
   @IsNotEmpty()
   kycAccessToken: string;
-  @ApiProperty({
-    name: 'createdAt',
-    description: 'Document creation date',
-    example: '2025-08-14T11:48:37.389Z',
-  })
-  @IsString()
-  @IsNotEmpty()
-  createdAt: string;
-  @ApiProperty({
-    name: 'updatedAt',
-    description: 'DOcument updation date',
-    example: '2025-08-14T12:48:37.389Z',
-  })
-  @IsString()
-  @IsNotEmpty()
-  updatedAt: string;
 }

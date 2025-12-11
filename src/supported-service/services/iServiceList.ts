@@ -92,6 +92,7 @@ export namespace SERVICES {
       WRITE_CREDIT = 'WRITE_CREDIT',
       READ_CREDIT = 'READ_CREDIT',
       CHECK_LIVE_STATUS = 'CHECK_LIVE_STATUS',
+      WRITE_AUTH='WRITE_AUTH',
     }
   }
 
@@ -111,4 +112,8 @@ export namespace SERVICES {
       VERIFY_USER = 'VERIFY_USER',
     }
   }
+}
+
+export enum Context {
+  idDashboard = 'idDashboard',
 }

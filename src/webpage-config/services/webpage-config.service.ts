@@ -20,10 +20,10 @@ import { WebPageConfigRepository } from '../repositories/webpage-config.reposito
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { ConfigService } from '@nestjs/config';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
-import { Types } from 'mongoose';
+import { isValidObjectId, Types } from 'mongoose';
 import { WEBPAGE_CONFIG_ERRORS } from '../constant/en';
 import { redisClient } from 'src/utils/redis.provider';
-import { TOKEN } from 'src/utils/time-constant';
+import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 import { getAccessListForModule, REDIS_KEYS } from 'src/utils/utils';
 
 @Injectable()
@@ -33,7 +33,7 @@ export class WebpageConfigService {
     private readonly appAuthService: AppAuthService,
     private readonly webPageConfigRepo: WebPageConfigRepository,
     private readonly config: ConfigService,
-  ) {}
+  ) { }
   async storeWebPageConfigDetial(
     serviceId: string,
     createWebpageConfigDto: CreateWebpageConfigDto,
@@ -145,10 +145,15 @@ export class WebpageConfigService {
   async fetchAWebPageConfigurationDetail(
     id: string,
   ): Promise<CreateWebpageConfigDto> {
+    const isValidId = isValidObjectId(id);
+    const query: any = {
+      $or: [{ serviceId: id }],
+    };
+    if (isValidId) {
+      query.$or.push({ _id: new Types.ObjectId(id) });
+    }
     const webpageConfiguration =
-      await this.webPageConfigRepo.findAWebpageConfig({
-        _id: new Types.ObjectId(id),
-      });
+      await this.webPageConfigRepo.findAWebpageConfig(query);
     if (!webpageConfiguration || webpageConfiguration == null) {
       throw new NotFoundException([
         `No webpage configuration found for id: ${id}`,
@@ -254,25 +259,35 @@ export class WebpageConfigService {
     }
     return { expiryDate };
   }
-  public async generateWebpageConfigTokens(id, appId, userDetail) {
+  public async generateWebpageConfigTokens(id, appId) {
     const redisKey = `${REDIS_KEYS.VERIFIER_PAGE_TOKEN}${id}`;
     const cachedData = await redisClient.get(redisKey);
     if (cachedData) return JSON.parse(cachedData);
-    const [verifierConfig, kycServiceDetail] = await Promise.all([
-      this.webPageConfigRepo.findAWebpageConfig({
-        _id: new Types.ObjectId(id),
-      }),
-      this.appRepository.findOne({ appId }),
-    ]);
-    if (!verifierConfig || verifierConfig == null) {
+    const verifierConfig = await this.webPageConfigRepo.findAWebpageConfig({
+      _id: new Types.ObjectId(id),
+    });
+    if (!verifierConfig) {
       throw new BadRequestException([
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_NOT_FOUND,
       ]);
     }
-    if (!kycServiceDetail) {
-      throw new BadRequestException([
-        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
-      ]);
+    let kycServiceDetail;
+    const kycService = await redisClient.get(appId);
+    if (!kycService) {
+      kycServiceDetail = await this.appRepository.findOne({ appId });
+      if (!kycServiceDetail) {
+        throw new BadRequestException([
+          WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
+        ]);
+      }
+      await this.appAuthService.storeDataInRedis(
+        GRANT_TYPES.access_service_kyc,
+        kycServiceDetail,
+        getAccessListForModule('VERIFIER', SERVICE_TYPES.CAVACH_API),
+        appId,
+      );
+    } else {
+      kycServiceDetail = JSON.parse(kycService);
     }
     if (
       !kycServiceDetail.dependentServices ||
@@ -282,29 +297,51 @@ export class WebpageConfigService {
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_SSI_SERVICE_NOT_FOUND,
       ]);
     }
-    const ssiServiceId = kycServiceDetail.dependentServices[0];
-    const ssiServiceDetail = await this.appRepository.findOne({
-      appId: ssiServiceId,
-    });
-    if (!ssiServiceDetail) {
-      throw new BadRequestException([
-        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_SSI_SERVICE_DOES_NOT_EXIST,
-      ]);
+    const ssiServiceId = kycServiceDetail?.dependentServices?.[0];
+    let ssiServiceDetail;
+    const ssiService = await redisClient.get(ssiServiceId);
+    if (!ssiService) {
+      ssiServiceDetail = await this.appRepository.findOne({
+        appId: ssiServiceId,
+      });
+      if (!ssiServiceDetail) {
+        throw new BadRequestException([
+          WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_SSI_SERVICE_DOES_NOT_EXIST,
+        ]);
+      }
+      await this.appAuthService.storeDataInRedis(
+        GRANT_TYPES.access_service_ssi,
+        ssiServiceDetail,
+        getAccessListForModule('VERIFIER', SERVICE_TYPES.SSI_API),
+        ssiServiceId,
+      );
+    } else {
+      ssiServiceDetail = JSON.parse(ssiService);
     }
 
     // generate access tokens
     const [ssiAccessTokenDetail, kycAccessTokenDetail] = await Promise.all([
       this.appAuthService.getAccessToken(
-        GRANT_TYPES.access_service_ssi,
-        ssiServiceDetail,
-        0.5,
-        getAccessListForModule('VERIFIER', SERVICE_TYPES.SSI_API),
+        {
+          appId: ssiServiceId,
+          appName: ssiServiceDetail.appName,
+          grantType: GRANT_TYPES.access_service_ssi,
+          sessionId: ssiServiceId,
+          subdomain: ssiServiceDetail.subdomain,
+        },
+        EXPIRY_CONFIG.VERIFIER_ACCESS.jwtTime,
+        EXPIRY_CONFIG.VERIFIER_ACCESS.jwtUnit,
       ),
       this.appAuthService.getAccessToken(
-        GRANT_TYPES.access_service_kyc,
-        kycServiceDetail,
-        0.5,
-        getAccessListForModule('VERIFIER', SERVICE_TYPES.CAVACH_API),
+        {
+          appId,
+          appName: kycServiceDetail.appName,
+          grantType: GRANT_TYPES.access_service_kyc,
+          sessionId: appId,
+          subdomain: kycServiceDetail.subdomain,
+        },
+        EXPIRY_CONFIG.VERIFIER_ACCESS.jwtTime,
+        EXPIRY_CONFIG.VERIFIER_ACCESS.jwtUnit,
       ),
     ]);
     const redisPayload = {
@@ -315,7 +352,7 @@ export class WebpageConfigService {
       redisKey,
       JSON.stringify(redisPayload),
       'EX',
-      TOKEN.VERIFIER_TOKEN.expiry,
+      EXPIRY_CONFIG.VERIFIER_ACCESS.redisExpiryTime,
     );
     return {
       ...redisPayload,

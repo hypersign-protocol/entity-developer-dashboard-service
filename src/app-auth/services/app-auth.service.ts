@@ -22,6 +22,7 @@ import * as url from 'url';
 import { SupportedServiceService } from 'src/supported-service/services/supported-service.service';
 import {
   APP_ENVIRONMENT,
+  Context,
   SERVICE_TYPES,
 } from 'src/supported-service/services/iServiceList';
 import { UserRepository } from 'src/user/repository/user.repository';
@@ -35,6 +36,12 @@ import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onb
 import { Model } from 'mongoose';
 import { getAccessListForModule } from 'src/utils/utils';
 import { TokenModule } from 'src/config/access-matrix';
+import { redisClient } from 'src/utils/redis.provider';
+import {
+  EXPIRY_CONFIG,
+  getSecondsFromUnit,
+  TIME_UNIT,
+} from 'src/utils/time-constant';
 
 export enum GRANT_TYPES {
   access_service_kyc = 'access_service_kyc',
@@ -61,7 +68,7 @@ export class AppAuthService {
     @InjectModel(CustomerOnboarding.name)
     private readonly onboardModel: Model<CustomerOnboarding>,
     private readonly webpageConfigRepo: WebPageConfigRepository,
-  ) {}
+  ) { }
 
   async createAnApp(
     createAppDto: CreateAppDto,
@@ -393,9 +400,8 @@ export class AppAuthService {
   }
 
   private async verifyDNS01(domain: URL, txt: string) {
-    const resolveDNSURL = `https://dns.google/resolve?name=${
-      new URL(domain).host
-    }&type=TXT`;
+    const resolveDNSURL = `https://dns.google/resolve?name=${new URL(domain).host
+      }&type=TXT`;
     const actuaTxt = txt;
     const res = await fetch(resolveDNSURL, {
       headers: {
@@ -435,7 +441,7 @@ export class AppAuthService {
     if (fetchedTxtRecord && fetchedTxtRecord.error) {
       throw new BadRequestException([
         fetchedTxtRecord.error?.message +
-          '. If you have already added then it may take a while to complete. Please try again in sometime.',
+        '. If you have already added then it may take a while to complete. Please try again in sometime.',
       ]);
     }
     if (fetchedTxtRecord.verified) {
@@ -541,7 +547,49 @@ export class AppAuthService {
       { appId, userId },
       updataAppDto,
     );
-    return this.getAppResponse(app);
+    const updatedapp = await this.getAppResponse(app);
+    // update redis
+
+    const baseKey = appId;
+    const dashboardRedisKey = `${appId}_${Context.idDashboard}`;
+
+    const updatedFields = {
+      whitelistedCors: updatedapp.whitelistedCors,
+      env: updatedapp.env ?? APP_ENVIRONMENT.dev,
+      appName: updatedapp.appName,
+    };
+
+    const [baseDataString, dashboardDataString] = await Promise.all([
+      redisClient.get(baseKey),
+      redisClient.get(dashboardRedisKey),
+    ]);
+
+    const updatePromises = [];
+
+    if (baseDataString) {
+      const baseData = JSON.parse(baseDataString);
+      const updatedBase = { ...baseData, ...updatedFields };
+      updatePromises.push(
+        redisClient.set(baseKey, JSON.stringify(updatedBase), 'KEEPTTL'),
+      );
+    }
+
+    if (dashboardDataString) {
+      const dashboardData = JSON.parse(dashboardDataString);
+      const updatedDashboard = { ...dashboardData, ...updatedFields };
+      updatePromises.push(
+        redisClient.set(
+          dashboardRedisKey,
+          JSON.stringify(updatedDashboard),
+          'KEEPTTL',
+        ),
+      );
+    }
+
+    if (updatePromises.length > 0) {
+      await Promise.all(updatePromises);
+    }
+    return updatedapp;
   }
 
   async deleteApp(appId: string, userId: string): Promise<DeleteAppResponse> {
@@ -619,6 +667,12 @@ export class AppAuthService {
     }
     this.authzCreditRepository.deleteAuthzDetail({ appId });
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });
+    // delete from redis
+    await Promise.all([
+      redisClient.del(appId),
+      redisClient.del(`${appId}_${Context.idDashboard}`),
+    ]);
+    Logger.debug(`Redis cache cleaned for appId: ${appId}`);
     return { appId: appDetail.appId };
   }
 
@@ -643,7 +697,6 @@ export class AppAuthService {
     grantType,
   ): Promise<{ access_token; expiresIn; tokenType }> {
     Logger.log('generateAccessToken() method: starts....', 'AppAuthService');
-
     const apikeyIndex = appSecreatKey.split('.')[0];
     const appDetail = await this.appRepository.findOne({
       apiKeyPrefix: apikeyIndex,
@@ -682,11 +735,25 @@ export class AppAuthService {
     const serviceType = appDetail.services[0]?.id; // TODO: remove this later
     let grant_type = '';
     let accessList = [];
+    const redisKey = appDetail.appId;
+    const savedSession = await redisClient.get(redisKey);
+    if (savedSession) {
+      Logger.log('Using redis cached session', 'AppAuthService');
+      const sessionJson = JSON.parse(savedSession);
+      const jwtPayload = {
+        appId: sessionJson.appId,
+        appName: sessionJson.appName,
+        grantType: sessionJson.grantType,
+        subdomain: sessionJson.subdomain,
+        sessionId: redisKey,
+      };
+      return this.getAccessToken(jwtPayload, expiresin);
+    }
     switch (serviceType) {
       case SERVICE_TYPES.SSI_API: {
         grant_type = GRANT_TYPES.access_service_ssi;
         accessList = getAccessListForModule(
-          TokenModule.VERIFIER,
+          TokenModule.APP_AUTH,
           SERVICE_TYPES.SSI_API,
         );
         break;
@@ -703,7 +770,7 @@ export class AppAuthService {
         }
         grant_type = grantType || GRANT_TYPES.access_service_kyc;
         accessList = getAccessListForModule(
-          TokenModule.VERIFIER,
+          TokenModule.APP_AUTH,
           SERVICE_TYPES.CAVACH_API,
         );
         break;
@@ -711,7 +778,7 @@ export class AppAuthService {
       case SERVICE_TYPES.QUEST: {
         grant_type = GRANT_TYPES.access_service_quest;
         accessList = getAccessListForModule(
-          TokenModule.VERIFIER,
+          TokenModule.APP_AUTH,
           SERVICE_TYPES.QUEST,
         );
         break;
@@ -726,15 +793,37 @@ export class AppAuthService {
         `You are not authorized to access service of type ${serviceType}`,
       ]);
     }
-
-    return this.getAccessToken(grant_type, appDetail, expiresin, accessList);
+    const jwtPayload = {
+      appId: appDetail.appId,
+      appName: appDetail.appName,
+      grantType: grant_type,
+      subdomain: appDetail.subdomain,
+      sessionId: redisKey,
+    };
+    await this.storeDataInRedis(grant_type, appDetail, accessList, redisKey);
+    return this.getAccessToken(jwtPayload, expiresin);
   }
 
   public async getAccessToken(
+    data,
+    time = 4,
+    unit: TIME_UNIT = TIME_UNIT.HOUR,
+  ) {
+    const secret = this.config.get('JWT_SECRET');
+    const token = await this.jwt.signAsync(data, {
+      expiresIn: `${time}${unit}`,
+      secret,
+    });
+    const expiresIn = getSecondsFromUnit(time, unit);
+    Logger.log('generateAccessToken() method: ends....', 'AppAuthService');
+
+    return { access_token: token, expiresIn, tokenType: 'Bearer' };
+  }
+  public async storeDataInRedis(
     grantType,
     appDetail,
-    expiresin = 4,
     accessList = [],
+    sessionId,
   ) {
     const payload = {
       appId: appDetail.appId,
@@ -763,27 +852,22 @@ export class AppAuthService {
     ) {
       payload['dependentServices'] = appDetail.dependentServices;
     }
-
-    const secret = this.config.get('JWT_SECRET');
-
-    const token = await this.jwt.signAsync(payload, {
-      expiresIn: expiresin.toString() + 'h',
-      secret,
-    });
-    const expiresIn = (expiresin * 1 * 60 * 60 * 1000) / 1000;
-    Logger.log('generateAccessToken() method: ends....', 'AppAuthService');
-
-    return { access_token: token, expiresIn, tokenType: 'Bearer' };
+    Logger.log('storeDataInRedis() method: ends....', 'AppAuthService');
+    redisClient.set(
+      sessionId,
+      JSON.stringify(payload),
+      'EX',
+      EXPIRY_CONFIG.SERVICE_ACCESS.redisExpiryTime,
+    );
   }
-
-  //access_service_ssi
-  //access_service_kyc
 
   async grantPermission(
     grantType: string,
     appId: string,
     user,
   ): Promise<{ access_token; expiresIn; tokenType }> {
+    const sessionId = `${appId}_${Context.idDashboard}`;
+    const savedSession = await redisClient.get(sessionId);
     switch (grantType) {
       case GRANT_TYPES.access_service_ssi:
         break;
@@ -796,20 +880,34 @@ export class AppAuthService {
       default: {
         throw new BadRequestException([
           'Grant type not supported, supported grant types are: ' +
-            GRANT_TYPES.access_service_kyc +
-            ',' +
-            GRANT_TYPES.access_service_ssi,
+          GRANT_TYPES.access_service_kyc +
+          ',' +
+          GRANT_TYPES.access_service_ssi,
         ]);
       }
     }
 
+    if (savedSession) {
+      const app = JSON.parse(savedSession);
+      const dataToStore = {
+        appId,
+        appName: app.appName,
+        grantType,
+        subdomain: app.subdomain,
+        sessionId,
+      };
+      return this.getAccessToken(
+        dataToStore,
+        EXPIRY_CONFIG.SERVICE_ACCESS.jwtTime,
+        EXPIRY_CONFIG.SERVICE_ACCESS.jwtUnit,
+      );
+    }
     const app = await this.getAppById(appId, user.userId);
     if (!app) {
       throw new BadRequestException([
         'Invalid service id or you do not have access of this service',
       ]);
     }
-
     const userDetails = user;
     if (!userDetails) {
       throw new UnauthorizedException([
@@ -868,7 +966,18 @@ export class AppAuthService {
         `You are not authorized to access service of type ${serviceType}`,
       ]);
     }
-
-    return this.getAccessToken(grantType, app, 12, accessList);
+    const tokenPayload = {
+      appId,
+      appName: app.appName,
+      grantType,
+      subdomain: app.subdomain,
+      sessionId,
+    };
+    await this.storeDataInRedis(grantType, app, accessList, sessionId);
+    return this.getAccessToken(
+      tokenPayload,
+      EXPIRY_CONFIG.SERVICE_ACCESS.jwtTime,
+      EXPIRY_CONFIG.SERVICE_ACCESS.jwtUnit,
+    );
   }
 }

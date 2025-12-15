@@ -68,7 +68,7 @@ export class CustomerOnboardingService {
     private readonly appAuthRepository: AppRepository,
     private readonly roleRepository: RoleRepository,
     private readonly webPageConfig: WebpageConfigService,
-    private readonly authzService: AuthzCreditService
+    private readonly authzService: AuthzCreditService,
   ) {}
   /**
    * Creates a new customer onboarding record and notifies super admins
@@ -205,8 +205,15 @@ export class CustomerOnboardingService {
   ) {
     Logger.log('Inside makeExternalRequest()', 'CustomerOnboardingService');
     try {
+      Logger.log(`Making request to ${url}`, 'CustomerOnboardingService');
       const response = await fetch(url, options);
-      const detail = await response.json();
+      Logger.log(
+        `Received response with status ${response.status}`,
+        'CustomerOnboardingService',
+      );
+      // const detail = await response.json();
+      const text = await response.text();
+      const detail = text ? JSON.parse(text) : null;
       if (!response.ok) {
         const serverError =
           detail?.error?.details ||
@@ -219,7 +226,8 @@ export class CustomerOnboardingService {
       }
       return detail;
     } catch (error) {
-      throw new Error(`${error.message}`);
+      Logger.error(error, error?.stack, 'CustomerOnboardingService');
+      throw error; // don't rewrap
     }
   }
 
@@ -585,6 +593,14 @@ export class CustomerOnboardingService {
                 'REGISTER_DID step started',
                 'CustomerOnboardingService',
               );
+              if (!ssiService && customerOnboardingData.ssiServiceId) {
+                ssiService = await this.appAuthRepository.findOne({
+                  appId: customerOnboardingData.ssiServiceId,
+                });
+              }
+
+              Logger.debug(`ssiService: ${ssiService._id}`);
+
               const ssiServiceDetail = await redisClient.get(ssiRedisKey);
               const defaultAccessList = getAccessListForModule(
                 TokenModule.DASHBOARD,
@@ -631,7 +647,7 @@ export class CustomerOnboardingService {
                     true,
                   )}api/v1/did/${didToRegister}`,
                   {
-                    method: 'POST',
+                    method: 'GET',
                     headers: {
                       authorization: `Bearer ${ssiAccessToken.access_token}`,
                       'Content-Type': 'application/json',
@@ -644,7 +660,7 @@ export class CustomerOnboardingService {
               }
 
               await this.makeExternalRequest(
-                `${sanitizeUrl(ssiTenantUrl, true)}api/v1/did/register`,
+                `${sanitizeUrl(ssiTenantUrl, true)}api/v1/did/register/v2`,
                 {
                   method: 'POST',
                   headers: {
@@ -653,7 +669,11 @@ export class CustomerOnboardingService {
                   },
                   body: JSON.stringify({
                     didDocument,
-                    verificationMethodId: `${didToRegister}#key-1`,
+                    signInfos: [
+                      {
+                        verificationMethodId: `${didToRegister}#key-1`,
+                      },
+                    ],
                   }),
                 },
                 'Failed to register DID',
@@ -713,6 +733,13 @@ export class CustomerOnboardingService {
                 'CREDIT_KYC_SERVICE step started',
                 'CustomerOnboardingService',
               );
+
+              if (!kycService && customerOnboardingData.kycServiceId) {
+                kycService = await this.appAuthRepository.findOne({
+                  appId: customerOnboardingData.kycServiceId,
+                });
+              }
+
               await this.handleCreditService(
                 kycCreditDetail,
                 {
@@ -861,6 +888,7 @@ export class CustomerOnboardingService {
           }
           this.logStepSuccess(onboardingLogs, step as OnboardingStep);
         } catch (error) {
+          Logger.error(error.message);
           this.logStepFailure(onboardingLogs, step as OnboardingStep, error);
           onboardingStatus = CreditStatus.FAILED;
           break;

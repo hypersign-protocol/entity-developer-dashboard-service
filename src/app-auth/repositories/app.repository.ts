@@ -32,97 +32,8 @@ export class AppRepository {
       hasDomainVerified: 1,
       domainLinkageCredentialString: 1,
       _id: 0,
-      tenantUrl: {
-        $concat: [
-          {
-            $arrayElemAt: [
-              {
-                $split: [{ $arrayElemAt: ['$services.domain', 0] }, '://'],
-              },
-              0,
-            ],
-          },
-          '://',
-          {
-            $cond: {
-              if: { $ifNull: ['$subdomain', false] },
-              then: { $concat: ['$subdomain', '.'] },
-              else: '',
-            },
-          },
-          {
-            $arrayElemAt: [
-              {
-                $split: [{ $arrayElemAt: ['$services.domain', 0] }, '://'],
-              },
-              1,
-            ],
-          },
-        ],
-      },
+      tenantUrl: { $arrayElemAt: ['$services.domain', 0] },
     };
-  }
-
-  private getTenantUrlAggeration() {
-    return [
-      {
-        $addFields: {
-          serviceDomain: {
-            $arrayElemAt: ['$services.domain', 0],
-          },
-        },
-      },
-      {
-        $match: {
-          serviceDomain: { $exists: true },
-        },
-      },
-      {
-        $set: {
-          serviceDomainProtocol: {
-            $arrayElemAt: [
-              {
-                $split: ['$serviceDomain', '://'],
-              },
-              0,
-            ],
-          },
-          serviceDomainHostname: {
-            $arrayElemAt: [
-              {
-                $split: ['$serviceDomain', '://'],
-              },
-              1,
-            ],
-          },
-        },
-      },
-      {
-        $set: {
-          tenantUrl: {
-            $cond: {
-              if: { $ifNull: ['$subdomain', false] },
-              then: {
-                $concat: [
-                  '$serviceDomainProtocol',
-                  '://',
-                  '$subdomain',
-                  '.',
-                  '$serviceDomainHostname',
-                ],
-              },
-              else: {
-                $concat: [
-                  '$serviceDomainProtocol',
-                  '://',
-                  '$serviceDomainHostname',
-                ],
-              },
-            },
-          },
-        },
-      },
-    ];
   }
 
   async findOne(appFilterQuery: FilterQuery<App>): Promise<App> {
@@ -132,7 +43,7 @@ export class AppRepository {
     );
     const aggregationPipeline = [
       { $match: appFilterQuery },
-      ...this.getTenantUrlAggeration(),
+      { $project: this.appDataProjectPipelineToReturn() },
     ];
     const apps = await this.appModel.aggregate(aggregationPipeline);
     return apps[0];

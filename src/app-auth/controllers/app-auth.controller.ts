@@ -44,7 +44,7 @@ import { UserRole } from 'src/user/schema/user.schema';
 @ApiTags('Application')
 @Controller('/api/v1/app')
 export class AppAuthController {
-  constructor(private readonly appAuthService: AppAuthService) { }
+  constructor(private readonly appAuthService: AppAuthService) {}
   @ApiBearerAuth('Authorization')
   @UseInterceptors(
     MongooseClassSerializerInterceptor(App, {
@@ -137,7 +137,7 @@ export class AppAuthController {
 
     const app = await this.appAuthService.getAppById(appId, userId);
     if (app) return app;
-    else throw new AppNotFoundException(); // Custom Exception handling
+    else throw new BadRequestException(['App not found']);
   }
 
   @ApiBearerAuth('Authorization')

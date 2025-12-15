@@ -645,7 +645,7 @@ export class CustomerOnboardingService {
                   `${sanitizeUrl(
                     ssiTenantUrl,
                     true,
-                  )}api/v1/did/${didToRegister}`,
+                  )}api/v1/did/resolve/${didToRegister}`,
                   {
                     method: 'GET',
                     headers: {

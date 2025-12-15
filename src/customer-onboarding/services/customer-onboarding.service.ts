@@ -371,7 +371,7 @@ export class CustomerOnboardingService {
       let ssiSubdomain = customerOnboardingData?.ssiSubdomain;
       let kycSubdomain = customerOnboardingData?.kycSubdomain;
       let ssiTenantUrl = ssiBaseDomain; //this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
-      let kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
+      let kycTenantUrl = cavachBaseDomain; //this.getTenantUrl(cavachBaseDomain, kycSubdomain);
       let ssiRedisKey = generateHash(
         `${customerOnboardingData?.ssiServiceId}_${Context.idDashboard}`,
       );
@@ -671,7 +671,7 @@ export class CustomerOnboardingService {
                     didDocument,
                     signInfos: [
                       {
-                        verificationMethodId: `${didToRegister}#key-1`,
+                        verification_method_id: `${didToRegister}#key-1`,
                       },
                     ],
                   }),
@@ -715,10 +715,10 @@ export class CustomerOnboardingService {
                 userId,
               );
 
-              kycSubdomain = kycService.subdomain;
+              // kycSubdomain = kycService.subdomain;
               onboardingUpdateData.kycSubdomain = kycService.subdomain;
               onboardingUpdateData.kycServiceId = kycService.appId;
-              kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
+              kycTenantUrl = cavachBaseDomain; //this.getTenantUrl(cavachBaseDomain, kycSubdomain);
               kycRedisKey = generateHash(
                 `${kycService?.appId}_${Context.idDashboard}`,
               );
@@ -844,7 +844,6 @@ export class CustomerOnboardingService {
                   headers: {
                     'x-kyc-access-token': kycAccessToken.access_token,
                     'Content-Type': 'application/json',
-                    origin: kycService.whitelistedCors[0],
                   },
                   body: JSON.stringify(requestBody),
                 },

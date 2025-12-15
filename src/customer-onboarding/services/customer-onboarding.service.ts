@@ -302,7 +302,7 @@ export class CustomerOnboardingService {
         ? { 'x-kyc-access-token': creditToken }
         : { authorization: `Bearer ${creditToken}` }),
     };
-    let requestOptions: any = {
+    const requestOptions: any = {
       method: 'POST',
       headers,
     };
@@ -370,7 +370,7 @@ export class CustomerOnboardingService {
       const secret = this.config.get('JWT_SECRET');
       let ssiSubdomain = customerOnboardingData?.ssiSubdomain;
       let kycSubdomain = customerOnboardingData?.kycSubdomain;
-      let ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
+      let ssiTenantUrl = ssiBaseDomain; //this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
       let kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
       let ssiRedisKey = generateHash(
         `${customerOnboardingData?.ssiServiceId}_${Context.idDashboard}`,

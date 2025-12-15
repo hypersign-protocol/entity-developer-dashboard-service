@@ -54,6 +54,7 @@ import getOnboardingRetryNotificationMail from 'src/mail-notification/constants/
 import { redisClient } from 'src/utils/redis.provider';
 import { EXPIRY_CONFIG, TIME } from 'src/utils/time-constant';
 import { TokenModule } from 'src/config/access-matrix';
+import { AuthzCreditService } from 'src/credits/services/credits.service';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -67,6 +68,7 @@ export class CustomerOnboardingService {
     private readonly appAuthRepository: AppRepository,
     private readonly roleRepository: RoleRepository,
     private readonly webPageConfig: WebpageConfigService,
+    private readonly authzService: AuthzCreditService
   ) {}
   /**
    * Creates a new customer onboarding record and notifies super admins
@@ -286,23 +288,28 @@ export class CustomerOnboardingService {
       grantType,
     };
     const creditToken = await this.generateCreditToken(tokenPayload, secret);
-    let headers: Record<string, string> = {
-      authorization: `Bearer ${creditToken}`,
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      ...(grantType === GRANT_TYPES.access_service_kyc
+        ? { 'x-kyc-access-token': creditToken }
+        : { authorization: `Bearer ${creditToken}` }),
     };
-
-    if (grantType === GRANT_TYPES.access_service_kyc) {
-      headers = {
-        'x-kyc-access-token': creditToken,
-        'Content-Type': 'application/json',
-      };
+    let requestOptions: any = {
+      method: 'POST',
+      headers,
+    };
+    if (grantType === GRANT_TYPES.access_service_ssi) {
+      const authzCreditDetail = await this.authzService.grantSSICredit(
+        serviceInfo.appId,
+        '5000000',
+      );
+      requestOptions.body = JSON.stringify({
+        ...authzCreditDetail,
+      });
     }
     await this.makeExternalRequest(
       `${sanitizeUrl(tenantUrl, true)}api/v1/credit`,
-      {
-        method: 'POST',
-        headers,
-      },
+      requestOptions,
       'Failed to credit service',
     );
   }

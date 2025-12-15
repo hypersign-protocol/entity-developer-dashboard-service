@@ -24,6 +24,7 @@ import { AppAuthModule } from 'src/app-auth/app-auth.module';
 import { JwtModule } from '@nestjs/jwt';
 import { TeamModule } from 'src/roles/role.module';
 import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
+import { CreditModule } from 'src/credits/credits.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
     AppAuthModule,
     TeamModule,
     WebpageConfigModule,
+    CreditModule
   ],
   controllers: [CustomerOnboardingController],
   providers: [CustomerOnboardingService, CustomerOnboardingRepository],

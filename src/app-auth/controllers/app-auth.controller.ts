@@ -14,6 +14,7 @@ import {
   Req,
   Delete,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   CreateAppDto,
@@ -43,7 +44,7 @@ import { UserRole } from 'src/user/schema/user.schema';
 @ApiTags('Application')
 @Controller('/api/v1/app')
 export class AppAuthController {
-  constructor(private readonly appAuthService: AppAuthService) {}
+  constructor(private readonly appAuthService: AppAuthService) { }
   @ApiBearerAuth('Authorization')
   @UseInterceptors(
     MongooseClassSerializerInterceptor(App, {
@@ -86,7 +87,7 @@ export class AppAuthController {
       userRole,
     );
     if (appList.length === 0) {
-      throw new AppNotFoundException();
+      throw new BadRequestException(['Application Not Found']);
     }
     if (appList) return appList;
   }

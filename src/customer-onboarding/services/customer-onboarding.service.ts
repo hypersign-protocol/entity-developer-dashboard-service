@@ -471,7 +471,7 @@ export class CustomerOnboardingService {
                   appName: `${companyName}`,
                   domain,
                   serviceIds: [SERVICE_TYPES.SSI_API],
-                  whitelistedCors: ['*'],
+                  whitelistedCors: [this.config.get<string>('CLIENT_APP_URL')],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
                   logoUrl: companyLogo,

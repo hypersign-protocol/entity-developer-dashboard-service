@@ -31,6 +31,8 @@ export class AppRepository {
       env: 1,
       hasDomainVerified: 1,
       domainLinkageCredentialString: 1,
+      userId: 1,
+      kmsId: 1,
       _id: 0,
       tenantUrl: { $arrayElemAt: ['$services.domain', 0] },
     };

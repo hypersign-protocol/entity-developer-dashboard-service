@@ -369,7 +369,7 @@ export class CustomerOnboardingService {
       const cavachBaseDomain = this.config.get<string>('CAVACH_API_DOMAIN');
       const secret = this.config.get('JWT_SECRET');
       let ssiSubdomain = customerOnboardingData?.ssiSubdomain;
-      let kycSubdomain = customerOnboardingData?.kycSubdomain;
+      const kycSubdomain = customerOnboardingData?.kycSubdomain;
       let ssiTenantUrl = ssiBaseDomain; //this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
       let kycTenantUrl = cavachBaseDomain; //this.getTenantUrl(cavachBaseDomain, kycSubdomain);
       let ssiRedisKey = generateHash(

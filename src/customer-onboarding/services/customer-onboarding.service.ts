@@ -482,7 +482,7 @@ export class CustomerOnboardingService {
               ssiSubdomain = ssiService.subdomain;
               onboardingUpdateData.ssiSubdomain = ssiService.subdomain;
               onboardingUpdateData.ssiServiceId = ssiService.appId;
-              ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
+              ssiTenantUrl = ssiBaseDomain; //this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
               Logger.debug(
                 'CREATE_SSI_SERVICE step ends',
                 'CustomerOnboardingService',

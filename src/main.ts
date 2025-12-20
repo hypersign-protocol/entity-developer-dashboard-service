@@ -27,6 +27,7 @@ async function bootstrap() {
   app.use(express.static(path.join(__dirname, '../public')));
   app.use(cookieParser());
 
+  const config = new ConfigService();
   // Adding prefix to our api
 
   const walletOptions = {
@@ -43,7 +44,7 @@ async function bootstrap() {
   const offlineSigner = hidWalletInstance.offlineSigner;
   const nodeRpcEndpoint = walletOptions.hidNodeRPCUrl;
   const nodeRestEndpoint = walletOptions.hidNodeRestUrl;
-  const namespace = this.config.get('HID_NETWORK_NAMESPACE') || '';
+  const namespace = config.get('HID_NETWORK_NAMESPACE') || '';
   const hsSSIdkInstance = new HypersignSSISdk({
     offlineSigner,
     nodeRpcEndpoint,
@@ -60,7 +61,6 @@ async function bootstrap() {
     mnemonic_EnglishMnemonic,
   );
 
-  const config = new ConfigService();
   const edv_config_dir = config.get('EDV_CONFIG_DIR')
     ? config.get('EDV_CONFIG_DIR')
     : '.edv-config';

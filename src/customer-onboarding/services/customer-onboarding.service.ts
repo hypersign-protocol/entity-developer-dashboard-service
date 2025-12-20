@@ -576,7 +576,9 @@ export class CustomerOnboardingService {
                     'Content-Type': 'application/json',
                     origin: ssiService.whitelistedCors[0],
                   },
-                  body: JSON.stringify({ namespace: 'testnet' }),
+                  body: JSON.stringify({
+                    namespace: this.config.get('HID_NETWORK_NAMESPACE') || '',
+                  }),
                 },
                 'Failed to create DID',
               );

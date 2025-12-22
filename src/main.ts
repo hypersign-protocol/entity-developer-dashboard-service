@@ -146,44 +146,6 @@ async function bootstrap() {
   );
 
   const server = await app.listen(process.env.PORT || 3001);
-
-  // TODO: we might not need to pass hidWalletInstance.offlineSigner since this sdk only verifies presenatation
-  // This way we do not have to pass hypersign.json config file
-  // const hypersignAuthOptions = {
-  //   serviceName: 'Entity Developer Dashboard',
-  //   serviceEp: config.get('DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP')
-  //     ? config.get('DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP')
-  //     : `http://localhost:${process.env.PORT}`,
-  //   schemaId: config.get('EMAIL_CREDENTITAL_SCHEMA_ID')
-  //     ? config.get('EMAIL_CREDENTITAL_SCHEMA_ID')
-  //     : 'sch:hid:testnet:z6MkoTFHzx3XPXAvAVAN9CWMh91vH53m4kTFiVPypC22c7fB:1.0',
-  //   accessToken: {
-  //     secret: config.get('JWT_SECRET')
-  //       ? config.get('JWT_SECRET')
-  //       : randomUUID(),
-  //     expiryTime: 120000,
-  //   },
-  //   refreshToken: {
-  //     secret: config.get('JWT_SECRET')
-  //       ? config.get('JWT_SECRET')
-  //       : randomUUID(),
-  //     expiryTime: 120000,
-  //   },
-  //   networkUrl: config.get('HID_NETWORK_RPC')
-  //     ? config.get('HID_NETWORK_RPC')
-  //     : hidNetworkUrls.testnet.rpc,
-  //   networkRestUrl: config.get('HID_NETWORK_API')
-  //     ? config.get('HID_NETWORK_API')
-  //     : hidNetworkUrls.testnet.rest,
-  // };
-  // const hypersignAuth = new HypersignAuth(
-  //   server,
-  //   hidWalletInstance.offlineSigner,
-  //   hypersignAuthOptions,
-  // );
-  // await hypersignAuth.init();
-  // globalThis.hypersignAuth = hypersignAuth;
-
   Logger.log(
     `Server running on http://localhost:${process.env.PORT}`,
     'Bootstrap',

@@ -122,6 +122,13 @@ export class CreateWebpageConfigResponseDto extends CreateWebpageConfigDto {
     example: 'dev',
   })
   logoUrl: string;
+
+  @ApiProperty({
+    name: 'tenantUrl',
+    description: 'Tenant url of the kyc service',
+    example: 'http://tenant.com',
+  })
+  tenantUrl: string;
 }
 export class CreateWebpageConfigResponseWithDetailDto extends CreateWebpageConfigResponseDto {
   @ApiProperty({

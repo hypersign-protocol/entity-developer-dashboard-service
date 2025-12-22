@@ -101,7 +101,7 @@ export class WebpageConfigService {
       pageDescription,
       pageTitle,
       pageType,
-      tenantUrl,
+      // tenantUrl,
       generatedUrl,
       contactEmail,
     };
@@ -114,6 +114,7 @@ export class WebpageConfigService {
       ...webpageConfigObject,
       serviceName: appName,
       developmentStage: env,
+      tenantUrl,
       logoUrl,
     };
   }
@@ -149,6 +150,7 @@ export class WebpageConfigService {
       serviceName: appName,
       developmentStage: env,
       logoUrl,
+      tenantUrl: serviceDetail['tenantUrl'],
     };
   }
 
@@ -178,6 +180,7 @@ export class WebpageConfigService {
       developmentStage: serviceDetail?.env as APP_ENVIRONMENT,
       serviceName: serviceDetail.appName,
       logoUrl: serviceDetail.logoUrl,
+      tenantUrl: serviceDetail['tenantUrl'],
     };
   }
 
@@ -226,6 +229,7 @@ export class WebpageConfigService {
       serviceName: appName,
       developmentStage: env,
       logoUrl,
+      tenantUrl: serviceDetail['tenantUrl'],
     };
   }
 

@@ -369,10 +369,8 @@ export class CustomerOnboardingService {
       const ssiBaseDomain = this.config.get<string>('SSI_API_DOMAIN');
       const cavachBaseDomain = this.config.get<string>('CAVACH_API_DOMAIN');
       const secret = this.config.get('JWT_SECRET');
-      let ssiSubdomain = customerOnboardingData?.ssiSubdomain;
-      const kycSubdomain = customerOnboardingData?.kycSubdomain;
-      let ssiTenantUrl = ssiBaseDomain; //this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
-      let kycTenantUrl = cavachBaseDomain; //this.getTenantUrl(cavachBaseDomain, kycSubdomain);
+      let ssiTenantUrl = ssiBaseDomain;
+      let kycTenantUrl = cavachBaseDomain;
       let ssiRedisKey = generateHash(
         `${customerOnboardingData?.ssiServiceId}_${Context.idDashboard}`,
       );
@@ -479,11 +477,9 @@ export class CustomerOnboardingService {
                 },
                 userId,
               );
-
-              ssiSubdomain = ssiService.subdomain;
               onboardingUpdateData.ssiSubdomain = ssiService.subdomain;
               onboardingUpdateData.ssiServiceId = ssiService.appId;
-              ssiTenantUrl = ssiBaseDomain; //this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
+              ssiTenantUrl = ssiBaseDomain;
               Logger.debug(
                 'CREATE_SSI_SERVICE step ends',
                 'CustomerOnboardingService',
@@ -575,7 +571,7 @@ export class CustomerOnboardingService {
                   headers: {
                     authorization: `Bearer ${ssiAccessToken.access_token}`,
                     'Content-Type': 'application/json',
-                    origin: ssiService.whitelistedCors[0],
+                    origin: ssiService?.whitelistedCors[0],
                   },
                   body: JSON.stringify({
                     namespace: this.config.get('HID_NETWORK_NAMESPACE') || '',
@@ -654,7 +650,7 @@ export class CustomerOnboardingService {
                     headers: {
                       authorization: `Bearer ${ssiAccessToken.access_token}`,
                       'Content-Type': 'application/json',
-                      origin: ssiService.whitelistedCors[0],
+                      origin: ssiService?.whitelistedCors[0],
                     },
                   },
                   'Failed to resolve DID',

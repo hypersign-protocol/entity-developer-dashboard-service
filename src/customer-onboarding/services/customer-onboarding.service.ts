@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   HttpException,
   Injectable,
+  InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { CreateCustomerOnboardingDto } from '../dto/create-customer-onboarding.dto';
@@ -911,7 +912,7 @@ export class CustomerOnboardingService {
       // Check for failures
       const failed = onboardingLogs.find((l) => l.status === StepStatus.FAILED);
       if (failed) {
-        throw new BadRequestException([
+        throw new InternalServerErrorException([
           `Step ${failed.step} failed: ${failed.failureReason}`,
         ]);
       }
@@ -931,7 +932,7 @@ export class CustomerOnboardingService {
       return { message: 'Customer onboarding completed successfully' };
     } catch (e) {
       if (e instanceof HttpException) throw e;
-      throw new BadRequestException([e.message]);
+      throw new InternalServerErrorException([e.message]);
     }
   }
 

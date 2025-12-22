@@ -7,6 +7,7 @@ import {
   IsString,
   ValidateIf,
 } from 'class-validator';
+import { APP_ENVIRONMENT } from 'src/supported-service/services/iServiceList';
 
 export enum ExpiryType {
   ONE_MONTH = '1month',
@@ -112,7 +113,9 @@ export class CreateWebpageConfigResponseDto extends CreateWebpageConfigDto {
     description: 'Development stage of kyc service',
     example: 'dev',
   })
-  developmentStage: string;
+  @IsEnum(APP_ENVIRONMENT)
+  developmentStage: APP_ENVIRONMENT;
+
   @ApiProperty({
     name: 'logoUrl',
     description: 'Logo url of the kyc service',

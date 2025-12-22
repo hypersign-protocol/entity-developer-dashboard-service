@@ -3,7 +3,6 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import {
   CreateWebpageConfigDto,
@@ -17,7 +16,10 @@ import {
   GRANT_TYPES,
 } from 'src/app-auth/services/app-auth.service';
 import { WebPageConfigRepository } from '../repositories/webpage-config.repository';
-import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
+import {
+  APP_ENVIRONMENT,
+  SERVICE_TYPES,
+} from 'src/supported-service/services/iServiceList';
 import { ConfigService } from '@nestjs/config';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { isValidObjectId, Types } from 'mongoose';
@@ -74,7 +76,8 @@ export class WebpageConfigService {
         'KYC service must have a dependent SSI service linked to it.',
       ]);
     }
-    const { appName, logoUrl, env = 'dev' } = serviceDetail;
+    const { appName, logoUrl } = serviceDetail;
+    const env: APP_ENVIRONMENT = serviceDetail?.env as APP_ENVIRONMENT;
     const tenantUrl: string = serviceDetail['tenantUrl'];
 
     const { expiryDate } = await this.generateExpiryDate(
@@ -131,7 +134,8 @@ export class WebpageConfigService {
         [`No service found with serviceId: ${serviceId}`],
       ]);
     }
-    const { appName, logoUrl, env = 'dev' } = serviceDetail;
+    const { appName, logoUrl } = serviceDetail;
+    const env: APP_ENVIRONMENT = serviceDetail?.env as APP_ENVIRONMENT;
     const webPAgeConfigData = await this.webPageConfigRepo.findAWebpageConfig({
       serviceId,
     });
@@ -150,7 +154,7 @@ export class WebpageConfigService {
 
   async fetchAWebPageConfigurationDetail(
     id: string,
-  ): Promise<CreateWebpageConfigDto> {
+  ): Promise<CreateWebpageConfigResponseDto> {
     const isValidId = isValidObjectId(id);
     const query: any = {
       $or: [{ serviceId: id }],
@@ -165,7 +169,16 @@ export class WebpageConfigService {
         `No webpage configuration found for id: ${id}`,
       ]);
     }
-    return webpageConfiguration;
+
+    const serviceDetail = await this.appRepository.findOne({
+      appId: webpageConfiguration.serviceId,
+    });
+    return {
+      ...webpageConfiguration,
+      developmentStage: serviceDetail?.env as APP_ENVIRONMENT,
+      serviceName: serviceDetail.appName,
+      logoUrl: serviceDetail.logoUrl,
+    };
   }
 
   async updateWebPageConfiguration(
@@ -206,8 +219,8 @@ export class WebpageConfigService {
         `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
       ]);
     }
-    const { appName, logoUrl, env = 'dev' } = serviceDetail;
-
+    const { appName, logoUrl } = serviceDetail;
+    const env: APP_ENVIRONMENT = serviceDetail?.env as APP_ENVIRONMENT;
     return {
       ...webpageConfiguration,
       serviceName: appName,

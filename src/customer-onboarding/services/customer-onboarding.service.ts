@@ -56,6 +56,7 @@ import { redisClient } from 'src/utils/redis.provider';
 import { EXPIRY_CONFIG, TIME } from 'src/utils/time-constant';
 import { TokenModule } from 'src/config/access-matrix';
 import { AuthzCreditService } from 'src/credits/services/credits.service';
+import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -470,7 +471,12 @@ export class CustomerOnboardingService {
                   appName: `${companyName}`,
                   domain,
                   serviceIds: [SERVICE_TYPES.SSI_API],
-                  whitelistedCors: [this.config.get<string>('CLIENT_APP_URL')],
+                  whitelistedCors: [
+                    sanitizeUrl(
+                      this.config.get<string>('CLIENT_APP_URL'),
+                      false,
+                    ),
+                  ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
                   logoUrl: companyLogo,
@@ -695,9 +701,18 @@ export class CustomerOnboardingService {
                   domain: domain,
                   serviceIds: [SERVICE_TYPES.CAVACH_API],
                   whitelistedCors: [
-                    this.config.get<string>('KYC_WIDGET_URL'),
-                    this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
-                    this.config.get<string>('CLIENT_APP_URL'),
+                    urlSanitizer(
+                      this.config.get<string>('KYC_WIDGET_URL'),
+                      false,
+                    ),
+                    urlSanitizer(
+                      this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
+                      false,
+                    ),
+                    urlSanitizer(
+                      this.config.get<string>('CLIENT_APP_URL'),
+                      false,
+                    ),
                   ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,

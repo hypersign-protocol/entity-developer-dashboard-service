@@ -189,9 +189,17 @@ export class WebpageConfigService {
     updateWebpageConfigDto: UpdateWebpageConfigDto,
     serviceId,
   ): Promise<CreateWebpageConfigResponseDto> {
+    Logger.log(
+      'Inside updateWebPageConfiguration() to update webpage configuration detail',
+      'WebpageConfigService',
+    );
     const serviceDetail = await this.appRepository.findOne({
       appId: serviceId,
     });
+    Logger.debug(
+      'Inside updateWebPageConfiguration() after fetchich service detail from db',
+      'WebpageConfigService',
+    );
     if (!serviceDetail) {
       throw new BadRequestException([
         `No service found with serviceId: ${serviceId}`,
@@ -206,6 +214,7 @@ export class WebpageConfigService {
       ]);
     }
     const dataToUpdate = { ...updateWebpageConfigDto };
+    delete dataToUpdate['_id'];
     if (updateWebpageConfigDto.expiryType) {
       const { expiryDate } = await this.generateExpiryDate(
         updateWebpageConfigDto.expiryType,
@@ -213,6 +222,10 @@ export class WebpageConfigService {
       );
       dataToUpdate['expiryDate'] = expiryDate;
     }
+    Logger.debug(
+      'before updating webpage config detail....',
+      'WebpageConfigService',
+    );
     const webpageConfiguration = await this.webPageConfigRepo.findOneAndUpdate(
       { _id: new Types.ObjectId(id) },
       dataToUpdate,
@@ -247,6 +260,10 @@ export class WebpageConfigService {
     return deletedConfig;
   }
   private async generateExpiryDate(expiryType, customExpiryDate) {
+    Logger.debug(
+      'Inside generateExpiryDate() to calculate expiry of configured webpage',
+      'WebpageConfigService',
+    );
     let expiresIn: number;
     let expiryDate: Date;
     if (expiryType === ExpiryType.CUSTOM) {
@@ -360,6 +377,10 @@ export class WebpageConfigService {
     grantType: GRANT_TYPES,
     tokenModule,
   ) {
+    Logger.debug(
+      'Inside getServiceAndCache() method to store and get service detail from redis',
+      'WebpageConfigService',
+    );
     const cached = await redisClient.get(generateHash(appId));
     if (cached) return JSON.parse(cached);
     const serviceDetail = await this.appRepository.findOne({ appId });

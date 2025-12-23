@@ -35,6 +35,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
 import { Model } from 'mongoose';
 import {
+  DNS_RESOLVER_URL,
   evaluateAccessPolicy,
   generateHash,
   getAccessListForModule,
@@ -404,8 +405,10 @@ export class AppAuthService {
   }
 
   private async verifyDNS01(domain: URL, txt: string) {
-    const resolveDNSURL = `https://dns.google/resolve?name=${new URL(domain).host
-      }&type=TXT`;
+
+    const resolveDNSURL = `${DNS_RESOLVER_URL}?name=${
+      new URL(domain).host
+    }&type=TXT`;
     const actuaTxt = txt;
     const res = await fetch(resolveDNSURL, {
       headers: {
@@ -874,7 +877,7 @@ export class AppAuthService {
       sessionId,
       JSON.stringify(payload),
       'EX',
-      EXPIRY_CONFIG.SERVICE_ACCESS.redisExpiryTime,
+      EXPIRY_CONFIG.DASHBOARD_ACCESS.redisExpiryTime,
     );
   }
 
@@ -884,6 +887,7 @@ export class AppAuthService {
     user,
     session?,
   ): Promise<{ access_token; expiresIn; tokenType }> {
+
     const context = Context.idDashboard;
     let rawRedisKey = `${appId}_${context}_${session.userId}`;
     if (session && session.tenantId) {
@@ -921,8 +925,8 @@ export class AppAuthService {
       };
       return this.getAccessToken(
         dataToStore,
-        EXPIRY_CONFIG.SERVICE_ACCESS.jwtTime,
-        EXPIRY_CONFIG.SERVICE_ACCESS.jwtUnit,
+        EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtTime,
+        EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtUnit,
       );
     }
     const app = await this.getAppById(appId, user.userId);
@@ -1017,8 +1021,9 @@ export class AppAuthService {
     await this.storeDataInRedis(grantType, app, accessList, sessionId);
     return this.getAccessToken(
       tokenPayload,
-      EXPIRY_CONFIG.SERVICE_ACCESS.jwtTime,
-      EXPIRY_CONFIG.SERVICE_ACCESS.jwtUnit,
+      EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtTime,
+      EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtUnit,
+
     );
   }
 }

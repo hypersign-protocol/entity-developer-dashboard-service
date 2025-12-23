@@ -228,3 +228,5 @@ export const evaluateAccessPolicy = (
 export function generateHash(input: string): string {
   return createHash('sha256').update(input).digest('hex');
 }
+
+export const DNS_RESOLVER_URL = 'https://dns.google/resolve';

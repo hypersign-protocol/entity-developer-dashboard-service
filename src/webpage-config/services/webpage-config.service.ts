@@ -308,8 +308,8 @@ export class WebpageConfigService {
           sessionId: ssiServiceId,
           subdomain: ssiServiceDetail.subdomain,
         },
-        EXPIRY_CONFIG.VERIFIER_ACCESS.jwtTime,
-        EXPIRY_CONFIG.VERIFIER_ACCESS.jwtUnit,
+        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtTime,
+        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtUnit,
       ),
       this.appAuthService.getAccessToken(
         {
@@ -319,8 +319,8 @@ export class WebpageConfigService {
           sessionId: appId,
           subdomain: kycServiceDetail.subdomain,
         },
-        EXPIRY_CONFIG.VERIFIER_ACCESS.jwtTime,
-        EXPIRY_CONFIG.VERIFIER_ACCESS.jwtUnit,
+        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtTime,
+        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtUnit,
       ),
     ]);
     const redisPayload = {
@@ -331,7 +331,7 @@ export class WebpageConfigService {
       redisKey,
       JSON.stringify(redisPayload),
       'EX',
-      EXPIRY_CONFIG.VERIFIER_ACCESS.redisExpiryTime,
+      EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.redisExpiryTime,
     );
     return {
       ...redisPayload,

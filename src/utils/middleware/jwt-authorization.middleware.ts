@@ -45,9 +45,11 @@ export class JWTAuthorizeMiddleware implements NestMiddleware {
         (req.headers.referer && req.headers.referer.includes(publicEp));
       decoded = jwt.verify(authToken, process.env.JWT_SECRET);
       if (decoded) {
+        Logger.debug(decoded?.aud, 'token audiance');
         // verifying the domain of frontend and token domain
         const requestOrigin =
           req?.headers?.origin || req?.headers?.referer || req?.headers?.host;
+        Logger.debug(requestOrigin, 'requestOrigin');
         if (!skipDomainValidation) {
           if (decoded.aud) {
             const ifDomainValid = sanitizeUrl(requestOrigin, false).includes(

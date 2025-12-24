@@ -38,7 +38,7 @@ import { CreditModule } from 'src/credits/credits.module';
     AppAuthModule,
     TeamModule,
     WebpageConfigModule,
-    CreditModule
+    CreditModule,
   ],
   controllers: [CustomerOnboardingController],
   providers: [CustomerOnboardingService, CustomerOnboardingRepository],

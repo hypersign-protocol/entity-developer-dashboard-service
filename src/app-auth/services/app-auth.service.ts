@@ -209,10 +209,7 @@ export class AppAuthService {
     const appResponse: createAppResponse = {
       ...appData['_doc'],
       apiSecretKey,
-      tenantUrl:
-        appData.services[0].id === 'QUEST'
-          ? appData.services[0].domain
-          : this.getTenantUrl(appData.subdomain, appData.services[0]),
+      tenantUrl: appData?.services[0].domain,
     };
 
     delete appResponse.userId;
@@ -224,25 +221,6 @@ export class AppAuthService {
   }
 
   // fix the type for service
-  private getTenantUrl(subdomain: string, service: object) {
-    Logger.log('Inside getTenantUrl()', 'app-auth.service');
-    const domain = this.supportedServices.fetchServiceById(
-      service['id'],
-    )?.domain;
-    Logger.log(domain, 'app-auth.service');
-
-    const SERVICE_BASE_URL = url.parse(domain);
-
-    const tenantUrl =
-      SERVICE_BASE_URL.protocol +
-      '//' +
-      subdomain +
-      '.' +
-      SERVICE_BASE_URL.host +
-      SERVICE_BASE_URL.pathname;
-    return tenantUrl;
-  }
-
   private async getRandomSubdomain() {
     const subdomain = await this.appAuthApiKeyService.generateAppId(7);
     const appInDb = await this.appRepository.findOne({
@@ -323,7 +301,6 @@ export class AppAuthService {
             ],
 
             dependentApps: [{ $match: { userId } }, { $project: basePipeline }],
-
             totalCount: [{ $match: { userId } }, { $count: 'total' }],
           },
         },
@@ -447,7 +424,7 @@ export class AppAuthService {
     if (fetchedTxtRecord && fetchedTxtRecord.error) {
       throw new BadRequestException([
         fetchedTxtRecord.error?.message +
-        '. If you have already added then it may take a while to complete. Please try again in sometime.',
+          '. If you have already added then it may take a while to complete. Please try again in sometime.',
       ]);
     }
     if (fetchedTxtRecord.verified) {
@@ -886,7 +863,6 @@ export class AppAuthService {
     user,
     session?,
   ): Promise<{ access_token; expiresIn; tokenType }> {
-
     const context = Context.idDashboard;
     let rawRedisKey = `${appId}_${context}_${session.userId}`;
     if (session && session.tenantId) {
@@ -906,9 +882,9 @@ export class AppAuthService {
       default: {
         throw new BadRequestException([
           'Grant type not supported, supported grant types are: ' +
-          GRANT_TYPES.access_service_kyc +
-          ',' +
-          GRANT_TYPES.access_service_ssi,
+            GRANT_TYPES.access_service_kyc +
+            ',' +
+            GRANT_TYPES.access_service_ssi,
         ]);
       }
     }

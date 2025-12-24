@@ -50,7 +50,6 @@
     "fs": "0.0.1-security",
     "hid-hd-wallet": "git+https://github.com/hypersign-protocol/hid-hd-wallet.git#main",
     "hs-ssi-sdk": "github:hypersign-protocol/hid-ssi-js-sdk#testcase/bjj",
-    "hypersign-auth-node-sdk": "github:hypersign-protocol/hypersign-auth-node-sdk#update-prajna",
     "hypersign-edv-client": "github:hypersign-protocol/hypersign-edv-client#deleteByDocumentId",
     "idb-keyval": "6.2.1",
     "mongoose": "6.8.3",

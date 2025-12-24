@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   HttpException,
   Injectable,
+  InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { CreateCustomerOnboardingDto } from '../dto/create-customer-onboarding.dto';
@@ -55,6 +56,7 @@ import { redisClient } from 'src/utils/redis.provider';
 import { EXPIRY_CONFIG, TIME } from 'src/utils/time-constant';
 import { TokenModule } from 'src/config/access-matrix';
 import { AuthzCreditService } from 'src/credits/services/credits.service';
+import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -368,10 +370,8 @@ export class CustomerOnboardingService {
       const ssiBaseDomain = this.config.get<string>('SSI_API_DOMAIN');
       const cavachBaseDomain = this.config.get<string>('CAVACH_API_DOMAIN');
       const secret = this.config.get('JWT_SECRET');
-      let ssiSubdomain = customerOnboardingData?.ssiSubdomain;
-      let kycSubdomain = customerOnboardingData?.kycSubdomain;
-      let ssiTenantUrl = ssiBaseDomain; //this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
-      let kycTenantUrl = cavachBaseDomain; //this.getTenantUrl(cavachBaseDomain, kycSubdomain);
+      let ssiTenantUrl = ssiBaseDomain;
+      let kycTenantUrl = cavachBaseDomain;
       let ssiRedisKey = generateHash(
         `${customerOnboardingData?.ssiServiceId}_${Context.idDashboard}`,
       );
@@ -471,18 +471,21 @@ export class CustomerOnboardingService {
                   appName: `${companyName}`,
                   domain,
                   serviceIds: [SERVICE_TYPES.SSI_API],
-                  whitelistedCors: ['*'],
+                  whitelistedCors: [
+                    sanitizeUrl(
+                      this.config.get<string>('CLIENT_APP_URL'),
+                      false,
+                    ),
+                  ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
                   logoUrl: companyLogo,
                 },
                 userId,
               );
-
-              ssiSubdomain = ssiService.subdomain;
               onboardingUpdateData.ssiSubdomain = ssiService.subdomain;
               onboardingUpdateData.ssiServiceId = ssiService.appId;
-              ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
+              ssiTenantUrl = ssiBaseDomain;
               Logger.debug(
                 'CREATE_SSI_SERVICE step ends',
                 'CustomerOnboardingService',
@@ -574,9 +577,11 @@ export class CustomerOnboardingService {
                   headers: {
                     authorization: `Bearer ${ssiAccessToken.access_token}`,
                     'Content-Type': 'application/json',
-                    origin: ssiService.whitelistedCors[0],
+                    origin: ssiService?.whitelistedCors[0],
                   },
-                  body: JSON.stringify({ namespace: 'testnet' }),
+                  body: JSON.stringify({
+                    namespace: this.config.get('HID_NETWORK_NAMESPACE') || '',
+                  }),
                 },
                 'Failed to create DID',
               );
@@ -651,7 +656,7 @@ export class CustomerOnboardingService {
                     headers: {
                       authorization: `Bearer ${ssiAccessToken.access_token}`,
                       'Content-Type': 'application/json',
-                      origin: ssiService.whitelistedCors[0],
+                      origin: ssiService?.whitelistedCors[0],
                     },
                   },
                   'Failed to resolve DID',
@@ -696,9 +701,18 @@ export class CustomerOnboardingService {
                   domain: domain,
                   serviceIds: [SERVICE_TYPES.CAVACH_API],
                   whitelistedCors: [
-                    this.config.get<string>('KYC_WIDGET_URL'),
-                    this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
-                    this.config.get<string>('CLIENT_APP_URL'),
+                    urlSanitizer(
+                      this.config.get<string>('KYC_WIDGET_URL'),
+                      false,
+                    ),
+                    urlSanitizer(
+                      this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
+                      false,
+                    ),
+                    urlSanitizer(
+                      this.config.get<string>('CLIENT_APP_URL'),
+                      false,
+                    ),
                   ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
@@ -909,7 +923,7 @@ export class CustomerOnboardingService {
       // Check for failures
       const failed = onboardingLogs.find((l) => l.status === StepStatus.FAILED);
       if (failed) {
-        throw new BadRequestException([
+        throw new InternalServerErrorException([
           `Step ${failed.step} failed: ${failed.failureReason}`,
         ]);
       }
@@ -929,7 +943,7 @@ export class CustomerOnboardingService {
       return { message: 'Customer onboarding completed successfully' };
     } catch (e) {
       if (e instanceof HttpException) throw e;
-      throw new BadRequestException([e.message]);
+      throw new InternalServerErrorException([e.message]);
     }
   }
 

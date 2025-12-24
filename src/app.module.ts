@@ -67,6 +67,10 @@ export class AppModule implements NestModule {
           path: '/api/v1/app/:appId/kyc-webpage-config',
           method: RequestMethod.GET,
         },
+        {
+          path: '/api/v1/customer-onboarding/:id/process',
+          method: RequestMethod.POST,
+        },
       )
       .forRoutes('*');
   }

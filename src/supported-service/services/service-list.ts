@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SERVICE_TYPES, SERVICES, SERVICE_INFO } from './iServiceList';
+import { sanitizeUrl } from 'src/utils/utils';
 type Serivce = {
   id: string;
   dBSuffix: string;
@@ -20,8 +21,10 @@ export class SupportedServiceList {
         id: SERVICE_INFO.SSI_API.type,
         dBSuffix: SERVICE_INFO.SSI_API.type,
         name: SERVICE_INFO.SSI_API.name,
-        domain:
-          this.config.get('SSI_API_DOMAIN') || SERVICE_INFO.SSI_API.baseDomain,
+        domain: sanitizeUrl(
+          ( this.config.get('SSI_API_DOMAIN') || SERVICE_INFO.SSI_API.baseDomain),
+          false,
+        ),
         description: SERVICE_INFO.SSI_API.description,
         swaggerAPIDocPath: SERVICE_INFO.SSI_API.swaggerAPIDocPath,
         accessList: SERVICES.SSI_API.ACCESS_TYPES,
@@ -30,9 +33,11 @@ export class SupportedServiceList {
         id: SERVICE_INFO.CAVACH_API.type,
         dBSuffix: SERVICE_INFO.CAVACH_API.type,
         name: SERVICE_INFO.CAVACH_API.name,
-        domain:
-          this.config.get('CAVACH_API_DOMAIN') ||
-          SERVICE_INFO.CAVACH_API.baseDomain,
+        domain: sanitizeUrl(
+          (this.config.get('CAVACH_API_DOMAIN') ||
+            SERVICE_INFO.CAVACH_API.baseDomain),
+          false
+        ),
         description: SERVICE_INFO.CAVACH_API.description,
         swaggerAPIDocPath: SERVICE_INFO.CAVACH_API.swaggerAPIDocPath,
         accessList: SERVICES.CAVACH_API.ACCESS_TYPES,
@@ -49,7 +54,7 @@ export class SupportedServiceList {
         id: SERVICE_INFO.QUEST.type,
         dBSuffix: SERVICE_INFO.QUEST.type,
         name: SERVICE_INFO.QUEST.name,
-        domain: SERVICE_INFO.QUEST.baseDomain,
+        domain: sanitizeUrl(SERVICE_INFO.QUEST.baseDomain, false),
         description: SERVICE_INFO.QUEST.description,
         swaggerAPIDocPath: SERVICE_INFO.QUEST.swaggerAPIDocPath,
         accessList: SERVICES.QUEST.ACCESS_TYPES,

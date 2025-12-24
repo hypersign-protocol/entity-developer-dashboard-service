@@ -111,6 +111,8 @@ spec:
           value: '__MAX_RETRY_ATTEMPT__'  
         - name: MFA_REDIRECT_URL
           value: __MFA_REDIRECT_URL__
+        - name: GOOGLE_CALLBACK_URL
+          value: __GOOGLE_CALLBACK_URL__
         - name: CLIENT_APP_URL
           value: __CLIENT_APP_URL__
         - name: KYC_WIDGET_URL

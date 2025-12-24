@@ -38,23 +38,28 @@ export const getSecondsFromUnit = (time: number, unit: TIME_UNIT) => {
  *  EXPIRY_CONFIG defines the expiry times for different types of tokens and Redis cache entries used across the system.
  */
 export const EXPIRY_CONFIG = {
-  // KYC and SSI Token for context - verifier Page ad Customer App
+  // KYC and SSI Token for context - verifier Page and Customer App
+  
   VERIFIER_CUSTOMER_APP_ACCESS: {
     jwtTime: 30,
     jwtUnit: TIME_UNIT.MINUTE,
     redisExpiryTime: 30 * TIME.MINUTE,
   },
+  
   // All Tokens generated during onboarding flow
+
   ONBOARDING_ACCESS: {
     jwtTime: 10,
     jwtUnit: TIME_UNIT.MINUTE,
   },
+
   // KYC and SSI tokens for context - ID and SSI Dashboard
   DASHBOARD_ACCESS: {
     jwtTime: 12,
     jwtUnit: TIME_UNIT.HOUR,
     redisExpiryTime: TIME.WEEK,
   },
+
   // Token generated for providing credit for SSI and KYC service
   CREDIT_TOKEN: {
     jwtTime: 5,
@@ -62,6 +67,7 @@ export const EXPIRY_CONFIG = {
     redisExpiryTime: 5 * TIME.MINUTE,
   },
   // Used for storing login flow–related data in Redis
+    
   LOGIN: {
     redisExpiryTime: TIME.WEEK,
   },

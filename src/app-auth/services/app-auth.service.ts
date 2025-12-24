@@ -382,6 +382,7 @@ export class AppAuthService {
   }
 
   private async verifyDNS01(domain: URL, txt: string) {
+
     const resolveDNSURL = `${DNS_RESOLVER_URL}?name=${
       new URL(domain).host
     }&type=TXT`;
@@ -998,6 +999,7 @@ export class AppAuthService {
       tokenPayload,
       EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtTime,
       EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtUnit,
+
     );
   }
 }

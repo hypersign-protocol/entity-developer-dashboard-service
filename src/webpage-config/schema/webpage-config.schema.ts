@@ -23,8 +23,8 @@ export class WebPageConfig {
   pageType: string;
   @Prop({ type: String, required: false })
   generatedUrl?: string;
-  @Prop({ type: String })
-  tenantUrl: string;
+  // @Prop({ type: String })
+  // tenantUrl: string;
   @Prop({ type: String, required: false })
   contactEmail?: string;
 }

@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   HttpException,
   Injectable,
+  InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { CreateCustomerOnboardingDto } from '../dto/create-customer-onboarding.dto';
@@ -54,6 +55,8 @@ import getOnboardingRetryNotificationMail from 'src/mail-notification/constants/
 import { redisClient } from 'src/utils/redis.provider';
 import { EXPIRY_CONFIG, TIME } from 'src/utils/time-constant';
 import { TokenModule } from 'src/config/access-matrix';
+import { AuthzCreditService } from 'src/credits/services/credits.service';
+import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -67,6 +70,7 @@ export class CustomerOnboardingService {
     private readonly appAuthRepository: AppRepository,
     private readonly roleRepository: RoleRepository,
     private readonly webPageConfig: WebpageConfigService,
+    private readonly authzService: AuthzCreditService,
   ) {}
   /**
    * Creates a new customer onboarding record and notifies super admins
@@ -203,8 +207,15 @@ export class CustomerOnboardingService {
   ) {
     Logger.log('Inside makeExternalRequest()', 'CustomerOnboardingService');
     try {
+      Logger.log(`Making request to ${url}`, 'CustomerOnboardingService');
       const response = await fetch(url, options);
-      const detail = await response.json();
+      Logger.log(
+        `Received response with status ${response.status}`,
+        'CustomerOnboardingService',
+      );
+      // const detail = await response.json();
+      const text = await response.text();
+      const detail = text ? JSON.parse(text) : null;
       if (!response.ok) {
         const serverError =
           detail?.error?.details ||
@@ -217,7 +228,8 @@ export class CustomerOnboardingService {
       }
       return detail;
     } catch (error) {
-      throw new Error(`${error.message}`);
+      Logger.error(error, error?.stack, 'CustomerOnboardingService');
+      throw error; // don't rewrap
     }
   }
 
@@ -286,23 +298,28 @@ export class CustomerOnboardingService {
       grantType,
     };
     const creditToken = await this.generateCreditToken(tokenPayload, secret);
-    let headers: Record<string, string> = {
-      authorization: `Bearer ${creditToken}`,
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      ...(grantType === GRANT_TYPES.access_service_kyc
+        ? { 'x-kyc-access-token': creditToken }
+        : { authorization: `Bearer ${creditToken}` }),
     };
-
-    if (grantType === GRANT_TYPES.access_service_kyc) {
-      headers = {
-        'x-kyc-access-token': creditToken,
-        'Content-Type': 'application/json',
-      };
+    const requestOptions: any = {
+      method: 'POST',
+      headers,
+    };
+    if (grantType === GRANT_TYPES.access_service_ssi) {
+      const authzCreditDetail = await this.authzService.grantSSICredit(
+        serviceInfo.appId,
+        '5000000',
+      );
+      requestOptions.body = JSON.stringify({
+        ...authzCreditDetail,
+      });
     }
     await this.makeExternalRequest(
       `${sanitizeUrl(tenantUrl, true)}api/v1/credit`,
-      {
-        method: 'POST',
-        headers,
-      },
+      requestOptions,
       'Failed to credit service',
     );
   }
@@ -353,10 +370,8 @@ export class CustomerOnboardingService {
       const ssiBaseDomain = this.config.get<string>('SSI_API_DOMAIN');
       const cavachBaseDomain = this.config.get<string>('CAVACH_API_DOMAIN');
       const secret = this.config.get('JWT_SECRET');
-      let ssiSubdomain = customerOnboardingData?.ssiSubdomain;
-      let kycSubdomain = customerOnboardingData?.kycSubdomain;
-      let ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
-      let kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
+      let ssiTenantUrl = ssiBaseDomain;
+      let kycTenantUrl = cavachBaseDomain;
       let ssiRedisKey = generateHash(
         `${customerOnboardingData?.ssiServiceId}_${Context.idDashboard}`,
       );
@@ -456,18 +471,21 @@ export class CustomerOnboardingService {
                   appName: `${companyName}`,
                   domain,
                   serviceIds: [SERVICE_TYPES.SSI_API],
-                  whitelistedCors: ['*'],
+                  whitelistedCors: [
+                    sanitizeUrl(
+                      this.config.get<string>('CLIENT_APP_URL'),
+                      false,
+                    ),
+                  ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
                   logoUrl: companyLogo,
                 },
                 userId,
               );
-
-              ssiSubdomain = ssiService.subdomain;
               onboardingUpdateData.ssiSubdomain = ssiService.subdomain;
               onboardingUpdateData.ssiServiceId = ssiService.appId;
-              ssiTenantUrl = this.getTenantUrl(ssiBaseDomain, ssiSubdomain);
+              ssiTenantUrl = ssiBaseDomain;
               Logger.debug(
                 'CREATE_SSI_SERVICE step ends',
                 'CustomerOnboardingService',
@@ -559,9 +577,11 @@ export class CustomerOnboardingService {
                   headers: {
                     authorization: `Bearer ${ssiAccessToken.access_token}`,
                     'Content-Type': 'application/json',
-                    origin: ssiService.whitelistedCors[0],
+                    origin: ssiService?.whitelistedCors[0],
                   },
-                  body: JSON.stringify({ namespace: 'testnet' }),
+                  body: JSON.stringify({
+                    namespace: this.config.get('HID_NETWORK_NAMESPACE') || '',
+                  }),
                 },
                 'Failed to create DID',
               );
@@ -578,6 +598,14 @@ export class CustomerOnboardingService {
                 'REGISTER_DID step started',
                 'CustomerOnboardingService',
               );
+              if (!ssiService && customerOnboardingData.ssiServiceId) {
+                ssiService = await this.appAuthRepository.findOne({
+                  appId: customerOnboardingData.ssiServiceId,
+                });
+              }
+
+              Logger.debug(`ssiService: ${ssiService._id}`);
+
               const ssiServiceDetail = await redisClient.get(ssiRedisKey);
               const defaultAccessList = getAccessListForModule(
                 TokenModule.DASHBOARD,
@@ -622,13 +650,13 @@ export class CustomerOnboardingService {
                   `${sanitizeUrl(
                     ssiTenantUrl,
                     true,
-                  )}api/v1/did/${didToRegister}`,
+                  )}api/v1/did/resolve/${didToRegister}`,
                   {
-                    method: 'POST',
+                    method: 'GET',
                     headers: {
                       authorization: `Bearer ${ssiAccessToken.access_token}`,
                       'Content-Type': 'application/json',
-                      origin: ssiService.whitelistedCors[0],
+                      origin: ssiService?.whitelistedCors[0],
                     },
                   },
                   'Failed to resolve DID',
@@ -637,7 +665,7 @@ export class CustomerOnboardingService {
               }
 
               await this.makeExternalRequest(
-                `${sanitizeUrl(ssiTenantUrl, true)}api/v1/did/register`,
+                `${sanitizeUrl(ssiTenantUrl, true)}api/v1/did/register/v2`,
                 {
                   method: 'POST',
                   headers: {
@@ -646,7 +674,11 @@ export class CustomerOnboardingService {
                   },
                   body: JSON.stringify({
                     didDocument,
-                    verificationMethodId: `${didToRegister}#key-1`,
+                    signInfos: [
+                      {
+                        verification_method_id: `${didToRegister}#key-1`,
+                      },
+                    ],
                   }),
                 },
                 'Failed to register DID',
@@ -669,9 +701,18 @@ export class CustomerOnboardingService {
                   domain: domain,
                   serviceIds: [SERVICE_TYPES.CAVACH_API],
                   whitelistedCors: [
-                    this.config.get<string>('KYC_WIDGET_URL'),
-                    this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
-                    this.config.get<string>('CLIENT_APP_URL'),
+                    urlSanitizer(
+                      this.config.get<string>('KYC_WIDGET_URL'),
+                      false,
+                    ),
+                    urlSanitizer(
+                      this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
+                      false,
+                    ),
+                    urlSanitizer(
+                      this.config.get<string>('CLIENT_APP_URL'),
+                      false,
+                    ),
                   ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
@@ -688,10 +729,10 @@ export class CustomerOnboardingService {
                 userId,
               );
 
-              kycSubdomain = kycService.subdomain;
+              // kycSubdomain = kycService.subdomain;
               onboardingUpdateData.kycSubdomain = kycService.subdomain;
               onboardingUpdateData.kycServiceId = kycService.appId;
-              kycTenantUrl = this.getTenantUrl(cavachBaseDomain, kycSubdomain);
+              kycTenantUrl = cavachBaseDomain; //this.getTenantUrl(cavachBaseDomain, kycSubdomain);
               kycRedisKey = generateHash(
                 `${kycService?.appId}_${Context.idDashboard}`,
               );
@@ -706,6 +747,13 @@ export class CustomerOnboardingService {
                 'CREDIT_KYC_SERVICE step started',
                 'CustomerOnboardingService',
               );
+
+              if (!kycService && customerOnboardingData.kycServiceId) {
+                kycService = await this.appAuthRepository.findOne({
+                  appId: customerOnboardingData.kycServiceId,
+                });
+              }
+
               await this.handleCreditService(
                 kycCreditDetail,
                 {
@@ -810,7 +858,6 @@ export class CustomerOnboardingService {
                   headers: {
                     'x-kyc-access-token': kycAccessToken.access_token,
                     'Content-Type': 'application/json',
-                    origin: kycService.whitelistedCors[0],
                   },
                   body: JSON.stringify(requestBody),
                 },
@@ -854,6 +901,7 @@ export class CustomerOnboardingService {
           }
           this.logStepSuccess(onboardingLogs, step as OnboardingStep);
         } catch (error) {
+          Logger.error(error.message);
           this.logStepFailure(onboardingLogs, step as OnboardingStep, error);
           onboardingStatus = CreditStatus.FAILED;
           break;
@@ -875,7 +923,7 @@ export class CustomerOnboardingService {
       // Check for failures
       const failed = onboardingLogs.find((l) => l.status === StepStatus.FAILED);
       if (failed) {
-        throw new BadRequestException([
+        throw new InternalServerErrorException([
           `Step ${failed.step} failed: ${failed.failureReason}`,
         ]);
       }
@@ -895,7 +943,7 @@ export class CustomerOnboardingService {
       return { message: 'Customer onboarding completed successfully' };
     } catch (e) {
       if (e instanceof HttpException) throw e;
-      throw new BadRequestException([e.message]);
+      throw new InternalServerErrorException([e.message]);
     }
   }
 

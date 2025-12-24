@@ -16,6 +16,7 @@ import { Transform } from 'class-transformer';
 import validator from 'validator';
 import { SanitizeUrlValidator } from 'src/utils/sanitizeUrl.validator';
 import { APP_ENVIRONMENT } from 'src/supported-service/services/iServiceList';
+import { IsUrlOrBase64Image } from 'src/utils/customDecorator/IsUrlOrBase64Image.decorator';
 
 export class UpdateAppDto {
   @ApiProperty({
@@ -35,10 +36,6 @@ export class UpdateAppDto {
   })
   @IsOptional()
   @IsArray()
-  // @Matches(/^(https?:\/\/[^ ]+|\*)$/, {
-  //   each: true,
-  //   message: 'Whitelisted cors must be a valid url or *',
-  // })
   @Validate(SanitizeUrlValidator)
   whitelistedCors: Array<string>;
   @ApiProperty({
@@ -57,7 +54,7 @@ export class UpdateAppDto {
   })
   @IsOptional()
   @IsString()
-  @IsUrlEmpty()
+  @IsUrlOrBase64Image()
   logoUrl: string;
 
   @ApiProperty({

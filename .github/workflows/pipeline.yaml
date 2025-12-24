@@ -150,7 +150,7 @@ jobs:
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MAX_MFA_RETRY_ATTEMPT__#${{ secrets.MAX_MFA_RETRY_ATTEMPT }}#" {} \;
     - name: "Replace secrets"
-      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MFA_REDIRECT_URL__#${{ secrets.MFA_REDIRECT_URL }}#" {} \;
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s|__MFA_REDIRECT_URL__|${{ secrets.MFA_REDIRECT_URL }}|" {} \;
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__GOOGLE_CALLBACK_URL__#${{ secrets.GOOGLE_CALLBACK_URL }}#" {} \;
     - name: "Replace secrets"

@@ -31,8 +31,6 @@ export class AppRepository {
       env: 1,
       hasDomainVerified: 1,
       domainLinkageCredentialString: 1,
-      userId: 1,
-      kmsId: 1,
       _id: 0,
       tenantUrl: { $arrayElemAt: ['$services.domain', 0] },
     };
@@ -45,7 +43,11 @@ export class AppRepository {
     );
     const aggregationPipeline = [
       { $match: appFilterQuery },
-      { $project: this.appDataProjectPipelineToReturn() },
+      {
+        $addFields: {
+          tenantUrl: { $arrayElemAt: ['$services.domain', 0] },
+        },
+      },
     ];
     const apps = await this.appModel.aggregate(aggregationPipeline);
     return apps[0];

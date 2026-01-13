@@ -476,6 +476,10 @@ export class CustomerOnboardingService {
                       this.config.get<string>('CLIENT_APP_URL'),
                       false,
                     ),
+                    sanitizeUrl(
+                      this.config.get<string>('CAVACH_API_DOMAIN'),
+                      false,
+                    ),
                   ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,

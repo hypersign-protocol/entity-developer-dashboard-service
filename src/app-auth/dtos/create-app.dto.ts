@@ -93,7 +93,10 @@ export class CreateAppDto {
   })
   @ValidateIf((o) => o.serviceIds?.includes(SERVICE_TYPES.CAVACH_API))
   @IsArray()
-  @ArrayNotEmpty({ message: 'dependentServices is required for SERVICE_TYPES CAVACH_API service' })
+  @ArrayNotEmpty({
+    message:
+      'dependentServices is required for SERVICE_TYPES CAVACH_API service',
+  })
   @IsString({ each: true })
   @IsNotEmpty({
     each: true,

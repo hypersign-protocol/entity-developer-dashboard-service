@@ -3,12 +3,14 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsNotEmpty,
   IsOptional,
   IsString,
   Length,
   Matches,
   MaxLength,
   Validate,
+  ValidateIf,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { IsUrlEmpty } from 'src/utils/customDecorator/isUrl.decorator';
@@ -89,8 +91,14 @@ export class CreateAppDto {
     isArray: true,
     required: false,
   })
-  @IsOptional()
+  @ValidateIf((o) => o.serviceIds?.includes(SERVICE_TYPES.CAVACH_API))
   @IsArray()
+  @ArrayNotEmpty({ message: 'dependentServices is required for SERVICE_TYPES CAVACH_API service' })
+  @IsString({ each: true })
+  @IsNotEmpty({
+    each: true,
+    message: 'dependentServices items must not be empty strings',
+  })
   dependentServices?: Array<string>; // ids of dependent services / apps
 
   @ApiProperty({

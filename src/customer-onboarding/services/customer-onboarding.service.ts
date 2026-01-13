@@ -717,7 +717,7 @@ export class CustomerOnboardingService {
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
                   dependentServices: [
-                    ssiService?.appId || customerOnboardingData.kycServiceId,
+                    ssiService?.appId || customerOnboardingData.ssiServiceId,
                   ],
                   logoUrl: companyLogo,
                   issuerDid:

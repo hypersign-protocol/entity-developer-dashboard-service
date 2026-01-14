@@ -26,6 +26,7 @@ import {
   TokenModule,
 } from 'src/config/access-matrix';
 import { createHash } from 'crypto';
+import { IsMongoId } from 'class-validator';
 export const existDir = (dirPath) => {
   if (!dirPath) throw new Error('Directory path undefined');
   return fs.existsSync(dirPath);
@@ -230,3 +231,7 @@ export function generateHash(input: string): string {
 }
 
 export const DNS_RESOLVER_URL = 'https://dns.google/resolve';
+export class VerifierParamsDto {
+  @IsMongoId({ message: 'Invalid verifier id' })
+  id: string;
+}

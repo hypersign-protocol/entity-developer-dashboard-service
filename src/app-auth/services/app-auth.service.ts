@@ -382,7 +382,6 @@ export class AppAuthService {
   }
 
   private async verifyDNS01(domain: URL, txt: string) {
-
     const resolveDNSURL = `${DNS_RESOLVER_URL}?name=${
       new URL(domain).host
     }&type=TXT`;
@@ -469,18 +468,22 @@ export class AppAuthService {
     appId: string,
     updataAppDto: UpdateAppDto,
     userDetail,
+    oldApp,
   ): Promise<createAppResponse> {
     Logger.log('updateAnApp() method: starts....', 'AppAuthService');
 
     const { env, hasDomainVerified, domain, logoUrl, issuerDid } = updataAppDto;
     const { userId } = userDetail;
-    const oldApp = await this.getAppById(appId, userId);
     if (!oldApp) {
       throw new BadRequestException([
         'Service with given id do not exists for this user',
       ]);
     }
     Logger.debug(oldApp);
+    const isEnvChanged =
+      typeof updataAppDto.env !== 'undefined' &&
+      updataAppDto.env !== oldApp.env;
+    Logger.debug(`isEnvChanged: ${isEnvChanged}`);
     // check if hasDomainVerified is verifed by DNS-01
     // only if credential was not issued
     // this should not happen everytime we update a record, only once.
@@ -532,45 +535,21 @@ export class AppAuthService {
       updataAppDto,
     );
     const updatedapp = await this.getAppResponse(app);
+    //update dependent service
+    if (isEnvChanged && oldApp.dependentServices?.length) {
+      await this.updateDependentServicesEnv(
+        oldApp.dependentServices,
+        updataAppDto?.env,
+        userId,
+      );
+    }
     // update redis
-    const baseKey = generateHash(appId);
-    const dashboardRedisKey = generateHash(`${appId}_${Context.idDashboard}`);
-    const updatedFields = {
-      whitelistedCors: updatedapp.whitelistedCors,
-      env: updatedapp.env ?? APP_ENVIRONMENT.dev,
+    await this.updateAppRedis(appId, {
+      env: (updatedapp.env as APP_ENVIRONMENT) ?? APP_ENVIRONMENT.dev,
       appName: updatedapp.appName,
-    };
+      whitelistedCors: updatedapp.whitelistedCors,
+    });
 
-    const [baseDataString, dashboardDataString] = await Promise.all([
-      redisClient.get(baseKey),
-      redisClient.get(dashboardRedisKey),
-    ]);
-
-    const updatePromises = [];
-
-    if (baseDataString) {
-      const baseData = JSON.parse(baseDataString);
-      const updatedBase = { ...baseData, ...updatedFields };
-      updatePromises.push(
-        redisClient.set(baseKey, JSON.stringify(updatedBase), 'KEEPTTL'),
-      );
-    }
-
-    if (dashboardDataString) {
-      const dashboardData = JSON.parse(dashboardDataString);
-      const updatedDashboard = { ...dashboardData, ...updatedFields };
-      updatePromises.push(
-        redisClient.set(
-          dashboardRedisKey,
-          JSON.stringify(updatedDashboard),
-          'KEEPTTL',
-        ),
-      );
-    }
-
-    if (updatePromises.length > 0) {
-      await Promise.all(updatePromises);
-    }
     return updatedapp;
   }
 
@@ -999,7 +978,77 @@ export class AppAuthService {
       tokenPayload,
       EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtTime,
       EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtUnit,
-
     );
+  }
+
+  private async updateDependentServicesEnv(
+    dependentServiceIds: string[],
+    env: APP_ENVIRONMENT | undefined,
+    userId: string,
+  ) {
+    Logger.debug(
+      'Inside updateDependentServicesEnv(): Updating dependent services env...',
+    );
+    if (!env || !dependentServiceIds?.length) return;
+    // Update DB
+    await this.appRepository.findOneAndUpdate(
+      {
+        appId: { $in: dependentServiceIds },
+        userId,
+      },
+      { env },
+    );
+
+    // Update Redis
+    await Promise.all(
+      dependentServiceIds.map((serviceId) =>
+        this.updateAppRedis(serviceId, { env }),
+      ),
+    );
+  }
+  private async updateAppRedis(
+    appId: string,
+    updatedFields: Partial<{
+      env: APP_ENVIRONMENT;
+      appName: string;
+      whitelistedCors: string[];
+    }>,
+  ) {
+    Logger.debug('Inside updateAppRedis(): Updating app redis cache...');
+    const baseKey = generateHash(appId);
+    const dashboardRedisKey = generateHash(`${appId}_${Context.idDashboard}`);
+
+    const [baseDataString, dashboardDataString] = await Promise.all([
+      redisClient.get(baseKey),
+      redisClient.get(dashboardRedisKey),
+    ]);
+
+    const updates: Promise<any>[] = [];
+
+    if (baseDataString) {
+      const baseData = JSON.parse(baseDataString);
+      updates.push(
+        redisClient.set(
+          baseKey,
+          JSON.stringify({ ...baseData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
+
+    if (dashboardDataString) {
+      const dashboardData = JSON.parse(dashboardDataString);
+      updates.push(
+        redisClient.set(
+          dashboardRedisKey,
+          JSON.stringify({ ...dashboardData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
+
+    if (updates.length) {
+      await Promise.all(updates);
+    }
   }
 }

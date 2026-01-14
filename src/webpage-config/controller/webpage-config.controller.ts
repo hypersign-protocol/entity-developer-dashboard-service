@@ -28,7 +28,7 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import { AllExceptionsFilter } from 'src/utils/utils';
+import { AllExceptionsFilter, VerifierParamsDto } from 'src/utils/utils';
 @ApiBearerAuth('Authorization')
 @ApiTags('Webpage-config')
 @UseFilters(AllExceptionsFilter)
@@ -114,8 +114,11 @@ export class WebpageConfigController {
   @ApiQuery({ name: 'appId', required: true, type: String })
   generateWebpageConfigTokens(
     @Query('appId') appId: string,
-    @Param('id') id: string,
+    @Param() params: VerifierParamsDto,
   ) {
-    return this.webpageConfigService.generateWebpageConfigTokens(id, appId);
+    return this.webpageConfigService.generateWebpageConfigTokens(
+      params.id,
+      appId,
+    );
   }
 }

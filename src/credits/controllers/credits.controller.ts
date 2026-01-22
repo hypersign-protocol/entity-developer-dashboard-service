@@ -9,7 +9,7 @@ import {
 } from '@nestjs/swagger';
 import { AllExceptionsFilter } from 'src/utils/utils';
 import { AuthzCreditService } from '../services/credits.service';
-import { GetCreditsDto } from '../dtos/credits.dto';
+import { GetCreditsDto, GrantAllowanceResponseDto } from '../dtos/credits.dto';
 
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Credits')
@@ -28,5 +28,23 @@ export class CreditsController {
 
     const appId = query.appId;
     return this.creditService.getCreditDetails(appId, userId);
+  }
+  @ApiBearerAuth('Authorization')
+  @ApiOkResponse({
+    description: 'Granted allowance to specific wallet successfully',
+    type: GrantAllowanceResponseDto,
+  })
+  @ApiQuery({
+    name: 'allowance',
+    description: 'Amount to authorize for the app',
+    required: false,
+    type: String,
+  })
+  @Get('/authz/:appId')
+  async getAllowanceGrant(
+    @Param('appId') appId: string,
+    @Query('allowance') allowance = '5000000',
+  ) {
+    return this.creditService.grantSSICredit(appId, allowance);
   }
 }

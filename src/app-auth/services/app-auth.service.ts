@@ -382,59 +382,94 @@ export class AppAuthService {
   }
 
   private async verifyDNS01(domain: URL, txt: string) {
-    const resolveDNSURL = `${DNS_RESOLVER_URL}?name=${
-      new URL(domain).host
-    }&type=TXT`;
-    const actuaTxt = txt;
-    const res = await fetch(resolveDNSURL, {
-      headers: {
-        'Content-Type': 'Application/json',
-      },
-    });
-
-    const json = await res.json();
-    const txtRecords = json.Answer?.filter((record: any) => record.type === 16);
-    const txtRecord = txtRecords?.find((record: any) =>
-      record.data.includes(txt),
-    );
-    if (!txtRecord) {
-      return {
-        verified: false,
-        error: new Error('DNS TXT record not found'),
-      };
-    }
-    if (txtRecord.data !== actuaTxt) {
-      return {
-        verified: false,
-        error: new Error('DNS TXT record not found'),
-      };
+    // Sanitize domain url: remove www. prefix and normalize
+    let hostname = domain.hostname;
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.substring(4);
     }
 
-    return {
-      TXT: txtRecord,
-      verified: true,
-    };
+    const resolveDNSURL = `${DNS_RESOLVER_URL}?name=${hostname}&type=TXT`;
+    Logger.debug(`Resolving DNS TXT record for domain: ${hostname}`);
+
+    try {
+      const res = await fetch(resolveDNSURL, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        return {
+          verified: false,
+          error: new Error(
+            `DNS resolution failed with status ${res.status}. Please try again later.`,
+          ),
+        };
+      }
+
+      const json = await res.json();
+      Logger.debug(`DNS response for ${hostname}:`, json);
+
+      const txtRecords = json.Answer?.filter(
+        (record: any) => record.type === 16,
+      );
+      const txtRecord = txtRecords?.find((record: any) =>
+        record.data.includes(txt),
+      );
+
+      if (!txtRecord) {
+        return {
+          verified: false,
+          error: new Error(
+            `DNS TXT record "${txt}" not found for domain ${hostname}. Please ensure you have added the correct DNS record and wait for propagation.`,
+          ),
+        };
+      }
+
+      Logger.debug(`DNS TXT record verified successfully for ${hostname}`);
+      return {
+        TXT: txtRecord,
+        verified: true,
+      };
+    } catch (error) {
+      Logger.error(`Error during DNS verification: ${error.message}`);
+      return {
+        verified: false,
+        error: new Error(
+          `Failed to verify DNS TXT record: ${error.message}. Please try again later.`,
+        ),
+      };
+    }
   }
 
   private async verifyDNS01Validation(domain, txtRecord) {
-    // verify DNS-01 domain
-    // const domainLinkage = new DomainLinkage(domain);
-    const d = new URL(domain.includes('http') ? domain : 'https://' + domain);
-    const fetchedTxtRecord = await this.verifyDNS01(d, txtRecord);
+    // Verify DNS-01 domain validation
+    // Sanitize domain: remove www., normalize protocol
+    let domainUrl = domain.trim();
+
+    // Add https:// if no protocol specified
+    if (!domainUrl.includes('http://') && !domainUrl.includes('https://')) {
+      domainUrl = 'https://' + domainUrl;
+    }
+
+    const urlObj = new URL(domainUrl);
+    const fetchedTxtRecord = await this.verifyDNS01(urlObj, txtRecord);
+
     if (fetchedTxtRecord && fetchedTxtRecord.error) {
       throw new BadRequestException([
-        fetchedTxtRecord.error?.message +
-          '. If you have already added then it may take a while to complete. Please try again in sometime.',
+        fetchedTxtRecord.error?.message ||
+          'DNS verification failed. If you have recently added the record, it may take some time to propagate. Please try again later.',
       ]);
     }
-    if (fetchedTxtRecord.verified) {
+
+    if (fetchedTxtRecord && fetchedTxtRecord.verified) {
       return {
         verified: true,
       };
     } else {
-      return {
-        verified: false,
-      };
+      throw new BadRequestException([
+        'Domain verification failed. Please check your DNS records and try again.',
+      ]);
     }
   }
 

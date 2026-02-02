@@ -272,7 +272,6 @@ export class CustomerOnboardingService {
       `Inside handleCreditService() to fund credit to the service with tenantUrl ${tenantUrl}`,
       'CustomerOnboardingService',
     );
-    const sessionId = generateHash(`credit:${serviceInfo.appId}:${Date.now()}`);
     const creditPayload = {
       serviceId: serviceInfo.appId,
       purpose: 'CreditRecharge',
@@ -285,24 +284,10 @@ export class CustomerOnboardingService {
       whitelistedCors,
       accessList,
     };
-    await redisClient.set(
-      sessionId,
-      JSON.stringify(creditPayload),
-      'EX',
-      EXPIRY_CONFIG.CREDIT_TOKEN.redisExpiryTime,
-    );
-    const tokenPayload = {
-      appId: serviceInfo.appId,
-      sessionId,
-      subdomain: serviceInfo.subdomain,
-      grantType,
-    };
-    const creditToken = await this.generateCreditToken(tokenPayload, secret);
+    const creditToken = await this.generateCreditToken(creditPayload, secret);
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(grantType === GRANT_TYPES.access_service_kyc
-        ? { 'x-kyc-access-token': creditToken }
-        : { authorization: `Bearer ${creditToken}` }),
+      'x-api-credit-token': creditToken,
     };
     const requestOptions: any = {
       method: 'POST',

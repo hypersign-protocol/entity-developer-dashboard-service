@@ -157,8 +157,7 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__CLIENT_APP_URL__#${{ secrets.CLIENT_APP_URL }}#" {} \;
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYC_WIDGET_URL__#${{ secrets.KYC_WIDGET_URL }}#" {} \;
-    - name: "Replace SUPER_ADMIN_EMAILS_IDS"
-      run: | 
-        sed -i 's|__SUPER_ADMIN_EMAILS_IDS__|${{ secrets.SUPER_ADMIN_EMAILS_IDS }}|g' .deploy/deployment.yaml
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__SUPER_ADMIN_EMAILS_IDS__#${{ secrets.SUPER_ADMIN_EMAILS_IDS }}#" {} \;
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

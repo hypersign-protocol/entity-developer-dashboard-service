@@ -57,6 +57,10 @@ export class SocialLoginService {
     }
     return { authUrl };
   }
+  private isSuperAdmin(email: string): boolean {
+    const superAdmins = JSON.parse(process.env.SUPER_ADMIN_EMAILS_IDS);
+    return superAdmins.includes(email.toLowerCase());
+  }
   async socialLogin(req): Promise<{
     isMfaRequired: boolean;
     refreshToken?: string;
@@ -72,6 +76,7 @@ export class SocialLoginService {
     let user = await this.userRepository.findOne({
       email,
     });
+    const isSuperAdmin = this.isSuperAdmin(email);
     if (!user) {
       const userId = `${Date.now()}-${uuidv4()}`;
       user = await this.userRepository.create({
@@ -79,11 +84,15 @@ export class SocialLoginService {
         userId,
         name,
         profileIcon,
+        role: isSuperAdmin ? UserRole.SUPER_ADMIN : UserRole.ADMIN,
       });
     }
     const updates: Partial<UserDocument> = {};
     if (!user.name) updates.name = name;
     if (!user.profileIcon) updates.profileIcon = profileIcon;
+    if (isSuperAdmin && user.role !== UserRole.SUPER_ADMIN) {
+      updates.role = UserRole.SUPER_ADMIN;
+    }
     if (Object.keys(updates).length > 0)
       this.userRepository.findOneUpdate({ email }, updates);
 

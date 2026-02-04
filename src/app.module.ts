@@ -71,6 +71,10 @@ export class AppModule implements NestModule {
           path: '/api/v1/customer-onboarding/:id/process',
           method: RequestMethod.POST,
         },
+        {
+          path: '/api/v1/credits/authz/:appId',
+          method: RequestMethod.GET,
+        },
       )
       .forRoutes('*');
   }

@@ -25,3 +25,24 @@ class Credit {
   })
   denom: string;
 }
+export class GrantAllowanceResponseDto {
+  @ApiProperty({
+    name: 'credit',
+    description: 'detail of credit',
+    type: Credit,
+  })
+  @Type(() => Credit)
+  @ValidateNested({ each: true })
+  credit: Credit;
+  @ApiProperty({
+    name: 'creditScope',
+    description: 'Credit scopre provided',
+    example: [
+      'MsgRegisterDID',
+      'MsgDeactivateDID',
+      'MsgRegisterCredentialSchema',
+      'MsgUpdateDID',
+    ],
+  })
+  creditScope: Array<string>;
+}

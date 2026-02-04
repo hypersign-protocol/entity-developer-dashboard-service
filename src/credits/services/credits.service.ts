@@ -22,6 +22,7 @@ import {
   MSG_UPDATE_CREDENTIAL_STATUS,
   MSG_UPDATE_DID_TYPEURL,
 } from 'src/utils/authz';
+import { sanitizeUrl } from 'src/utils/utils';
 
 @Injectable()
 export class AuthzCreditService {
@@ -87,7 +88,7 @@ export class AuthzCreditService {
       expiresIn: '5m',
       secret: this.config.get('JWT_SECRET'),
     });
-    fetch(`${tenantUrl}api/v1/credit`, {
+    fetch(`${sanitizeUrl(tenantUrl, true)}api/v1/credit`, {
       method: 'POST',
       headers: {
         'Content-Type': 'Application/json',

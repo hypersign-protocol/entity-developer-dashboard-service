@@ -118,8 +118,9 @@ spec:
         - name: KYC_WIDGET_URL
           value: __KYC_WIDGET_URL__
         - name: MAX_MFA_RETRY_ATTEMPT
-          value: '__MAX_MFA_RETRY_ATTEMPT__'
-
+          value: '__MAX_MFA_RETRY_ATTEMPT__' 
+        - name: SUPER_ADMIN_EMAILS_IDS
+          value: "__SUPER_ADMIN_EMAILS_IDS__"       
         volumeMounts:
         - name: mongo
           mountPath: "/data"

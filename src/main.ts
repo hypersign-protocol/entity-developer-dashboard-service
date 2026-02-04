@@ -18,6 +18,7 @@ import * as cors from 'cors';
 import * as cookieParser from 'cookie-parser';
 import { WebpageConfigModule } from './webpage-config/webpage-config.module';
 import { CustomerOnboardingModule } from './customer-onboarding/customer-onboarding.module';
+import { CreditModule } from './credits/credits.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -118,7 +119,12 @@ async function bootstrap() {
       .build();
 
     const orgDocuments = SwaggerModule.createDocument(app, orgDocConfig, {
-      include: [AppOauthModule, WebpageConfigModule, CustomerOnboardingModule],
+      include: [
+        AppOauthModule,
+        WebpageConfigModule,
+        CustomerOnboardingModule,
+        CreditModule,
+      ],
     });
     const tenantOptions = {
       swaggerOptions: {

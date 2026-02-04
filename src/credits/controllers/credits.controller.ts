@@ -17,6 +17,7 @@ import { GetCreditsDto, GrantAllowanceResponseDto } from '../dtos/credits.dto';
 export class CreditsController {
   constructor(private readonly creditService: AuthzCreditService) {}
   @ApiBearerAuth('Authorization')
+  @ApiExcludeEndpoint()
   @Get('/app')
   @ApiQuery({
     name: 'appId',

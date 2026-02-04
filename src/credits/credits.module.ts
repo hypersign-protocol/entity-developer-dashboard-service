@@ -49,16 +49,11 @@ import { SuperAdminMiddleware } from 'src/utils/middleware/super-admin.middlewar
 })
 export class CreditModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-
-    consumer.apply(JWTAuthorizeMiddleware)
-      .forRoutes(CreditsController);
-    consumer.apply(JWTAccessAccountMiddleware)
-      .forRoutes(CreditsController);
+    consumer.apply(JWTAuthorizeMiddleware).forRoutes(CreditsController);
+    consumer.apply(JWTAccessAccountMiddleware).forRoutes(CreditsController);
     consumer
       .apply(SuperAdminMiddleware)
-      .exclude(
-        { path: 'api/v1/credits/app', method: RequestMethod.GET },
-      )
+      .exclude({ path: 'api/v1/credits/app', method: RequestMethod.GET })
       .forRoutes(CreditsController);
     consumer.apply(RateLimitMiddleware).forRoutes(CreditsController);
   }

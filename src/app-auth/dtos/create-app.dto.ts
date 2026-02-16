@@ -3,12 +3,14 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsNotEmpty,
   IsOptional,
   IsString,
   Length,
   Matches,
   MaxLength,
   Validate,
+  ValidateIf,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { IsUrlEmpty } from 'src/utils/customDecorator/isUrl.decorator';
@@ -19,6 +21,7 @@ import {
   SERVICE_TYPES,
   APP_ENVIRONMENT,
 } from 'src/supported-service/services/iServiceList';
+import { IsUrlOrBase64Image } from 'src/utils/customDecorator/IsUrlOrBase64Image.decorator';
 
 export class CreateAppDto {
   @ApiProperty({
@@ -60,7 +63,7 @@ export class CreateAppDto {
   })
   @IsOptional()
   @IsString()
-  @IsUrlEmpty()
+  @IsUrlOrBase64Image()
   logoUrl?: string;
   @ApiProperty({
     description: 'services',
@@ -88,8 +91,17 @@ export class CreateAppDto {
     isArray: true,
     required: false,
   })
-  @IsOptional()
+  @ValidateIf((o) => o.serviceIds?.includes(SERVICE_TYPES.CAVACH_API))
   @IsArray()
+  @ArrayNotEmpty({
+    message:
+      'dependentServices is required for SERVICE_TYPES CAVACH_API service',
+  })
+  @IsString({ each: true })
+  @IsNotEmpty({
+    each: true,
+    message: 'dependentServices items must not be empty strings',
+  })
   dependentServices?: Array<string>; // ids of dependent services / apps
 
   @ApiProperty({

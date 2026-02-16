@@ -19,11 +19,11 @@ spec:
         imagePullPolicy: Always
         resources:
           requests:
-            memory: "2Gi"
+            memory: "512Mi"
             cpu: "250m"
             ephemeral-storage: "200Mi"
           limits:
-            memory: "3Gi"
+            memory: "1Gi"
             cpu: "500m"
             ephemeral-storage: "200Mi"
         ports:
@@ -87,6 +87,8 @@ spec:
           value: __MAIL_QUEUE__
         - name: SERVER_NAME
           value: __SERVER_NAME__
+        - name: NODE_ENV
+          value: __NODE_ENV__
         - name: ALLOWED_ORIGIN
           value: "__ALLOWED_ORIGIN__"
         - name: JWT_REFRESH_SECRET
@@ -100,15 +102,27 @@ spec:
         - name: REDIS_HOST
           value: "__REDIS_HOST__"
         - name: KYC_VERIFIER_APP_BASE_URL
-          value: "__KYC_VERIFIER_APP_BASE_URL__"        
+          value: "__KYC_VERIFIER_APP_BASE_URL__"
         - name: OTP_COOLDOWN_MINUTES
           value: '__OTP_COOLDOWN_MINUTES__'
         - name: OTP_HOURLY_LIMIT
-          value: '__OTP_HOURLY_LIMIT__'  
+          value: '__OTP_HOURLY_LIMIT__'
         - name: OTP_EXPIRY_MINUTES
-          value: '__OTP_EXPIRY_MINUTES__'  
+          value: '__OTP_EXPIRY_MINUTES__'
         - name: MAX_RETRY_ATTEMPT
-          value: '__MAX_RETRY_ATTEMPT__'          
+          value: '__MAX_RETRY_ATTEMPT__'
+        - name: MFA_REDIRECT_URL
+          value: __MFA_REDIRECT_URL__
+        - name: GOOGLE_CALLBACK_URL
+          value: __GOOGLE_CALLBACK_URL__
+        - name: CLIENT_APP_URL
+          value: __CLIENT_APP_URL__
+        - name: KYC_WIDGET_URL
+          value: __KYC_WIDGET_URL__
+        - name: MAX_MFA_RETRY_ATTEMPT
+          value: '__MAX_MFA_RETRY_ATTEMPT__' 
+        - name: SUPER_ADMIN_EMAILS_IDS
+          value: '["vikrambanand@gmail.com","raj.v.patil108@gmail.com","meet.hypersign@gmail.com","vishwasbhushan001@gmail.com"]'       
         volumeMounts:
         - name: mongo
           mountPath: "/data"

@@ -25,7 +25,6 @@ class Credit {
   })
   denom: string;
 }
-
 export class GrantAllowanceResponseDto {
   @ApiProperty({
     name: 'credit',

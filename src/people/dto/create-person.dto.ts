@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, Matches } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateInviteDto {
   @ApiProperty({
@@ -8,6 +8,14 @@ export class CreateInviteDto {
   })
   @IsEmail({}, { message: 'Email must be a valid email address' })
   emailId: string;
+  @ApiProperty({
+    name: 'roleId',
+    type: String,
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  roleId?: string;
 }
 
 export class InviteResponseDTO {
@@ -200,7 +208,7 @@ export class AttachRoleDTO {
   userId: string;
 }
 
-export class AdminLoginDTO {
+export class TenantLoginDTO {
   @ApiProperty({
     name: 'adminId',
   })

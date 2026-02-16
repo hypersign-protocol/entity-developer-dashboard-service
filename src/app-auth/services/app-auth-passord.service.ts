@@ -11,7 +11,9 @@ export class AppAuthSecretService {
 
   async comapareSecret(secret: string, hash: string): Promise<boolean> {
     Logger.log('comapareSecret() method: starts....', 'AppAuthSecretService');
-
+    if (!secret || !hash) {
+      throw new Error('Secret or hash is missing');
+    }
     const isValid = await argon2.verify(hash, secret);
     Logger.debug(
       `compareSecret() method: isValid: ${isValid}`,

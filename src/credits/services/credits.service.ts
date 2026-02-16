@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
@@ -21,6 +22,7 @@ import {
   MSG_UPDATE_CREDENTIAL_STATUS,
   MSG_UPDATE_DID_TYPEURL,
 } from 'src/utils/authz';
+import { sanitizeUrl } from 'src/utils/utils';
 
 @Injectable()
 export class AuthzCreditService {
@@ -86,7 +88,7 @@ export class AuthzCreditService {
       expiresIn: '5m',
       secret: this.config.get('JWT_SECRET'),
     });
-    fetch(`${tenantUrl}api/v1/credit`, {
+    fetch(`${sanitizeUrl(tenantUrl, true)}api/v1/credit`, {
       method: 'POST',
       headers: {
         'Content-Type': 'Application/json',
@@ -105,7 +107,7 @@ export class AuthzCreditService {
     try {
       appDetail = await this.appRepository.findOne({ appId });
       if (!appDetail || appDetail === null) {
-        throw new NotFoundException([`No app found for appId ${appId}`]);
+        throw new BadRequestException([`No app found for appId ${appId}`]);
       }
       const walletAddress = appDetail.walletAddress;
       if (!this.authzWalletInstance) {
@@ -181,7 +183,10 @@ export class AuthzCreditService {
         ],
       };
     } catch (e) {
-      throw new BadRequestException([e.message]);
+      if (e instanceof Error) {
+        throw new InternalServerErrorException(e.message);
+      }
+      throw new InternalServerErrorException([e]);
     }
   }
 }

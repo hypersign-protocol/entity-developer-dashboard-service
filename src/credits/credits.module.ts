@@ -22,6 +22,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { HidWalletModule } from 'src/hid-wallet/hid-wallet.module';
 import { AppAuthModule } from 'src/app-auth/app-auth.module';
 import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
+import { SuperAdminMiddleware } from 'src/utils/middleware/super-admin.middleware';
 
 @Module({
   imports: [
@@ -48,14 +49,12 @@ import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware'
 })
 export class CreditModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(JWTAuthorizeMiddleware)
-      .exclude({
-        path: '/api/v1/credits/authz/:appId',
-        method: RequestMethod.GET,
-      })
-      .forRoutes(CreditsController);
+    consumer.apply(JWTAuthorizeMiddleware).forRoutes(CreditsController);
     consumer.apply(JWTAccessAccountMiddleware).forRoutes(CreditsController);
+    consumer
+      .apply(SuperAdminMiddleware)
+      .exclude({ path: 'api/v1/credits/app', method: RequestMethod.GET })
+      .forRoutes(CreditsController);
     consumer.apply(RateLimitMiddleware).forRoutes(CreditsController);
   }
 }

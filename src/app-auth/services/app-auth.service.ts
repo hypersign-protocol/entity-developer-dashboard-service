@@ -22,6 +22,7 @@ import * as url from 'url';
 import { SupportedServiceService } from 'src/supported-service/services/supported-service.service';
 import {
   APP_ENVIRONMENT,
+  Context,
   SERVICE_TYPES,
 } from 'src/supported-service/services/iServiceList';
 import { UserRepository } from 'src/user/repository/user.repository';
@@ -30,6 +31,22 @@ import { AuthZCreditsRepository } from 'src/credits/repositories/authz.repositor
 import { EdvClientKeysManager } from 'src/edv/services/edv.singleton';
 import { UserRole } from 'src/user/schema/user.schema';
 import { WebPageConfigRepository } from 'src/webpage-config/repositories/webpage-config.repository';
+import { InjectModel } from '@nestjs/mongoose';
+import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
+import { Model } from 'mongoose';
+import {
+  DNS_RESOLVER_URL,
+  evaluateAccessPolicy,
+  generateHash,
+  getAccessListForModule,
+} from 'src/utils/utils';
+import { TokenModule } from 'src/config/access-matrix';
+import { redisClient } from 'src/utils/redis.provider';
+import {
+  EXPIRY_CONFIG,
+  getSecondsFromUnit,
+  TIME_UNIT,
+} from 'src/utils/time-constant';
 
 export enum GRANT_TYPES {
   access_service_kyc = 'access_service_kyc',
@@ -53,6 +70,8 @@ export class AppAuthService {
     private readonly userRepository: UserRepository,
     private readonly authzCreditService: AuthzCreditService,
     private readonly authzCreditRepository: AuthZCreditsRepository,
+    @InjectModel(CustomerOnboarding.name)
+    private readonly onboardModel: Model<CustomerOnboarding>,
     private readonly webpageConfigRepo: WebPageConfigRepository,
   ) {}
 
@@ -115,7 +134,9 @@ export class AppAuthService {
       );
 
       if (!globalThis.kmsVault) {
-        throw new InternalServerErrorException('KMS vault is not initialized');
+        throw new InternalServerErrorException([
+          'KMS vault is not initialized',
+        ]);
       }
       const edvDocToInsert = globalThis.kmsVault.prepareEdvDocument(doc, [
         { index: 'content.edvId', unique: true },
@@ -188,10 +209,7 @@ export class AppAuthService {
     const appResponse: createAppResponse = {
       ...appData['_doc'],
       apiSecretKey,
-      tenantUrl:
-        appData.services[0].id === 'QUEST'
-          ? appData.services[0].domain
-          : this.getTenantUrl(appData.subdomain, appData.services[0]),
+      tenantUrl: appData?.services[0].domain,
     };
 
     delete appResponse.userId;
@@ -203,25 +221,6 @@ export class AppAuthService {
   }
 
   // fix the type for service
-  private getTenantUrl(subdomain: string, service: object) {
-    Logger.log('Inside getTenantUrl()', 'app-auth.service');
-    const domain = this.supportedServices.fetchServiceById(
-      service['id'],
-    )?.domain;
-    Logger.log(domain, 'app-auth.service');
-
-    const SERVICE_BASE_URL = url.parse(domain);
-
-    const tenantUrl =
-      SERVICE_BASE_URL.protocol +
-      '//' +
-      subdomain +
-      '.' +
-      SERVICE_BASE_URL.host +
-      SERVICE_BASE_URL.pathname;
-    return tenantUrl;
-  }
-
   private async getRandomSubdomain() {
     const subdomain = await this.appAuthApiKeyService.generateAppId(7);
     const appInDb = await this.appRepository.findOne({
@@ -302,7 +301,6 @@ export class AppAuthService {
             ],
 
             dependentApps: [{ $match: { userId } }, { $project: basePipeline }],
-
             totalCount: [{ $match: { userId } }, { $count: 'total' }],
           },
         },
@@ -384,59 +382,94 @@ export class AppAuthService {
   }
 
   private async verifyDNS01(domain: URL, txt: string) {
-    const resolveDNSURL = `https://dns.google/resolve?name=${
-      new URL(domain).host
-    }&type=TXT`;
-    const actuaTxt = txt;
-    const res = await fetch(resolveDNSURL, {
-      headers: {
-        'Content-Type': 'Application/json',
-      },
-    });
-
-    const json = await res.json();
-    const txtRecords = json.Answer?.filter((record: any) => record.type === 16);
-    const txtRecord = txtRecords?.find((record: any) =>
-      record.data.includes(txt),
-    );
-    if (!txtRecord) {
-      return {
-        verified: false,
-        error: new Error('DNS TXT record not found'),
-      };
-    }
-    if (txtRecord.data !== actuaTxt) {
-      return {
-        verified: false,
-        error: new Error('DNS TXT record not found'),
-      };
+    // Sanitize domain url: remove www. prefix and normalize
+    let hostname = domain.hostname;
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.substring(4);
     }
 
-    return {
-      TXT: txtRecord,
-      verified: true,
-    };
+    const resolveDNSURL = `${DNS_RESOLVER_URL}?name=${hostname}&type=TXT`;
+    Logger.debug(`Resolving DNS TXT record for domain: ${hostname}`);
+
+    try {
+      const res = await fetch(resolveDNSURL, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        return {
+          verified: false,
+          error: new Error(
+            `DNS resolution failed with status ${res.status}. Please try again later.`,
+          ),
+        };
+      }
+
+      const json = await res.json();
+      Logger.debug(`DNS response for ${hostname}:`, json);
+
+      const txtRecords = json.Answer?.filter(
+        (record: any) => record.type === 16,
+      );
+      const txtRecord = txtRecords?.find((record: any) =>
+        record.data.includes(txt),
+      );
+
+      if (!txtRecord) {
+        return {
+          verified: false,
+          error: new Error(
+            `DNS TXT record "${txt}" not found for domain ${hostname}. Please ensure you have added the correct DNS record and wait for propagation.`,
+          ),
+        };
+      }
+
+      Logger.debug(`DNS TXT record verified successfully for ${hostname}`);
+      return {
+        TXT: txtRecord,
+        verified: true,
+      };
+    } catch (error) {
+      Logger.error(`Error during DNS verification: ${error.message}`);
+      return {
+        verified: false,
+        error: new Error(
+          `Failed to verify DNS TXT record: ${error.message}. Please try again later.`,
+        ),
+      };
+    }
   }
 
   private async verifyDNS01Validation(domain, txtRecord) {
-    // verify DNS-01 domain
-    // const domainLinkage = new DomainLinkage(domain);
-    const d = new URL(domain.includes('http') ? domain : 'https://' + domain);
-    const fetchedTxtRecord = await this.verifyDNS01(d, txtRecord);
-    if (fetchedTxtRecord && fetchedTxtRecord.error) {
-      throw new BadRequestException(
-        fetchedTxtRecord.error?.message +
-          '. If you have already added then it may take a while to complete. Please try again in sometime.',
-      );
+    // Verify DNS-01 domain validation
+    // Sanitize domain: remove www., normalize protocol
+    let domainUrl = domain.trim();
+
+    // Add https:// if no protocol specified
+    if (!domainUrl.includes('http://') && !domainUrl.includes('https://')) {
+      domainUrl = 'https://' + domainUrl;
     }
-    if (fetchedTxtRecord.verified) {
+
+    const urlObj = new URL(domainUrl);
+    const fetchedTxtRecord = await this.verifyDNS01(urlObj, txtRecord);
+
+    if (fetchedTxtRecord && fetchedTxtRecord.error) {
+      throw new BadRequestException([
+        fetchedTxtRecord.error?.message ||
+          'DNS verification failed. If you have recently added the record, it may take some time to propagate. Please try again later.',
+      ]);
+    }
+
+    if (fetchedTxtRecord && fetchedTxtRecord.verified) {
       return {
         verified: true,
       };
     } else {
-      return {
-        verified: false,
-      };
+      throw new BadRequestException([
+        'Domain verification failed. Please check your DNS records and try again.',
+      ]);
     }
   }
 
@@ -470,18 +503,22 @@ export class AppAuthService {
     appId: string,
     updataAppDto: UpdateAppDto,
     userDetail,
+    oldApp,
   ): Promise<createAppResponse> {
     Logger.log('updateAnApp() method: starts....', 'AppAuthService');
 
     const { env, hasDomainVerified, domain, logoUrl, issuerDid } = updataAppDto;
     const { userId } = userDetail;
-    const oldApp = await this.getAppById(appId, userId);
     if (!oldApp) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         'Service with given id do not exists for this user',
-      );
+      ]);
     }
     Logger.debug(oldApp);
+    const isEnvChanged =
+      typeof updataAppDto.env !== 'undefined' &&
+      updataAppDto.env !== oldApp.env;
+    Logger.debug(`isEnvChanged: ${isEnvChanged}`);
     // check if hasDomainVerified is verifed by DNS-01
     // only if credential was not issued
     // this should not happen everytime we update a record, only once.
@@ -517,32 +554,38 @@ export class AppAuthService {
     // Env restrictions
     if (env === APP_ENVIRONMENT.prod) {
       if (!(domain && hasDomainVerified)) {
-        throw new BadRequestException(
+        throw new BadRequestException([
           'You must verify your domain before going to production',
-        );
+        ]);
       }
 
       if (!logoUrl || logoUrl == '') {
-        throw new BadRequestException(
+        throw new BadRequestException([
           'Logo must be set before going to production',
-        );
+        ]);
       }
     }
     const app: App = await this.appRepository.findOneAndUpdate(
       { appId, userId },
       updataAppDto,
     );
-    // update webpage detail
-    if ((app.services[0].id = SERVICE_TYPES.CAVACH_API)) {
-      this.updateWebPageConfigDetail(app, userDetail).catch((err) => {
-        Logger.error(
-          `updateWebPageConfigDetail failed for ${appId}: ${err.message}`,
-          err.stack,
-        );
-      });
+    const updatedapp = await this.getAppResponse(app);
+    //update dependent service
+    if (isEnvChanged && oldApp.dependentServices?.length) {
+      await this.updateDependentServicesEnv(
+        oldApp.dependentServices,
+        updataAppDto?.env,
+        userId,
+      );
     }
+    // update redis
+    await this.updateAppRedis(appId, {
+      env: (updatedapp.env as APP_ENVIRONMENT) ?? APP_ENVIRONMENT.dev,
+      appName: updatedapp.appName,
+      whitelistedCors: updatedapp.whitelistedCors,
+    });
 
-    return this.getAppResponse(app);
+    return updatedapp;
   }
 
   async deleteApp(appId: string, userId: string): Promise<DeleteAppResponse> {
@@ -581,7 +624,9 @@ export class AppAuthService {
       kmsId,
     );
     if (!appDataFromVault) {
-      throw new BadRequestException('App detail does not exists in datavault');
+      throw new BadRequestException([
+        'App detail does not exists in datavault',
+      ]);
     }
     const appKmsVaultWallet = await VaultWalletManager.getWallet(
       appDataFromVault.mnemonic,
@@ -607,8 +652,23 @@ export class AppAuthService {
     }
     const appDbConnectionSuffix = `service:${appDetail.services[0].dBSuffix}:${appDetail.subdomain}`;
     await this.appRepository.findAndDeleteServiceDB(appDbConnectionSuffix);
+    if (
+      appDetail?.services?.length > 0 &&
+      appDetail.services[0].id === SERVICE_TYPES.CAVACH_API
+    ) {
+      // delete onboarding data
+      await this.onboardModel.deleteOne({ kycServiceId: appId });
+      // delete webpage config data of that service
+      await this.webpageConfigRepo.findOneAndDelete({ appId });
+    }
     this.authzCreditRepository.deleteAuthzDetail({ appId });
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });
+    // delete from redis
+    await Promise.all([
+      redisClient.del(generateHash(appId)),
+      redisClient.del(generateHash(`${appId}_${Context.idDashboard}`)),
+    ]);
+    Logger.debug(`Redis cache cleaned for appId: ${appId}`);
     return { appId: appDetail.appId };
   }
 
@@ -633,9 +693,7 @@ export class AppAuthService {
     grantType,
   ): Promise<{ access_token; expiresIn; tokenType }> {
     Logger.log('generateAccessToken() method: starts....', 'AppAuthService');
-
     const apikeyIndex = appSecreatKey.split('.')[0];
-
     const appDetail = await this.appRepository.findOne({
       apiKeyPrefix: apikeyIndex,
     });
@@ -667,26 +725,38 @@ export class AppAuthService {
         'AppAuthService',
       );
 
-      throw new UnauthorizedException('access_denied');
+      throw new UnauthorizedException(['access_denied']);
     }
 
     const serviceType = appDetail.services[0]?.id; // TODO: remove this later
     let grant_type = '';
     let accessList = [];
+    const redisKey = generateHash(appDetail.appId);
+    const savedSession = await redisClient.get(redisKey);
+    if (savedSession) {
+      Logger.log('Using redis cached session', 'AppAuthService');
+      const sessionJson = JSON.parse(savedSession);
+      const jwtPayload = {
+        appId: sessionJson.appId,
+        appName: sessionJson.appName,
+        grantType: sessionJson.grantType,
+        subdomain: sessionJson.subdomain,
+        sessionId: redisKey,
+      };
+      return this.getAccessToken(jwtPayload, expiresin);
+    }
     switch (serviceType) {
       case SERVICE_TYPES.SSI_API: {
         grant_type = GRANT_TYPES.access_service_ssi;
-        if (userDetails.accessList && userDetails.accessList.length > 0) {
-          accessList = userDetails.accessList
-            .map((x) => {
-              if (x.serviceType === SERVICE_TYPES.SSI_API) {
-                if (!this.checkIfDateExpired(x.expiryDate)) {
-                  return x.access;
-                }
-              }
-            })
-            .filter((x) => x != undefined);
-        }
+        const defaultAccessList = getAccessListForModule(
+          TokenModule.APP_AUTH,
+          SERVICE_TYPES.SSI_API,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.SSI_API,
+          [],
+        );
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
@@ -700,53 +770,71 @@ export class AppAuthService {
           ]);
         }
         grant_type = grantType || GRANT_TYPES.access_service_kyc;
-        if (userDetails.accessList && userDetails.accessList.length > 0) {
-          accessList = userDetails.accessList
-            .map((x) => {
-              if (x.serviceType === SERVICE_TYPES.CAVACH_API) {
-                if (!this.checkIfDateExpired(x.expiryDate)) {
-                  return x.access;
-                }
-              }
-            })
-            .filter((x) => x != undefined);
-        }
+        const defaultAccessList = getAccessListForModule(
+          TokenModule.APP_AUTH,
+          SERVICE_TYPES.CAVACH_API,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.CAVACH_API,
+          [],
+        );
         break;
       }
       case SERVICE_TYPES.QUEST: {
         grant_type = GRANT_TYPES.access_service_quest;
-        if (userDetails.accessList && userDetails.accessList.length > 0) {
-          accessList = userDetails.accessList
-            .map((x) => {
-              if (x.serviceType === SERVICE_TYPES.QUEST) {
-                if (!this.checkIfDateExpired(x.expiryDate)) {
-                  return x.access;
-                }
-              }
-            })
-            .filter((x) => x != undefined);
-        }
+        const defaultAccessList = getAccessListForModule(
+          TokenModule.APP_AUTH,
+          SERVICE_TYPES.QUEST,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.QUEST,
+          [],
+        );
         break;
       }
       default: {
-        throw new BadRequestException('Invalid service ' + appDetail.appId);
+        throw new BadRequestException(['Invalid service ' + appDetail.appId]);
       }
     }
 
     if (accessList.length <= 0) {
-      throw new UnauthorizedException(
+      throw new UnauthorizedException([
         `You are not authorized to access service of type ${serviceType}`,
-      );
+      ]);
     }
-
-    return this.getAccessToken(grant_type, appDetail, expiresin, accessList);
+    const jwtPayload = {
+      appId: appDetail.appId,
+      appName: appDetail.appName,
+      grantType: grant_type,
+      subdomain: appDetail.subdomain,
+      sessionId: redisKey,
+    };
+    await this.storeDataInRedis(grant_type, appDetail, accessList, redisKey);
+    return this.getAccessToken(jwtPayload, expiresin);
   }
 
   public async getAccessToken(
+    data,
+    time = 4,
+    unit: TIME_UNIT = TIME_UNIT.HOUR,
+  ) {
+    const secret = this.config.get('JWT_SECRET');
+    const token = await this.jwt.signAsync(data, {
+      expiresIn: `${time}${unit}`,
+      secret,
+    });
+    const expiresIn = getSecondsFromUnit(time, unit);
+    Logger.log('generateAccessToken() method: ends....', 'AppAuthService');
+
+    return { access_token: token, expiresIn, tokenType: 'Bearer' };
+  }
+  public async storeDataInRedis(
     grantType,
     appDetail,
-    expiresin = 4,
     accessList = [],
+    sessionId,
   ) {
     const payload = {
       appId: appDetail.appId,
@@ -760,7 +848,6 @@ export class AppAuthService {
       env: appDetail.env ? appDetail.env : APP_ENVIRONMENT.dev,
       appName: appDetail.appName,
     };
-
     if (appDetail.issuerDid) {
       payload['issuerDid'] = appDetail.issuerDid;
     }
@@ -776,27 +863,28 @@ export class AppAuthService {
     ) {
       payload['dependentServices'] = appDetail.dependentServices;
     }
-
-    const secret = this.config.get('JWT_SECRET');
-
-    const token = await this.jwt.signAsync(payload, {
-      expiresIn: expiresin.toString() + 'h',
-      secret,
-    });
-    const expiresIn = (expiresin * 1 * 60 * 60 * 1000) / 1000;
-    Logger.log('generateAccessToken() method: ends....', 'AppAuthService');
-
-    return { access_token: token, expiresIn, tokenType: 'Bearer' };
+    Logger.log('storeDataInRedis() method: ends....', 'AppAuthService');
+    redisClient.set(
+      sessionId,
+      JSON.stringify(payload),
+      'EX',
+      EXPIRY_CONFIG.DASHBOARD_ACCESS.redisExpiryTime,
+    );
   }
-
-  //access_service_ssi
-  //access_service_kyc
 
   async grantPermission(
     grantType: string,
     appId: string,
     user,
+    session?,
   ): Promise<{ access_token; expiresIn; tokenType }> {
+    const context = Context.idDashboard;
+    let rawRedisKey = `${appId}_${context}_${session.userId}`;
+    if (session && session.tenantId) {
+      rawRedisKey = `${rawRedisKey}_tenant`;
+    }
+    const sessionId = generateHash(rawRedisKey);
+    const savedSession = await redisClient.get(sessionId);
     switch (grantType) {
       case GRANT_TYPES.access_service_ssi:
         break;
@@ -807,22 +895,36 @@ export class AppAuthService {
       case GRANT_TYPES.access_service_quest:
         break;
       default: {
-        throw new BadRequestException(
+        throw new BadRequestException([
           'Grant type not supported, supported grant types are: ' +
             GRANT_TYPES.access_service_kyc +
             ',' +
             GRANT_TYPES.access_service_ssi,
-        );
+        ]);
       }
     }
 
-    const app = await this.getAppById(appId, user.userId);
-    if (!app) {
-      throw new BadRequestException(
-        'Invalid service id or you do not have access of this service',
+    if (savedSession) {
+      const app = JSON.parse(savedSession);
+      const dataToStore = {
+        appId,
+        appName: app.appName,
+        grantType,
+        subdomain: app.subdomain,
+        sessionId,
+      };
+      return this.getAccessToken(
+        dataToStore,
+        EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtTime,
+        EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtUnit,
       );
     }
-
+    const app = await this.getAppById(appId, user.userId);
+    if (!app) {
+      throw new BadRequestException([
+        'Invalid service id or you do not have access of this service',
+      ]);
+    }
     const userDetails = user;
     if (!userDetails) {
       throw new UnauthorizedException([
@@ -835,19 +937,20 @@ export class AppAuthService {
     switch (serviceType) {
       case SERVICE_TYPES.SSI_API: {
         if (grantType != 'access_service_ssi') {
-          throw new BadRequestException(
+          throw new BadRequestException([
             'Invalid grant type for this service ' + appId,
-          );
+          ]);
         }
-        accessList = userDetails.accessList
-          .map((x) => {
-            if (x.serviceType === SERVICE_TYPES.SSI_API) {
-              if (!this.checkIfDateExpired(x.expiryDate)) {
-                return x.access;
-              }
-            }
-          })
-          .filter((x) => x != undefined);
+        const defaultAccessList = getAccessListForModule(
+          TokenModule.DASHBOARD,
+          SERVICE_TYPES.SSI_API,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.SSI_API,
+          user.accessList,
+          context,
+        );
         break;
       }
       case SERVICE_TYPES.CAVACH_API: {
@@ -855,127 +958,132 @@ export class AppAuthService {
           grantType != GRANT_TYPES.access_service_kyc &&
           grantType != GRANT_TYPES.access_service_kyb
         ) {
-          throw new BadRequestException(
+          throw new BadRequestException([
             'Invalid grant type for this service ' + appId,
-          );
+          ]);
         }
-        accessList = userDetails.accessList
-          .map((x) => {
-            if (x.serviceType === SERVICE_TYPES.CAVACH_API) {
-              if (!this.checkIfDateExpired(x.expiryDate)) {
-                return x.access;
-              }
-            }
-          })
-          .filter((x) => x != undefined);
+        const defaultAccessList = getAccessListForModule(
+          TokenModule.DASHBOARD,
+          SERVICE_TYPES.CAVACH_API,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.CAVACH_API,
+          user.accessList,
+          context,
+        );
         break;
       }
       case SERVICE_TYPES.QUEST: {
         if (grantType != 'access_service_quest') {
-          throw new BadRequestException(
+          throw new BadRequestException([
             'Invalid grant type for this service ' + appId,
-          );
+          ]);
         }
-        accessList = userDetails.accessList
-          .map((x) => {
-            if (x.serviceType === SERVICE_TYPES.QUEST) {
-              if (!this.checkIfDateExpired(x.expiryDate)) {
-                return x.access;
-              }
-            }
-          })
-          .filter((x) => x != undefined);
+        const defaultAccessList = getAccessListForModule(
+          TokenModule.DASHBOARD,
+          SERVICE_TYPES.QUEST,
+        );
+        accessList = evaluateAccessPolicy(
+          defaultAccessList,
+          SERVICE_TYPES.QUEST,
+          user.accessList,
+          context,
+        );
         break;
       }
       default: {
-        throw new BadRequestException('Invalid service ' + appId);
+        throw new BadRequestException(['Invalid service ' + appId]);
       }
     }
     if (accessList.length <= 0) {
-      throw new UnauthorizedException(
+      throw new UnauthorizedException([
         `You are not authorized to access service of type ${serviceType}`,
-      );
-    }
-
-    return this.getAccessToken(grantType, app, 12, accessList);
-  }
-
-  private async updateWebPageConfigDetail(app, userDetail) {
-    const webpageDetail = await this.webpageConfigRepo.findAWebpageConfig({
-      serviceId: app.appId,
-    });
-    if (!webpageDetail) {
-      Logger.warn(`No webpage config found for serviceId ${app.appId}`);
-      return;
-    }
-    let expiryDate = webpageDetail.expiryDate;
-    const userAccessList = userDetail.accessList;
-    Logger.log(
-      'Inside updateWebPageConfigDetail(): Method to generate ssi and kyc token',
-      'AppAuthService',
-    );
-    const ssiAccessList = (userAccessList || [])
-      .filter(
-        (x) =>
-          x.serviceType === SERVICE_TYPES.SSI_API &&
-          !this.checkIfDateExpired(x.expiryDate),
-      )
-      .map((x) => x.access);
-
-    const kycAccessList = (userAccessList || [])
-      .filter(
-        (x) =>
-          x.serviceType === SERVICE_TYPES.CAVACH_API &&
-          !this.checkIfDateExpired(x.expiryDate),
-      )
-      .map((x) => x.access);
-
-    if (ssiAccessList.length <= 0 || kycAccessList.length <= 0) {
-      throw new UnauthorizedException(
-        `You are not authorized for both SSI and KYC services.`,
-      );
-    }
-    expiryDate = new Date(expiryDate);
-
-    if (isNaN(expiryDate.getTime())) {
-      throw new BadRequestException('Invalid custom expiry date format.');
-    }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (expiryDate < today) {
-      throw new BadRequestException(
-        'Custom expiry date cannot be earlier than today.',
-      );
-    }
-    const expiresIn = Math.floor(
-      (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60),
-    );
-
-    const ssiServiceDetail = await this.appRepository.findOne({
-      appId: app.dependentServices[0],
-    });
-    if (!ssiServiceDetail) {
-      throw new BadRequestException([
-        `No service found with dependentServiceId: ${app.dependentServices[0]}`,
       ]);
     }
-    // Get access tokens
-    const ssiAccessTokenDetail = await this.getAccessToken(
-      GRANT_TYPES.access_service_ssi,
-      ssiServiceDetail,
-      expiresIn,
+    const tokenPayload = {
+      appId,
+      appName: app.appName,
+      grantType,
+      subdomain: app.subdomain,
+      sessionId,
+    };
+    await this.storeDataInRedis(grantType, app, accessList, sessionId);
+    return this.getAccessToken(
+      tokenPayload,
+      EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtTime,
+      EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtUnit,
     );
-    const kycAccessTokenDetail = await this.getAccessToken(
-      GRANT_TYPES.access_service_kyc,
-      app,
-      expiresIn,
+  }
+
+  private async updateDependentServicesEnv(
+    dependentServiceIds: string[],
+    env: APP_ENVIRONMENT | undefined,
+    userId: string,
+  ) {
+    Logger.debug(
+      'Inside updateDependentServicesEnv(): Updating dependent services env...',
     );
-    await this.webpageConfigRepo.findOneAndUpdate(
-      { _id: webpageDetail['_id'] },
+    if (!env || !dependentServiceIds?.length) return;
+    // Update DB
+    await this.appRepository.findOneAndUpdate(
       {
-        ssiAccessToken: ssiAccessTokenDetail.access_token,
-        kycAccessToken: kycAccessTokenDetail.access_token,
+        appId: { $in: dependentServiceIds },
+        userId,
       },
+      { env },
     );
+
+    // Update Redis
+    await Promise.all(
+      dependentServiceIds.map((serviceId) =>
+        this.updateAppRedis(serviceId, { env }),
+      ),
+    );
+  }
+  private async updateAppRedis(
+    appId: string,
+    updatedFields: Partial<{
+      env: APP_ENVIRONMENT;
+      appName: string;
+      whitelistedCors: string[];
+    }>,
+  ) {
+    Logger.debug('Inside updateAppRedis(): Updating app redis cache...');
+    const baseKey = generateHash(appId);
+    const dashboardRedisKey = generateHash(`${appId}_${Context.idDashboard}`);
+
+    const [baseDataString, dashboardDataString] = await Promise.all([
+      redisClient.get(baseKey),
+      redisClient.get(dashboardRedisKey),
+    ]);
+
+    const updates: Promise<any>[] = [];
+
+    if (baseDataString) {
+      const baseData = JSON.parse(baseDataString);
+      updates.push(
+        redisClient.set(
+          baseKey,
+          JSON.stringify({ ...baseData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
+
+    if (dashboardDataString) {
+      const dashboardData = JSON.parse(dashboardDataString);
+      updates.push(
+        redisClient.set(
+          dashboardRedisKey,
+          JSON.stringify({ ...dashboardData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
+
+    if (updates.length) {
+      await Promise.all(updates);
+    }
   }
 }

@@ -17,6 +17,7 @@ import { GetCreditsDto, GrantAllowanceResponseDto } from '../dtos/credits.dto';
 export class CreditsController {
   constructor(private readonly creditService: AuthzCreditService) {}
   @ApiBearerAuth('Authorization')
+  @ApiExcludeEndpoint()
   @Get('/app')
   @ApiQuery({
     name: 'appId',
@@ -29,8 +30,7 @@ export class CreditsController {
     const appId = query.appId;
     return this.creditService.getCreditDetails(appId, userId);
   }
-  @ApiExcludeEndpoint()
-  // @ApiBearerAuth('Authorization') we will implement basic authentication and will set the userId and password on ssi service
+  @ApiBearerAuth('Authorization')
   @ApiOkResponse({
     description: 'Granted allowance to specific wallet successfully',
     type: GrantAllowanceResponseDto,

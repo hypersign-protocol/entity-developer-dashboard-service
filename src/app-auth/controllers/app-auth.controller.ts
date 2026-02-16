@@ -14,6 +14,7 @@ import {
   Req,
   Delete,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   CreateAppDto,
@@ -86,7 +87,7 @@ export class AppAuthController {
       userRole,
     );
     if (appList.length === 0) {
-      throw new AppNotFoundException();
+      throw new BadRequestException(['Application Not Found']);
     }
     if (appList) return appList;
   }
@@ -136,7 +137,7 @@ export class AppAuthController {
 
     const app = await this.appAuthService.getAppById(appId, userId);
     if (app) return app;
-    else throw new AppNotFoundException(); // Custom Exception handling
+    else throw new BadRequestException(['App not found']);
   }
 
   @ApiBearerAuth('Authorization')
@@ -201,7 +202,12 @@ export class AppAuthController {
 
     const app = await this.appAuthService.getAppById(appId, userId);
     if (app) {
-      return this.appAuthService.updateAnApp(appId, updateAppDto, req.user);
+      return this.appAuthService.updateAnApp(
+        appId,
+        updateAppDto,
+        req.user,
+        app,
+      );
     } else throw new AppNotFoundException();
   }
 

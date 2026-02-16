@@ -3,11 +3,11 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import {
   CreateWebpageConfigDto,
   CreateWebpageConfigResponseDto,
+  ExpiryType,
 } from '../dto/create-webpage-config.dto';
 import { UpdateWebpageConfigDto } from '../dto/update-webpage-config.dto';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
@@ -16,9 +16,23 @@ import {
   GRANT_TYPES,
 } from 'src/app-auth/services/app-auth.service';
 import { WebPageConfigRepository } from '../repositories/webpage-config.repository';
-import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
+import {
+  APP_ENVIRONMENT,
+  SERVICE_TYPES,
+} from 'src/supported-service/services/iServiceList';
 import { ConfigService } from '@nestjs/config';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
+import { isValidObjectId, Types } from 'mongoose';
+import { WEBPAGE_CONFIG_ERRORS } from '../constant/en';
+import { redisClient } from 'src/utils/redis.provider';
+import { EXPIRY_CONFIG } from 'src/utils/time-constant';
+import {
+  evaluateAccessPolicy,
+  generateHash,
+  getAccessListForModule,
+  REDIS_KEYS,
+} from 'src/utils/utils';
+import { TokenModule } from 'src/config/access-matrix';
 
 @Injectable()
 export class WebpageConfigService {
@@ -31,7 +45,6 @@ export class WebpageConfigService {
   async storeWebPageConfigDetial(
     serviceId: string,
     createWebpageConfigDto: CreateWebpageConfigDto,
-    userDetail,
   ): Promise<CreateWebpageConfigResponseDto> {
     Logger.log(
       'Inside storeWebPageConfigDetial to store webpage configuration',
@@ -59,35 +72,36 @@ export class WebpageConfigService {
       !serviceDetail?.dependentServices ||
       serviceDetail.dependentServices.length === 0
     ) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         'KYC service must have a dependent SSI service linked to it.',
-      );
+      ]);
     }
-    const { appName, logoUrl, env = 'dev' } = serviceDetail;
+    const { appName, logoUrl } = serviceDetail;
+    const env: APP_ENVIRONMENT = serviceDetail?.env as APP_ENVIRONMENT;
     const tenantUrl: string = serviceDetail['tenantUrl'];
 
-    const tokenAndExpiryDetail = await this.generateTokenBasedOnExpiry(
-      serviceDetail,
-      userDetail.accessList,
+    const { expiryDate } = await this.generateExpiryDate(
       expiryType,
       customExpiryDate,
-      serviceDetail.dependentServices[0],
     );
     const veriferAppBaseUrl =
       this.config.get('KYC_VERIFIER_APP_BASE_URL') ||
       'https://verifier.hypersign.id';
-    const generatedUrl = `${urlSanitizer(veriferAppBaseUrl, true)}${serviceId}`;
+    const id = new Types.ObjectId();
+    const generatedUrl = `${urlSanitizer(
+      veriferAppBaseUrl,
+      true,
+    )}${id.toString()}`;
     const payload = {
+      _id: id,
       serviceId,
       themeColor,
-      ssiAccessToken: tokenAndExpiryDetail.ssiAccessToken,
-      kycAccessToken: tokenAndExpiryDetail.kycAccessToken,
       expiryType,
-      expiryDate: tokenAndExpiryDetail.expiryDate,
+      expiryDate,
       pageDescription,
       pageTitle,
       pageType,
-      tenantUrl,
+      // tenantUrl,
       generatedUrl,
       contactEmail,
     };
@@ -96,12 +110,11 @@ export class WebpageConfigService {
       payload,
     );
     const webpageConfigObject = webpageConfigData;
-    const { ssiAccessToken, kycAccessToken, ...responseData } =
-      webpageConfigObject;
     return {
-      ...responseData,
+      ...webpageConfigObject,
       serviceName: appName,
       developmentStage: env,
+      tenantUrl,
       logoUrl,
     };
   }
@@ -119,52 +132,74 @@ export class WebpageConfigService {
 
     if (!serviceDetail) {
       throw new BadRequestException([
-        `No service found with serviceId: ${serviceId}`,
+        [`No service found with serviceId: ${serviceId}`],
       ]);
     }
-    const { appName, logoUrl, env = 'dev' } = serviceDetail;
+    const { appName, logoUrl } = serviceDetail;
+    const env: APP_ENVIRONMENT = serviceDetail?.env as APP_ENVIRONMENT;
     const webPAgeConfigData = await this.webPageConfigRepo.findAWebpageConfig({
       serviceId,
     });
     if (!webPAgeConfigData) {
-      throw new NotFoundException(
+      throw new NotFoundException([
         `No webpage configuration found for serviceId: ${serviceId}`,
-      );
+      ]);
     }
     return {
       ...webPAgeConfigData,
       serviceName: appName,
       developmentStage: env,
       logoUrl,
+      tenantUrl: serviceDetail['tenantUrl'],
     };
   }
 
   async fetchAWebPageConfigurationDetail(
     id: string,
-    serviceId: string,
-  ): Promise<CreateWebpageConfigDto> {
-    const webpageConfiguration =
-      await this.webPageConfigRepo.findAWebpageConfig({
-        _id: id,
-        serviceId,
-      });
-    if (!webpageConfiguration || webpageConfiguration == null) {
-      throw new NotFoundException(
-        `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
-      );
+  ): Promise<CreateWebpageConfigResponseDto> {
+    const isValidId = isValidObjectId(id);
+    const query: any = {
+      $or: [{ serviceId: id }],
+    };
+    if (isValidId) {
+      query.$or.push({ _id: new Types.ObjectId(id) });
     }
-    return webpageConfiguration;
+    const webpageConfiguration =
+      await this.webPageConfigRepo.findAWebpageConfig(query);
+    if (!webpageConfiguration || webpageConfiguration == null) {
+      throw new NotFoundException([
+        `No webpage configuration found for id: ${id}`,
+      ]);
+    }
+
+    const serviceDetail = await this.appRepository.findOne({
+      appId: webpageConfiguration.serviceId,
+    });
+    return {
+      ...webpageConfiguration,
+      developmentStage: serviceDetail?.env as APP_ENVIRONMENT,
+      serviceName: serviceDetail.appName,
+      logoUrl: serviceDetail.logoUrl,
+      tenantUrl: serviceDetail['tenantUrl'],
+    };
   }
 
   async updateWebPageConfiguration(
     id: string,
     updateWebpageConfigDto: UpdateWebpageConfigDto,
-    userDetail,
     serviceId,
   ): Promise<CreateWebpageConfigResponseDto> {
+    Logger.log(
+      'Inside updateWebPageConfiguration() to update webpage configuration detail',
+      'WebpageConfigService',
+    );
     const serviceDetail = await this.appRepository.findOne({
       appId: serviceId,
     });
+    Logger.debug(
+      'Inside updateWebPageConfiguration() after fetchich service detail from db',
+      'WebpageConfigService',
+    );
     if (!serviceDetail) {
       throw new BadRequestException([
         `No service found with serviceId: ${serviceId}`,
@@ -174,110 +209,80 @@ export class WebpageConfigService {
       !serviceDetail?.dependentServices ||
       serviceDetail.dependentServices.length === 0
     ) {
-      throw new BadRequestException(
+      throw new BadRequestException([
         'KYC service must have a dependent SSI service linked to it.',
-      );
+      ]);
     }
-    let tokenDetail;
     const dataToUpdate = { ...updateWebpageConfigDto };
+    delete dataToUpdate['_id'];
     if (updateWebpageConfigDto.expiryType) {
-      tokenDetail = await this.generateTokenBasedOnExpiry(
-        serviceDetail,
-        userDetail.accessList,
+      const { expiryDate } = await this.generateExpiryDate(
         updateWebpageConfigDto.expiryType,
         updateWebpageConfigDto.customExpiryDate,
-        serviceDetail.dependentServices[0],
       );
-      dataToUpdate['expiryDate'] = tokenDetail.expiryDate;
-      dataToUpdate['ssiAccessToken'] = tokenDetail.ssiAccessToken;
-      dataToUpdate['kycAccessToken'] = tokenDetail.kycAccessToken;
+      dataToUpdate['expiryDate'] = expiryDate;
     }
+    Logger.debug(
+      'before updating webpage config detail....',
+      'WebpageConfigService',
+    );
     const webpageConfiguration = await this.webPageConfigRepo.findOneAndUpdate(
-      { _id: id },
+      { _id: new Types.ObjectId(id) },
       dataToUpdate,
     );
     if (!webpageConfiguration || webpageConfiguration == null) {
-      throw new NotFoundException(
+      throw new NotFoundException([
         `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
-      );
+      ]);
     }
-    const { appName, logoUrl, env = 'dev' } = serviceDetail;
-
+    const { appName, logoUrl } = serviceDetail;
+    const env: APP_ENVIRONMENT = serviceDetail?.env as APP_ENVIRONMENT;
     return {
       ...webpageConfiguration,
       serviceName: appName,
       developmentStage: env,
       logoUrl,
+      tenantUrl: serviceDetail['tenantUrl'],
     };
   }
 
   async removeWebPageConfiguration(id: string, serviceId: string) {
     const deletedConfig = await this.webPageConfigRepo.findOneAndDelete({
-      _id: id,
+      _id: new Types.ObjectId(id),
       serviceId,
     });
     if (!deletedConfig) {
-      throw new NotFoundException(
+      throw new NotFoundException([
         `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
-      );
+      ]);
     }
 
     return deletedConfig;
   }
-  private async generateTokenBasedOnExpiry(
-    serviceDetail,
-    userAccessList,
-    expiryType,
-    customExpiryDate,
-    ssiServiceId,
-  ) {
-    // Get both SSI & KYC access lists
-    Logger.log(
-      'Inside generateTokenBasedOnExpiry(): Method to generate ssi and kyc token',
-      'removeWebPageConfiguration',
+  private async generateExpiryDate(expiryType, customExpiryDate) {
+    Logger.debug(
+      'Inside generateExpiryDate() to calculate expiry of configured webpage',
+      'WebpageConfigService',
     );
-    const ssiAccessList = (userAccessList || [])
-      .filter(
-        (x) =>
-          x.serviceType === SERVICE_TYPES.SSI_API &&
-          !this.appAuthService.checkIfDateExpired(x.expiryDate),
-      )
-      .map((x) => x.access);
-
-    const kycAccessList = (userAccessList || [])
-      .filter(
-        (x) =>
-          x.serviceType === SERVICE_TYPES.CAVACH_API &&
-          !this.appAuthService.checkIfDateExpired(x.expiryDate),
-      )
-      .map((x) => x.access);
-
-    if (ssiAccessList.length <= 0 || kycAccessList.length <= 0) {
-      throw new UnauthorizedException(
-        `You are not authorized for both SSI and KYC services.`,
-      );
-    }
-
-    // Calculate expiresIn
     let expiresIn: number;
     let expiryDate: Date;
-    if (expiryType === 'custom') {
+    if (expiryType === ExpiryType.CUSTOM) {
       if (!customExpiryDate) {
-        throw new BadRequestException(
+        throw new BadRequestException([
           'Custom expiry date is required when expiryType is "custom".',
-        );
+        ]);
       }
       expiryDate = new Date(customExpiryDate);
 
       if (isNaN(expiryDate.getTime())) {
-        throw new BadRequestException('Invalid custom expiry date format.');
+        throw new BadRequestException(['Invalid custom expiry date format.']);
       }
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       if (expiryDate < today) {
-        throw new BadRequestException(
+        throw new BadRequestException([
           'Custom expiry date cannot be earlier than today.',
-        );
+        ]);
       }
       expiresIn = Math.floor(
         (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60),
@@ -292,29 +297,110 @@ export class WebpageConfigService {
       expiresIn = days * 24;
       expiryDate = new Date(Date.now() + expiresIn * 60 * 60 * 1000);
     }
-    const ssiServiceDetail = await this.appRepository.findOne({
-      appId: ssiServiceId,
+    return { expiryDate };
+  }
+  public async generateWebpageConfigTokens(id, appId) {
+    const redisKey = generateHash(`${REDIS_KEYS.VERIFIER_PAGE_TOKEN}${id}`);
+    const cachedData = await redisClient.get(redisKey);
+    if (cachedData) return JSON.parse(cachedData);
+    const verifierConfig = await this.webPageConfigRepo.findAWebpageConfig({
+      _id: new Types.ObjectId(id),
     });
-    if (!ssiServiceDetail) {
+    if (!verifierConfig) {
       throw new BadRequestException([
-        `No service found with dependentServiceId: ${ssiServiceId}`,
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_NOT_FOUND,
       ]);
     }
-    // Get access tokens
-    const ssiAccessTokenDetail = await this.appAuthService.getAccessToken(
-      GRANT_TYPES.access_service_ssi,
-      ssiServiceDetail,
-      expiresIn,
-    );
-    const kycAccessTokenDetail = await this.appAuthService.getAccessToken(
+    const kycServiceDetail = await this.getServiceAndCache(
+      appId,
+      SERVICE_TYPES.CAVACH_API,
       GRANT_TYPES.access_service_kyc,
-      serviceDetail,
-      expiresIn,
+      TokenModule.VERIFIER,
     );
-    return {
+    if (
+      !kycServiceDetail.dependentServices ||
+      kycServiceDetail.dependentServices.length === 0
+    ) {
+      throw new BadRequestException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_SSI_SERVICE_NOT_FOUND,
+      ]);
+    }
+    const ssiServiceId = kycServiceDetail?.dependentServices?.[0];
+    const ssiServiceDetail = await this.getServiceAndCache(
+      ssiServiceId,
+      SERVICE_TYPES.SSI_API,
+      GRANT_TYPES.access_service_ssi,
+      TokenModule.ID_SERVICE,
+    );
+    // generate access tokens
+    const [ssiAccessTokenDetail, kycAccessTokenDetail] = await Promise.all([
+      this.appAuthService.getAccessToken(
+        {
+          appId: ssiServiceId,
+          appName: ssiServiceDetail.appName,
+          grantType: GRANT_TYPES.access_service_ssi,
+          sessionId: ssiServiceId,
+          subdomain: ssiServiceDetail.subdomain,
+        },
+        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtTime,
+        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtUnit,
+      ),
+      this.appAuthService.getAccessToken(
+        {
+          appId,
+          appName: kycServiceDetail.appName,
+          grantType: GRANT_TYPES.access_service_kyc,
+          sessionId: appId,
+          subdomain: kycServiceDetail.subdomain,
+        },
+        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtTime,
+        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtUnit,
+      ),
+    ]);
+    const redisPayload = {
       ssiAccessToken: ssiAccessTokenDetail.access_token,
       kycAccessToken: kycAccessTokenDetail.access_token,
-      expiryDate,
     };
+    redisClient.set(
+      redisKey,
+      JSON.stringify(redisPayload),
+      'EX',
+      EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.redisExpiryTime,
+    );
+    return {
+      ...redisPayload,
+    };
+  }
+  public async getServiceAndCache(
+    appId: string,
+    serviceType: SERVICE_TYPES,
+    grantType: GRANT_TYPES,
+    tokenModule,
+  ) {
+    Logger.debug(
+      'Inside getServiceAndCache() method to store and get service detail from redis',
+      'WebpageConfigService',
+    );
+    const cached = await redisClient.get(generateHash(appId));
+    if (cached) return JSON.parse(cached);
+    const serviceDetail = await this.appRepository.findOne({ appId });
+    if (!serviceDetail) {
+      throw new BadRequestException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
+      ]);
+    }
+    const defaultAccessList = getAccessListForModule(tokenModule, serviceType);
+    const validateAccessList = evaluateAccessPolicy(
+      defaultAccessList,
+      serviceType,
+      [],
+    );
+    await this.appAuthService.storeDataInRedis(
+      grantType,
+      serviceDetail,
+      validateAccessList,
+      appId,
+    );
+    return serviceDetail;
   }
 }

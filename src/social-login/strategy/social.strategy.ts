@@ -15,7 +15,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       callbackURL:
         process.env.GOOGLE_CALLBACK_URL ||
         sanitizeUrl(process.env.DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP) +
-          '/api/v1/login/callback',
+          '/api/v1/auth/google/callback',
       scope: ['email', 'profile'],
       session: false,
     });

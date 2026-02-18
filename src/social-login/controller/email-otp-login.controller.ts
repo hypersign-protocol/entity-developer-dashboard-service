@@ -20,6 +20,7 @@ import {
   GenerateEmailOtpDto,
   GenerateEmailOtpResponse,
   VerifyEmailOtpDto,
+  VerifyEmailOtpResponseDto,
 } from '../dto/generate-email-otp.dto';
 import { EmailOtpLoginService } from '../services/email-otp-login.service';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
@@ -50,7 +51,10 @@ export class EmailOtpLoginController {
     Logger.log('generateEmailOtp() method starts', 'EmailOtpLoginController');
     return this.emailOtpService.generateEmailOtp(body);
   }
-
+  @ApiOkResponse({
+    description: 'Emial otp verifed successfully',
+    type: VerifyEmailOtpResponseDto,
+  })
   @ApiBadRequestResponse({
     status: 400,
     type: AppError,
@@ -66,8 +70,8 @@ export class EmailOtpLoginController {
     @Res() res,
   ) {
     Logger.log('verifyEmailOtp() method starts', 'EmailOtpLoginController');
-    const email = await this.emailOtpService.verifyEmailOtp(body);
-    req['user'] = { email };
+    const detail = await this.emailOtpService.verifyEmailOtp(body);
+    req['user'] = { email: detail.email };
     const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
     Logger.debug(
       `Cookied domain set is ${cookieDomain}`,
@@ -76,7 +80,12 @@ export class EmailOtpLoginController {
     try {
       const result = await this.socialLoginService.socialLogin(req);
       if (result.isMfaRequired) {
-        res.redirect(this.config.get('MFA_REDIRECT_URL'));
+        return res.json({
+          verified: detail.verified,
+          isMfaRequired: result.isMfaRequired,
+          authenticators: result.authenticators,
+          sessionId: result.sessionId,
+        });
       }
       res.cookie(
         TOKEN.AUTH.name,
@@ -88,7 +97,10 @@ export class EmailOtpLoginController {
         result.refreshToken,
         getCookieOptions(TOKEN.REFRESH.expiry),
       );
-      res.redirect(`${this.config.get('REDIRECT_URL')}`);
+      res.json({
+        verified: detail.verified,
+        isMfaRequired: result.isMfaRequired,
+      });
     } catch (err) {
       Logger.error(`Login failed: ${err.message}`, 'EmailOtpLoginController');
       throw new BadRequestException(['Failed to complete login']);

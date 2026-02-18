@@ -580,7 +580,7 @@ export class AppAuthService {
       );
     }
     // update redis
-    await this.updateAppRedis(appId, {
+    await this.updateAppRedis(appId, userId, {
       env: (updatedapp.env as APP_ENVIRONMENT) ?? APP_ENVIRONMENT.dev,
       appName: updatedapp.appName,
       whitelistedCors: updatedapp.whitelistedCors,
@@ -1038,12 +1038,13 @@ export class AppAuthService {
     // Update Redis
     await Promise.all(
       dependentServiceIds.map((serviceId) =>
-        this.updateAppRedis(serviceId, { env }),
+        this.updateAppRedis(serviceId, userId, { env }),
       ),
     );
   }
   private async updateAppRedis(
     appId: string,
+    userId,
     updatedFields: Partial<{
       env: APP_ENVIRONMENT;
       appName: string;
@@ -1052,7 +1053,9 @@ export class AppAuthService {
   ) {
     Logger.debug('Inside updateAppRedis(): Updating app redis cache...');
     const baseKey = generateHash(appId);
-    const dashboardRedisKey = generateHash(`${appId}_${Context.idDashboard}`);
+    const dashboardRedisKey = generateHash(
+      `${appId}_${Context.idDashboard}_${userId}`,
+    );
 
     const [baseDataString, dashboardDataString] = await Promise.all([
       redisClient.get(baseKey),

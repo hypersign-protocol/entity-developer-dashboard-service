@@ -399,7 +399,7 @@ export class WebpageConfigService {
       grantType,
       serviceDetail,
       validateAccessList,
-      appId,
+      generateHash(appId),
     );
     return serviceDetail;
   }

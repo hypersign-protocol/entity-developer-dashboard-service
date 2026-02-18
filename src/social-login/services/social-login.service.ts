@@ -58,6 +58,11 @@ export class SocialLoginService {
     return { authUrl };
   }
   private isSuperAdmin(email: string): boolean {
+    const envValue = process.env.SUPER_ADMIN_EMAILS_IDS;
+    if (!envValue) {
+      return false;
+    }
+
     const superAdmins = JSON.parse(process.env.SUPER_ADMIN_EMAILS_IDS);
     return superAdmins.includes(email.toLowerCase());
   }

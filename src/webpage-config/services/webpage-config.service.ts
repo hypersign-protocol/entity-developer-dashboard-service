@@ -361,7 +361,7 @@ export class WebpageConfigService {
       ssiAccessToken: ssiAccessTokenDetail.access_token,
       kycAccessToken: kycAccessTokenDetail.access_token,
     };
-    redisClient.set(
+    await redisClient.set(
       redisKey,
       JSON.stringify(redisPayload),
       'EX',

@@ -694,6 +694,10 @@ export class CustomerOnboardingService {
                   domain: domain,
                   serviceIds: [SERVICE_TYPES.CAVACH_API],
                   whitelistedCors: [
+                    sanitizeUrl(
+                      this.config.get<string>('CAVACH_API_DOMAIN'),
+                      false,
+                    ),
                     urlSanitizer(
                       this.config.get<string>('KYC_WIDGET_URL'),
                       false,

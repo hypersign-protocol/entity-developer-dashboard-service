@@ -732,7 +732,8 @@ export class AppAuthService {
     const serviceType = appDetail.services[0]?.id; // TODO: remove this later
     let grant_type = '';
     let accessList = [];
-    const redisKey = generateHash(appDetail.appId);
+    const key = `${appDetail.appId}_${Context.customer}`;
+    const redisKey = generateHash(key);
     const savedSession = await redisClient.get(redisKey);
     if (savedSession) {
       Logger.log('Using redis cached session', 'AppAuthService');

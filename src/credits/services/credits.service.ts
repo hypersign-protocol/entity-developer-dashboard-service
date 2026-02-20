@@ -9,7 +9,7 @@ import { AuthZCreditsRepository } from '../repositories/authz.repository';
 import { scope } from '../../credits/schemas/authz.schema';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { APP_ENVIRONMENT } from 'src/supported-service/services/iServiceList';
+import { APP_ENVIRONMENT, SERVICE_TYPES, SERVICES } from 'src/supported-service/services/iServiceList';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
 import { SigningStargateClient } from '@cosmjs/stargate';
 import { HidWalletService } from 'src/hid-wallet/services/hid-wallet.service';
@@ -23,6 +23,8 @@ import {
   MSG_UPDATE_DID_TYPEURL,
 } from 'src/utils/authz';
 import { sanitizeUrl } from 'src/utils/utils';
+import { GRANT_TYPES } from 'src/app-auth/services/app-auth.service';
+import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 
 @Injectable()
 export class AuthzCreditService {
@@ -187,6 +189,99 @@ export class AuthzCreditService {
         throw new InternalServerErrorException(e.message);
       }
       throw new InternalServerErrorException([e]);
+    }
+  }
+  async grantCredit(appId, creditDto) {
+    let appDetail;
+    try {
+      appDetail = await this.appRepository.findOne({ appId });
+      if (!appDetail || appDetail === null) {
+        throw new BadRequestException([`No app found for appId ${appId}`]);
+      }
+      const serviceInfo = appDetail?.services?.[0];
+      if (!serviceInfo) {
+        throw new BadRequestException(`No service configured for appId ${appId}`);
+      }
+      const isSsiService = serviceInfo.id === SERVICE_TYPES.SSI_API;
+      const {
+        amount,
+        validityPeriod,
+        validityPeriodUnit,
+        amountDenom = 'uHID',
+      } = creditDto;
+      const creditPayload = {
+        serviceId: appDetail.appId,
+        purpose: 'CreditRecharge',
+        amount,
+        validityPeriod,
+        validityPeriodUnit,
+        amountDenom,
+        subdomain: appDetail.subdomain,
+        grantType: isSsiService ? GRANT_TYPES.access_service_ssi : GRANT_TYPES.access_service_kyc,
+        whitelistedCors: appDetail.whitelistedCors,
+        accessList: isSsiService ? SERVICES.SSI_API.ACCESS_TYPES.WRITE_CREDIT : SERVICES.CAVACH_API.ACCESS_TYPES.WRITE_CREDIT
+      };
+      const { jwtTime, jwtUnit } = EXPIRY_CONFIG.CREDIT_TOKEN;
+      const expiresIn = `${jwtTime}${jwtUnit}`;
+      const creditToken = this.jwt.sign(creditPayload, { expiresIn, secret: this.config.get('JWT_SECRET') })
+      const requestOptions: RequestInit = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-credit-token': creditToken,
+        },
+      };
+      if (isSsiService) {
+        const authzCreditDetail = await this.grantSSICredit(
+          appId,
+          amount,
+        );
+        requestOptions.body = JSON.stringify({
+          ...authzCreditDetail,
+        });
+      }
+      const tenantUrl = sanitizeUrl(serviceInfo.domain, true);
+      await this.makeExternalRequest(
+        `${tenantUrl}api/v1/credit`,
+        requestOptions,
+      );
+      return { message: `Credit is successfully granted for service ${appId}` };
+    } catch (e) {
+      if (e instanceof Error) {
+        throw new InternalServerErrorException([e.message]);
+      }
+      throw new InternalServerErrorException([e]);
+    }
+  }
+
+  private async makeExternalRequest(
+    url: string,
+    options: RequestInit,
+  ) {
+    Logger.log('Inside makeExternalRequest()', 'AuthzCreditService');
+    try {
+      Logger.log(`Making request to ${url}`, 'AuthzCreditService');
+      const response = await fetch(url, options);
+      Logger.log(
+        `Received response with status ${response.status}`,
+        'AuthzCreditService',
+      );
+      const text = await response.text();
+      const detail = text ? JSON.parse(text) : null;
+      if (!response.ok) {
+        const serverError =
+          detail?.error?.details ||
+          (Array.isArray(detail?.message)
+            ? detail.message.join(', ')
+            : detail?.message) ||
+          JSON.stringify(detail) ||
+          'Unknown error from external service';
+        throw new Error(serverError);
+      }
+      return detail;
+    } catch (error) {
+      Logger.error(error, error?.stack, 'AuthzCreditService');
+      throw error;
     }
   }
 }

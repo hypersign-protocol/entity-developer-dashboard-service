@@ -18,7 +18,6 @@ import { JwtService } from '@nestjs/jwt';
 import { AppAuthApiKeyService } from './app-auth-apikey.service';
 import { EdvClientManagerFactoryService } from '../../edv/services/edv.clientFactory';
 import { VaultWalletManager } from '../../edv/services/vaultWalletManager';
-import * as url from 'url';
 import { SupportedServiceService } from 'src/supported-service/services/supported-service.service';
 import {
   APP_ENVIRONMENT,

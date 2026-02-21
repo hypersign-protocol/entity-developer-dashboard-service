@@ -12,7 +12,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { Providers } from '../strategy/social.strategy';
 import { generateHash, sanitizeUrl } from 'src/utils/utils';
 import { SupportedServiceList } from 'src/supported-service/services/service-list';
-import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { authenticator } from 'otplib';
 import { toDataURL } from 'qrcode';
 import {

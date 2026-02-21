@@ -339,7 +339,7 @@ export class WebpageConfigService {
           appId: ssiServiceId,
           appName: ssiServiceDetail.appName,
           grantType: GRANT_TYPES.access_service_ssi,
-          sessionId: ssiServiceId,
+          sessionId: generateHash(ssiServiceId),
           subdomain: ssiServiceDetail.subdomain,
         },
         EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtTime,
@@ -350,7 +350,7 @@ export class WebpageConfigService {
           appId,
           appName: kycServiceDetail.appName,
           grantType: GRANT_TYPES.access_service_kyc,
-          sessionId: appId,
+          sessionId: generateHash(appId),
           subdomain: kycServiceDetail.subdomain,
         },
         EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtTime,
@@ -361,7 +361,7 @@ export class WebpageConfigService {
       ssiAccessToken: ssiAccessTokenDetail.access_token,
       kycAccessToken: kycAccessTokenDetail.access_token,
     };
-    redisClient.set(
+    await redisClient.set(
       redisKey,
       JSON.stringify(redisPayload),
       'EX',
@@ -399,7 +399,7 @@ export class WebpageConfigService {
       grantType,
       serviceDetail,
       validateAccessList,
-      appId,
+      generateHash(appId),
     );
     return serviceDetail;
   }

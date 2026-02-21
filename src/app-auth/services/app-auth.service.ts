@@ -18,7 +18,6 @@ import { JwtService } from '@nestjs/jwt';
 import { AppAuthApiKeyService } from './app-auth-apikey.service';
 import { EdvClientManagerFactoryService } from '../../edv/services/edv.clientFactory';
 import { VaultWalletManager } from '../../edv/services/vaultWalletManager';
-import * as url from 'url';
 import { SupportedServiceService } from 'src/supported-service/services/supported-service.service';
 import {
   APP_ENVIRONMENT,
@@ -357,6 +356,7 @@ export class AppAuthService {
         $match: {
           hasDomainVerified: true,
           env: APP_ENVIRONMENT.prod,
+          'service.id': SERVICE_TYPES.CAVACH_API,
         },
       },
       {
@@ -579,7 +579,7 @@ export class AppAuthService {
       );
     }
     // update redis
-    await this.updateAppRedis(appId, {
+    await this.updateAppRedis(appId, userId, {
       env: (updatedapp.env as APP_ENVIRONMENT) ?? APP_ENVIRONMENT.dev,
       appName: updatedapp.appName,
       whitelistedCors: updatedapp.whitelistedCors,
@@ -731,7 +731,8 @@ export class AppAuthService {
     const serviceType = appDetail.services[0]?.id; // TODO: remove this later
     let grant_type = '';
     let accessList = [];
-    const redisKey = generateHash(appDetail.appId);
+    const key = `${appDetail.appId}_${Context.customer}`;
+    const redisKey = generateHash(key);
     const savedSession = await redisClient.get(redisKey);
     if (savedSession) {
       Logger.log('Using redis cached session', 'AppAuthService');
@@ -1037,12 +1038,13 @@ export class AppAuthService {
     // Update Redis
     await Promise.all(
       dependentServiceIds.map((serviceId) =>
-        this.updateAppRedis(serviceId, { env }),
+        this.updateAppRedis(serviceId, userId, { env }),
       ),
     );
   }
   private async updateAppRedis(
     appId: string,
+    userId,
     updatedFields: Partial<{
       env: APP_ENVIRONMENT;
       appName: string;
@@ -1051,7 +1053,9 @@ export class AppAuthService {
   ) {
     Logger.debug('Inside updateAppRedis(): Updating app redis cache...');
     const baseKey = generateHash(appId);
-    const dashboardRedisKey = generateHash(`${appId}_${Context.idDashboard}`);
+    const dashboardRedisKey = generateHash(
+      `${appId}_${Context.idDashboard}_${userId}`,
+    );
 
     const [baseDataString, dashboardDataString] = await Promise.all([
       redisClient.get(baseKey),

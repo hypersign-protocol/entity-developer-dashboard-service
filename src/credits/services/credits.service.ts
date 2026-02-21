@@ -9,7 +9,11 @@ import { AuthZCreditsRepository } from '../repositories/authz.repository';
 import { scope } from '../../credits/schemas/authz.schema';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { APP_ENVIRONMENT, SERVICE_TYPES, SERVICES } from 'src/supported-service/services/iServiceList';
+import {
+  APP_ENVIRONMENT,
+  SERVICE_TYPES,
+  SERVICES,
+} from 'src/supported-service/services/iServiceList';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
 import { SigningStargateClient } from '@cosmjs/stargate';
 import { HidWalletService } from 'src/hid-wallet/services/hid-wallet.service';
@@ -200,7 +204,9 @@ export class AuthzCreditService {
       }
       const serviceInfo = appDetail?.services?.[0];
       if (!serviceInfo) {
-        throw new BadRequestException(`No service configured for appId ${appId}`);
+        throw new BadRequestException(
+          `No service configured for appId ${appId}`,
+        );
       }
       const isSsiService = serviceInfo.id === SERVICE_TYPES.SSI_API;
       const {
@@ -217,13 +223,20 @@ export class AuthzCreditService {
         validityPeriodUnit,
         amountDenom,
         subdomain: appDetail.subdomain,
-        grantType: isSsiService ? GRANT_TYPES.access_service_ssi : GRANT_TYPES.access_service_kyc,
+        grantType: isSsiService
+          ? GRANT_TYPES.access_service_ssi
+          : GRANT_TYPES.access_service_kyc,
         whitelistedCors: appDetail.whitelistedCors,
-        accessList: isSsiService ? SERVICES.SSI_API.ACCESS_TYPES.WRITE_CREDIT : SERVICES.CAVACH_API.ACCESS_TYPES.WRITE_CREDIT
+        accessList: isSsiService
+          ? SERVICES.SSI_API.ACCESS_TYPES.WRITE_CREDIT
+          : SERVICES.CAVACH_API.ACCESS_TYPES.WRITE_CREDIT,
       };
       const { jwtTime, jwtUnit } = EXPIRY_CONFIG.CREDIT_TOKEN;
       const expiresIn = `${jwtTime}${jwtUnit}`;
-      const creditToken = this.jwt.sign(creditPayload, { expiresIn, secret: this.config.get('JWT_SECRET') })
+      const creditToken = this.jwt.sign(creditPayload, {
+        expiresIn,
+        secret: this.config.get('JWT_SECRET'),
+      });
       const requestOptions: RequestInit = {
         method: 'POST',
         headers: {
@@ -232,10 +245,7 @@ export class AuthzCreditService {
         },
       };
       if (isSsiService) {
-        const authzCreditDetail = await this.grantSSICredit(
-          appId,
-          amount,
-        );
+        const authzCreditDetail = await this.grantSSICredit(appId, amount);
         requestOptions.body = JSON.stringify({
           ...authzCreditDetail,
         });
@@ -254,10 +264,7 @@ export class AuthzCreditService {
     }
   }
 
-  private async makeExternalRequest(
-    url: string,
-    options: RequestInit,
-  ) {
+  private async makeExternalRequest(url: string, options: RequestInit) {
     Logger.log('Inside makeExternalRequest()', 'AuthzCreditService');
     try {
       Logger.log(`Making request to ${url}`, 'AuthzCreditService');

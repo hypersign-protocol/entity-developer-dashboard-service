@@ -62,9 +62,19 @@ export class SocialLoginService {
     if (!envValue) {
       return false;
     }
-
-    const superAdmins = JSON.parse(process.env.SUPER_ADMIN_EMAILS_IDS);
-    return superAdmins.includes(email.toLowerCase());
+    try {
+      const superAdmins = JSON.parse(envValue);
+      if (!Array.isArray(superAdmins)) {
+        return false;
+      }
+      return superAdmins.includes(email.toLowerCase());
+    } catch (e) {
+      Logger.error(
+        'Failed to parse SUPER_ADMIN_EMAILS_IDS',
+        e instanceof Error ? e.stack : String(e),
+      );
+      return false;
+    }
   }
   async socialLogin(req): Promise<{
     isMfaRequired: boolean;

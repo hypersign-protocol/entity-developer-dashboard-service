@@ -148,6 +148,6 @@ export class EmailOtpLoginService {
     // OTP is valid → delete it (one-time use if success)
     await redisClient.del(otpKey);
     await redisClient.del(attemptsKey);
-    return email;
+    return { email, verified: isValid };
   }
 }

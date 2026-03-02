@@ -52,7 +52,7 @@ export class EmailOtpLoginController {
     return this.emailOtpService.generateEmailOtp(body);
   }
   @ApiOkResponse({
-    description: 'Emial otp verifed successfully',
+    description: 'Email otp verified successfully',
     type: VerifyEmailOtpResponseDto,
   })
   @ApiBadRequestResponse({

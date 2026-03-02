@@ -226,6 +226,7 @@ export class AuthzCreditService {
           ? GRANT_TYPES.access_service_ssi
           : GRANT_TYPES.access_service_kyc,
         whitelistedCors: appDetail.whitelistedCors,
+        // If service has access WRITE_CREDIT then only allow to call credit API. 
         accessList: isSsiService
           ? SERVICES.SSI_API.ACCESS_TYPES.WRITE_CREDIT
           : SERVICES.CAVACH_API.ACCESS_TYPES.WRITE_CREDIT,

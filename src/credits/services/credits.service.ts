@@ -3,7 +3,6 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
-  NotFoundException,
 } from '@nestjs/common';
 import { AuthZCreditsRepository } from '../repositories/authz.repository';
 import { scope } from '../../credits/schemas/authz.schema';

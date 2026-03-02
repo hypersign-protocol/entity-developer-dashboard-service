@@ -1,15 +1,27 @@
-import { UseFilters, Controller, Get, Query, Req, Param } from '@nestjs/common';
+import {
+  UseFilters,
+  Controller,
+  Get,
+  Query,
+  Req,
+  Param,
+  Post,
+  Body,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiExcludeEndpoint,
   ApiOkResponse,
   ApiQuery,
-  ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { AllExceptionsFilter } from 'src/utils/utils';
 import { AuthzCreditService } from '../services/credits.service';
-import { GetCreditsDto, GrantAllowanceResponseDto } from '../dtos/credits.dto';
+import {
+  CreditRequestDto,
+  CreditResponseDto,
+  GetCreditsDto,
+} from '../dtos/credits.dto';
 
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Credits')
@@ -32,20 +44,14 @@ export class CreditsController {
   }
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({
-    description: 'Granted allowance to specific wallet successfully',
-    type: GrantAllowanceResponseDto,
+    description: 'Credit granted successfully',
+    type: CreditResponseDto,
   })
-  @ApiQuery({
-    name: 'allowance',
-    description: 'Amount to authorize for the app',
-    required: false,
-    type: String,
-  })
-  @Get('/authz/:appId')
-  async getAllowanceGrant(
+  @Post('/:appId')
+  async grantCredit(
     @Param('appId') appId: string,
-    @Query('allowance') allowance = '5000000',
+    @Body() creditRequestDto: CreditRequestDto,
   ) {
-    return this.creditService.grantSSICredit(appId, allowance);
+    return this.creditService.grantCredit(appId, creditRequestDto);
   }
 }

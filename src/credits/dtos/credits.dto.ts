@@ -1,6 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsNotEmpty, IsString, ValidateNested } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+import { TimeUnit } from 'src/customer-onboarding/constants/enum';
 
 export class GetCreditsDto {
   @ApiProperty({
@@ -45,4 +52,44 @@ export class GrantAllowanceResponseDto {
     ],
   })
   creditScope: Array<string>;
+}
+
+export class CreditRequestDto {
+  @ApiProperty({
+    name: 'amount',
+    description: 'Amount of allowance provided',
+    example: '15000',
+  })
+  amount: string;
+  @ApiProperty({
+    name: 'validityPeriod',
+    description: 'Time till credit will be valie',
+    example: '60',
+  })
+  @IsNumber()
+  validityPeriod: number;
+  @ApiProperty({
+    name: 'validityPeriodUnit',
+    description: 'unit for validity period',
+    enum: TimeUnit,
+  })
+  @IsEnum(TimeUnit)
+  validityPeriodUnit: TimeUnit;
+  @ApiProperty({
+    name: 'amountDenom',
+    description: 'denom',
+    example: 'uHid',
+  })
+  @IsNumber()
+  amountDenom: string;
+}
+
+export class CreditResponseDto {
+  @ApiProperty({
+    name: 'message',
+    description: 'Time till credit will be valie',
+    example: 'Credit is successfully granted for service 6532468859078546',
+  })
+  @IsString()
+  message: string;
 }

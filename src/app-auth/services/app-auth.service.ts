@@ -1056,11 +1056,15 @@ export class AppAuthService {
     const dashboardRedisKey = generateHash(
       `${appId}_${Context.idDashboard}_${userId}`,
     );
-
-    const [baseDataString, dashboardDataString] = await Promise.all([
-      redisClient.get(baseKey),
-      redisClient.get(dashboardRedisKey),
-    ]);
+    const customerContextCacheKey = generateHash(
+      `${appId}_${Context.customer}`,
+    );
+    const [baseDataString, dashboardDataString, customerContextDataString] =
+      await Promise.all([
+        redisClient.get(baseKey),
+        redisClient.get(dashboardRedisKey),
+        redisClient.get(customerContextCacheKey),
+      ]);
 
     const updates: Promise<any>[] = [];
 
@@ -1085,7 +1089,16 @@ export class AppAuthService {
         ),
       );
     }
-
+    if (customerContextDataString) {
+      const customerContextData = JSON.parse(customerContextDataString);
+      updates.push(
+        redisClient.set(
+          customerContextCacheKey,
+          JSON.stringify({ ...customerContextData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
     if (updates.length) {
       await Promise.all(updates);
     }

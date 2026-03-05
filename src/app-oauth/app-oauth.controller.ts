@@ -89,7 +89,7 @@ export class AppOauthController {
     @OauthTokenExpiryHeader() expiresin,
     @Query('grant_type') grantType,
   ): Promise<{ access_token; expiresIn; tokenType }> {
-    Logger.log('reGenerateAppSecretKey() method: starts', 'AppOAuthController');
+    Logger.log('generateAccessToken() method: starts', 'AppOAuthController');
     return this.appAuthService.generateAccessToken(
       appSecreatKey,
       expiresin,

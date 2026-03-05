@@ -740,7 +740,7 @@ export class AppAuthService {
       const jwtPayload = {
         appId: sessionJson.appId,
         appName: sessionJson.appName,
-        grantType: sessionJson.grantType,
+        grantType: grantType|| sessionJson.grantType,
         subdomain: sessionJson.subdomain,
         sessionId: redisKey,
       };

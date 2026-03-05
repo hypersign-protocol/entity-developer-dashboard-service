@@ -731,7 +731,10 @@ export class AppAuthService {
     const serviceType = appDetail.services[0]?.id; // TODO: remove this later
     let grant_type = '';
     let accessList = [];
-    const key = `${appDetail.appId}_${Context.customer}`;
+    const key =
+      grantType === 'access_service_kyb'
+        ? `${appDetail.appId}_${Context.customer}_${grantType}`
+        : `${appDetail.appId}_${Context.customer}`;
     const redisKey = generateHash(key);
     const savedSession = await redisClient.get(redisKey);
     if (savedSession) {
@@ -740,7 +743,7 @@ export class AppAuthService {
       const jwtPayload = {
         appId: sessionJson.appId,
         appName: sessionJson.appName,
-        grantType: grantType|| sessionJson.grantType,
+        grantType: grantType || sessionJson.grantType,
         subdomain: sessionJson.subdomain,
         sessionId: redisKey,
       };
@@ -1059,6 +1062,13 @@ export class AppAuthService {
     const customerContextCacheKey = generateHash(
       `${appId}_${Context.customer}`,
     );
+    const customerContextCacheKybKey = generateHash(
+      `${appId}_${Context.customer}_${GRANT_TYPES.access_service_kyb}`,
+    );
+    let customerKybTokenDataString;
+    if (customerContextCacheKybKey) {
+      customerKybTokenDataString = await redisClient.get(customerContextCacheKybKey);
+    }
     const [baseDataString, dashboardDataString, customerContextDataString] =
       await Promise.all([
         redisClient.get(baseKey),
@@ -1095,6 +1105,16 @@ export class AppAuthService {
         redisClient.set(
           customerContextCacheKey,
           JSON.stringify({ ...customerContextData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
+    if (customerKybTokenDataString) {
+      const customerContextKybData = JSON.parse(customerKybTokenDataString);
+      updates.push(
+        redisClient.set(
+          customerContextCacheKybKey,
+          JSON.stringify({ ...customerContextKybData, ...updatedFields }),
           'KEEPTTL',
         ),
       );

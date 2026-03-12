@@ -923,7 +923,11 @@ export class AppAuthService {
         EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtUnit,
       );
     }
-    const app = await this.getAppById(appId, user.userId);
+    const query: any = {
+      appId,
+      ...(user?.role !== UserRole.SUPER_ADMIN && { userId: user.userId }),
+    };
+    const app = await this.appRepository.findOne(query);
     if (!app) {
       throw new BadRequestException([
         'Invalid service id or you do not have access of this service',

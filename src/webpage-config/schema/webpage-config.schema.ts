@@ -11,7 +11,7 @@ export class WebPageConfig {
   themeColor: string;
   @Prop({ type: String, enum: ExpiryType, required: true })
   expiryType: ExpiryType;
-  @Prop({ type: String, unique: true })
+  @Prop({ type: String})
   serviceId: string;
   @Prop({ type: Date })
   expiryDate: Date;
@@ -28,5 +28,5 @@ export class WebPageConfig {
   @Prop({ type: String, required: false })
   contactEmail?: string;
 }
-
 export const WebPageConfigSchema = SchemaFactory.createForClass(WebPageConfig);
+WebPageConfigSchema.index({ serviceId: 1, pageType: 1 }, { unique: true });

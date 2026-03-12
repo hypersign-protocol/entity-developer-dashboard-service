@@ -189,16 +189,18 @@ export class VerifierPageTokenResponse {
     example: 'eyJhbGciOiJIUzI1Ni.......',
     required: false,
   })
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  kycAccessToken: string;
+  kycAccessToken?: string;
   @ApiProperty({
     name: 'kybAccessToken',
     description: 'kybAccessToken',
     example: 'eyJhbGciOiJIUzI1Ni.......',
     required: false,
   })
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  kybAccessToken: string;
+  kybAccessToken?: string;
 }

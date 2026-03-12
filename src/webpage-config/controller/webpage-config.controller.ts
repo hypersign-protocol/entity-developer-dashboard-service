@@ -18,6 +18,7 @@ import {
   CreateWebpageConfigDto,
   CreateWebpageConfigResponseWithDetailDto,
   FetchWebpageConfigResponseDto,
+  PageType,
   VerifierPageTokenResponse,
 } from '../dto/create-webpage-config.dto';
 import { UpdateWebpageConfigDto } from '../dto/update-webpage-config.dto';
@@ -59,13 +60,26 @@ export class WebpageConfigController {
     description: 'Webpage configuration list',
     type: FetchWebpageConfigResponseDto,
   })
+  @ApiQuery({
+    name: 'pageType',
+    description:
+      'The type of page to fetch or create. Can be "KYC" for individual verification or "KYB" for business verification.',
+    required: false,
+    enum: PageType,
+  })
   @Get(':appId/verifier')
-  async fetchWebPageConfigurationDetail(@Param('appId') appId: string) {
+  async fetchWebPageConfigurationDetail(
+    @Param('appId') appId: string,
+    @Query('pageType') pageType: PageType = PageType.KYC,
+  ) {
     Logger.log(
       'Inside fetchWebPageConfigurationDetail() to fetch webpageData',
       'WebpageConfigController',
     );
-    return this.webpageConfigService.fetchWebPageConfigurationList(appId);
+    return this.webpageConfigService.fetchWebPageConfigurationList(
+      appId,
+      pageType,
+    );
   }
 
   @ApiOkResponse({

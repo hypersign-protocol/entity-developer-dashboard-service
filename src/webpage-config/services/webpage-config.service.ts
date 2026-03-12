@@ -122,6 +122,7 @@ export class WebpageConfigService {
 
   async fetchWebPageConfigurationList(
     serviceId: string,
+    pageType: PageType,
   ): Promise<CreateWebpageConfigResponseDto> {
     Logger.log(
       'Inside fetchWebPageConfigurationList(): to fetch webpage configuration of a service',
@@ -140,6 +141,7 @@ export class WebpageConfigService {
     const env: APP_ENVIRONMENT = serviceDetail?.env as APP_ENVIRONMENT;
     const webPAgeConfigData = await this.webPageConfigRepo.findAWebpageConfig({
       serviceId,
+      pageType,
     });
     if (!webPAgeConfigData) {
       throw new NotFoundException([

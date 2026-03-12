@@ -1129,10 +1129,7 @@ export class AppAuthService {
     const verifierKybKey = generateHash(
       `${appId}_${GRANT_TYPES.access_service_kyb}`,
     );
-    let verifierKybTokenDataString;
-    if (verifierKybKey) {
-      verifierKybTokenDataString = await redisClient.get(verifierKybKey);
-    }
+    const verifierKybTokenDataString = await redisClient.get(verifierKybKey);
     if (verifierKybTokenDataString) {
       const verifierKybData = JSON.parse(verifierKybTokenDataString);
       updates.push(

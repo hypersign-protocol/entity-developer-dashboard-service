@@ -25,6 +25,7 @@ import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
+  ApiParam,
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
@@ -111,6 +112,12 @@ export class WebpageConfigController {
     type: VerifierPageTokenResponse,
   })
   @Post('verifier/:id/tokens')
+  @ApiParam({
+    name: 'id',
+    required: true,
+    type: String,
+    description: 'Verifier ID',
+  })
   @ApiQuery({ name: 'appId', required: true, type: String })
   generateWebpageConfigTokens(
     @Query('appId') appId: string,

@@ -8,6 +8,7 @@ import {
   CreateWebpageConfigDto,
   CreateWebpageConfigResponseDto,
   ExpiryType,
+  PageType,
 } from '../dto/create-webpage-config.dto';
 import { UpdateWebpageConfigDto } from '../dto/update-webpage-config.dto';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
@@ -311,6 +312,10 @@ export class WebpageConfigService {
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_NOT_FOUND,
       ]);
     }
+    const serviceType =
+      verifierConfig.pageType === PageType.KYB
+        ? GRANT_TYPES.access_service_kyb
+        : GRANT_TYPES.access_service_kyc;
     const kycServiceDetail = await this.getServiceAndCache(
       appId,
       SERVICE_TYPES.CAVACH_API,
@@ -333,7 +338,7 @@ export class WebpageConfigService {
       TokenModule.ID_SERVICE,
     );
     // generate access tokens
-    const [ssiAccessTokenDetail, kycAccessTokenDetail] = await Promise.all([
+    const [ssiAccessTokenDetail, pageAccessTokenDetail] = await Promise.all([
       this.appAuthService.getAccessToken(
         {
           appId: ssiServiceId,
@@ -349,7 +354,7 @@ export class WebpageConfigService {
         {
           appId,
           appName: kycServiceDetail.appName,
-          grantType: GRANT_TYPES.access_service_kyc,
+          grantType: serviceType,
           sessionId: generateHash(appId),
           subdomain: kycServiceDetail.subdomain,
         },
@@ -357,10 +362,14 @@ export class WebpageConfigService {
         EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtUnit,
       ),
     ]);
-    const redisPayload = {
+    const redisPayload: any = {
       ssiAccessToken: ssiAccessTokenDetail.access_token,
-      kycAccessToken: kycAccessTokenDetail.access_token,
     };
+    if (verifierConfig.pageType === PageType.KYB) {
+      redisPayload.kybAccessToken = pageAccessTokenDetail.access_token;
+    } else {
+      redisPayload.kycAccessToken = pageAccessTokenDetail.access_token;
+    }
     await redisClient.set(
       redisKey,
       JSON.stringify(redisPayload),

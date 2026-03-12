@@ -396,7 +396,7 @@ export class WebpageConfigService {
       'Inside getServiceAndCache() method to store and get service detail from redis',
       'WebpageConfigService',
     );
-    let key =
+    const key =
       grantType === GRANT_TYPES.access_service_kyb
         ? `${appId}_${grantType}`
         : appId;

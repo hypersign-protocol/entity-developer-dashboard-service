@@ -321,7 +321,7 @@ export class WebpageConfigService {
     const kycServiceDetail = await this.getServiceAndCache(
       appId,
       SERVICE_TYPES.CAVACH_API,
-      GRANT_TYPES.access_service_kyc,
+      serviceType,
       TokenModule.VERIFIER,
     );
     if (

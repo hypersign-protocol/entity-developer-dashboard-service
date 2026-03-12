@@ -1071,8 +1071,11 @@ export class AppAuthService {
     );
     let customerKybTokenDataString;
     if (customerContextCacheKybKey) {
-      customerKybTokenDataString = await redisClient.get(customerContextCacheKybKey);
+      customerKybTokenDataString = await redisClient.get(
+        customerContextCacheKybKey,
+      );
     }
+
     const [baseDataString, dashboardDataString, customerContextDataString] =
       await Promise.all([
         redisClient.get(baseKey),
@@ -1119,6 +1122,20 @@ export class AppAuthService {
         redisClient.set(
           customerContextCacheKybKey,
           JSON.stringify({ ...customerContextKybData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
+    const verifierKybKey = generateHash(
+      `${appId}_${GRANT_TYPES.access_service_kyb}`,
+    );
+    const verifierKybTokenDataString = await redisClient.get(verifierKybKey);
+    if (verifierKybTokenDataString) {
+      const verifierKybData = JSON.parse(verifierKybTokenDataString);
+      updates.push(
+        redisClient.set(
+          verifierKybKey,
+          JSON.stringify({ ...verifierKybData, ...updatedFields }),
           'KEEPTTL',
         ),
       );

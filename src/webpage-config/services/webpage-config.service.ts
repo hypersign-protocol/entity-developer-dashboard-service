@@ -357,7 +357,11 @@ export class WebpageConfigService {
           appId,
           appName: kycServiceDetail.appName,
           grantType: serviceType,
-          sessionId: generateHash(appId),
+          sessionId: generateHash(
+            serviceType === GRANT_TYPES.access_service_kyb
+              ? `${appId}_${serviceType}`
+              : appId,
+          ),
           subdomain: kycServiceDetail.subdomain,
         },
         EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtTime,
@@ -392,7 +396,11 @@ export class WebpageConfigService {
       'Inside getServiceAndCache() method to store and get service detail from redis',
       'WebpageConfigService',
     );
-    const cached = await redisClient.get(generateHash(appId));
+    const key =
+      grantType === GRANT_TYPES.access_service_kyb
+        ? `${appId}_${grantType}`
+        : appId;
+    const cached = await redisClient.get(generateHash(key));
     if (cached) return JSON.parse(cached);
     const serviceDetail = await this.appRepository.findOne({ appId });
     if (!serviceDetail) {
@@ -410,7 +418,7 @@ export class WebpageConfigService {
       grantType,
       serviceDetail,
       validateAccessList,
-      generateHash(appId),
+      generateHash(key),
     );
     return serviceDetail;
   }

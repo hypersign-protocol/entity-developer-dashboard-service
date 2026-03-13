@@ -159,6 +159,7 @@ export class WebpageConfigService {
 
   async fetchAWebPageConfigurationDetail(
     id: string,
+    pageType?: PageType,
   ): Promise<CreateWebpageConfigResponseDto> {
     const isValidId = isValidObjectId(id);
     const query: any = {
@@ -166,6 +167,9 @@ export class WebpageConfigService {
     };
     if (isValidId) {
       query.$or.push({ _id: new Types.ObjectId(id) });
+    }
+    if (pageType) {
+      query.pageType = pageType;
     }
     const webpageConfiguration =
       await this.webPageConfigRepo.findAWebpageConfig(query);

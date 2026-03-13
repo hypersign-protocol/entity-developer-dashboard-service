@@ -86,9 +86,22 @@ export class WebpageConfigController {
     description: 'Webpage configuration fetched successfully',
     type: FetchWebpageConfigResponseDto,
   })
+  @ApiQuery({
+    name: 'pageType',
+    description:
+      'The type of page to fetch or create. Can be "KYC" for individual verification or "KYB" for business verification.',
+    required: false,
+    enum: PageType,
+  })
   @Get('verifier/:id')
-  fetchAWebPageConfigurationDetail(@Param('id') id: string) {
-    return this.webpageConfigService.fetchAWebPageConfigurationDetail(id);
+  fetchAWebPageConfigurationDetail(
+    @Param('id') id: string,
+    @Query('pageType') pageType: PageType,
+  ) {
+    return this.webpageConfigService.fetchAWebPageConfigurationDetail(
+      id,
+      pageType,
+    );
   }
 
   @ApiOkResponse({

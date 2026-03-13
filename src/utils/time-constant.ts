@@ -31,7 +31,11 @@ export enum TIME_UNIT {
   DAY = 'd',
 }
 export const getSecondsFromUnit = (time: number, unit: TIME_UNIT) => {
-  return time * TIME[unit.toUpperCase()];
+  const key = Object.keys(TIME_UNIT).find(
+    (k) => TIME_UNIT[k as keyof typeof TIME_UNIT] === unit,
+  ) as keyof typeof TIME;
+
+  return time * TIME[key];
 };
 
 /**

@@ -356,7 +356,7 @@ export class AppAuthService {
         $match: {
           hasDomainVerified: true,
           env: APP_ENVIRONMENT.prod,
-          'service.id': SERVICE_TYPES.CAVACH_API,
+          'services.id': SERVICE_TYPES.CAVACH_API,
         },
       },
       {

@@ -76,7 +76,7 @@ export class EmailOtpLoginService {
     const message = getEmailOtpMail(
       otp,
       OtpExpiryMinute,
-      'Your One-Time Password (OTP) for Login',
+      'Your One-Time Password (OTP)',
     );
     const subject = 'Your One-Time Password (OTP) for Login';
     await this.sendEmail(email, subject, message);

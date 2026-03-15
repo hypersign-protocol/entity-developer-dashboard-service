@@ -105,7 +105,7 @@ export class PeopleService {
       mailName: JobNames.SEND_TEAM_MATE_INVITATION_MAIL,
       teamMateMailId: emailId,
       adminEmailId: adminUserData.email,
-      mailSubject: " You're invited to join Hypersign Dashboard",
+      mailSubject: " You're invited to join the Hypersign Dashboard",
       inviteLink: `${this.configService.get(
         'INVITATIONURL',
       )}&code=${invitecode}`,

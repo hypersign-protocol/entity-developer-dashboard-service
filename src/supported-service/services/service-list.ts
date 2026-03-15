@@ -22,7 +22,7 @@ export class SupportedServiceList {
         dBSuffix: SERVICE_INFO.SSI_API.type,
         name: SERVICE_INFO.SSI_API.name,
         domain: sanitizeUrl(
-          ( this.config.get('SSI_API_DOMAIN') || SERVICE_INFO.SSI_API.baseDomain),
+          this.config.get('SSI_API_DOMAIN') || SERVICE_INFO.SSI_API.baseDomain,
           false,
         ),
         description: SERVICE_INFO.SSI_API.description,
@@ -34,9 +34,9 @@ export class SupportedServiceList {
         dBSuffix: SERVICE_INFO.CAVACH_API.type,
         name: SERVICE_INFO.CAVACH_API.name,
         domain: sanitizeUrl(
-          (this.config.get('CAVACH_API_DOMAIN') ||
-            SERVICE_INFO.CAVACH_API.baseDomain),
-          false
+          this.config.get('CAVACH_API_DOMAIN') ||
+            SERVICE_INFO.CAVACH_API.baseDomain,
+          false,
         ),
         description: SERVICE_INFO.CAVACH_API.description,
         swaggerAPIDocPath: SERVICE_INFO.CAVACH_API.swaggerAPIDocPath,

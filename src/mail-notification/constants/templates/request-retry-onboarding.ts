@@ -30,8 +30,6 @@ export default function getOnboardingRetryNotificationMail(
       Please review the failure details and proceed with necessary action for re-onboarding.
     </p>
     <br>
-    <p>Regards,</p>
-    <p>The Onboarding System</p>
   `;
 
   const container = getContainer(message, salutationMessage);

@@ -72,5 +72,16 @@ export const style = `
                 font-style: italic;
         }
         table, td { color: #000000; } #u_body a { color: #aeaeae; text-decoration: underline; } @media (max-width: 480px) { #u_content_image_1 .v-container-padding-padding { padding: 5px 40px 6px 6px !important; } }
+        
+        .btn {
+            display: inline-block;
+            background-color: #4b4b4b;
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 12px 24px;
+            font-weight: 600;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
     </style>
 `;

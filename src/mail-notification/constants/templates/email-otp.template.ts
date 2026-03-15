@@ -5,13 +5,13 @@ import getHtml from '../element/html.template';
 export default function getEmailOtpMail(
   otp: string,
   validityMinutes = 5,
-  salutationMessage = 'Your One-Time Password (OTP) for Login',
+  salutationMessage = 'Your One-Time Password (OTP)',
 ) {
   const message = `
     <p>Dear User,</p>
     <br>
     <p>
-      Use the following One-Time Password (OTP) to verify your email address or complete the login process:
+      Use the following One-Time Password (OTP) to verify your email address and complete the login process:
     </p>
     <br>
     <h2 style="text-align:center; font-size:24px; color:#2c3e50;">${otp}</h2>

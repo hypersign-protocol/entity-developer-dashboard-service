@@ -9,7 +9,7 @@ export const TIME = {
 export const COOKIE_CONFIG = {
   AUTH: {
     name: 'accessToken',
-    expiry: 30 * TIME.MINUTE * 1000,
+    expiry: 4 * TIME.HOUR * 1000,
     redisExpiryTime: TIME.WEEK,
   },
   REFRESH: {

@@ -40,10 +40,10 @@ export default function getCreditRequestNotificationMail(
     </p>
     <br>
     <ul>
+     <li><strong>OnboardingId:</strong> ${onboardingId}</li>
      <li><strong>UserId:</strong> ${userId}</li>
         ${emailFields}
      <li><strong>Requested Service:</strong> ${requestedService}</li>
-     <li><strong>OnboardingId:</strong> ${onboardingId}</li>
      <li><strong>companyName:</strong> ${companyName}</li>
      <li><strong>accountType:</strong> ${type}</li>
      ${optionalFields}

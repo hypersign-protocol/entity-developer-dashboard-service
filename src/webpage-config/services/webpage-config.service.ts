@@ -343,6 +343,10 @@ export class WebpageConfigService {
       GRANT_TYPES.access_service_ssi,
       TokenModule.ID_SERVICE,
     );
+    const expiryConfig =
+      serviceType === GRANT_TYPES.access_service_kyb
+        ? EXPIRY_CONFIG.VERIFIER_CUSTOMER_KYB_APP_ACCESS
+        : EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS;
     // generate access tokens
     const [ssiAccessTokenDetail, pageAccessTokenDetail] = await Promise.all([
       this.appAuthService.getAccessToken(
@@ -353,8 +357,8 @@ export class WebpageConfigService {
           sessionId: generateHash(ssiServiceId),
           subdomain: ssiServiceDetail.subdomain,
         },
-        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtTime,
-        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtUnit,
+        expiryConfig.jwtTime,
+        expiryConfig.jwtUnit,
       ),
       this.appAuthService.getAccessToken(
         {
@@ -368,8 +372,8 @@ export class WebpageConfigService {
           ),
           subdomain: kycServiceDetail.subdomain,
         },
-        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtTime,
-        EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.jwtUnit,
+        expiryConfig.jwtTime,
+        expiryConfig.jwtUnit,
       ),
     ]);
     const redisPayload: any = {

@@ -117,6 +117,8 @@ spec:
           value: __CLIENT_APP_URL__
         - name: KYC_WIDGET_URL
           value: __KYC_WIDGET_URL__
+        - name: KYB_WIDGET_URL
+          value: __KYB_WIDGET_URL__
         - name: MAX_MFA_RETRY_ATTEMPT
           value: '__MAX_MFA_RETRY_ATTEMPT__' 
         - name: SUPER_ADMIN_EMAILS_IDS

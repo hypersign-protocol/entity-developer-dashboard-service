@@ -157,5 +157,7 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__CLIENT_APP_URL__#${{ secrets.CLIENT_APP_URL }}#" {} \;
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYC_WIDGET_URL__#${{ secrets.KYC_WIDGET_URL }}#" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYB_WIDGET_URL__#${{ secrets.KYB_WIDGET_URL }}#" {} \;
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

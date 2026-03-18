@@ -711,7 +711,8 @@ export class CustomerOnboardingService {
                       false,
                     ),
                     urlSanitizer(
-                      this.config.get<string>('KYB_WIDGET_URL') || 'https://verify.business.hypersign.id',
+                      this.config.get<string>('KYB_WIDGET_URL') ||
+                        'https://verify.business.hypersign.id',
                       false,
                     ),
                   ],

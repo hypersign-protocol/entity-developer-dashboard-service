@@ -119,6 +119,8 @@ spec:
           value: __KYC_WIDGET_URL__
         - name: MAX_MFA_RETRY_ATTEMPT
           value: '__MAX_MFA_RETRY_ATTEMPT__' 
+        - name: DASHBOARD_CREDIT_USAGE_NOTIFICATION_QUEUE
+          value:  __DASHBOARD_CREDIT_USAGE_NOTIFICATION_QUEUE__
         - name: SUPER_ADMIN_EMAILS_IDS
           value: '["vikrambanand@gmail.com","raj.v.patil108@gmail.com","meet.hypersign@gmail.com","vishwasbhushan001@gmail.com"]'       
         volumeMounts:

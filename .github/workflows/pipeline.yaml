@@ -128,6 +128,8 @@ jobs:
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MAIL_QUEUE__#${{ secrets.MAIL_QUEUE }}#" {} \;
     - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__DASHBOARD_CREDIT_USAGE_NOTIFICATION_QUEUE__#${{ secrets.DASHBOARD_CREDIT_USAGE_NOTIFICATION_QUEUE }}#" {} \;
+    - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__SERVER_NAME__#${{ secrets.SERVER_NAME }}#" {} \;
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i "s#__ALLOWED_ORIGIN__#${{ secrets.ALLOWED_ORIGIN }}#" {} \;

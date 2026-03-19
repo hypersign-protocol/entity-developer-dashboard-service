@@ -21,8 +21,8 @@ export const COOKIE_CONFIG = {
 
 export enum JobNames {
   SEND_EMAIL_LOGIN_OTP = 'send-email-login-otp',
-  SEND_TEAM_MATE_INVITATION_MAIL = 'sendTeamMatemail',
-  SEND_CREDIT_USAGE_NOTIFICATION = 'SEND_CREDIT_USAGE_NOTIFICATION',
+  SEND_TEAM_MATE_INVITATION_MAIL = 'send-team-mate-invitation-mail',
+  SEND_CREDIT_USAGE_NOTIFICATION = 'send-credit-usage-notification',
 }
 
 export enum TIME_UNIT {

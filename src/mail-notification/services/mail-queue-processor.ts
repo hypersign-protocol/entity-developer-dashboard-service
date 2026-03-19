@@ -59,9 +59,10 @@ export class CreditUsageNotificationProcessor extends WorkerHost {
         },
       ];
       const result = await this.appAuthRepository.findAppsByPipeline(pipeline);
-      let adminEmail;
-      if (result.length > 0) {
-        adminEmail = result[0].adminEmail;
+      const adminEmail = result?.[0]?.adminEmail;
+      if (!adminEmail) {
+        Logger.warn(`Admin email not found for serviceId: ${serviceId}`);
+        return;
       }
       const html = getCreditUsageAlertMail(
         serviceId,

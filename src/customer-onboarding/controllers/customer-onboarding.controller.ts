@@ -61,7 +61,7 @@ export class CustomerOnboardingController {
     }
     return this.customerOnboardingService.createCustomerOnboardingDetail(
       createCustomerOnboardingDto,
-      req.user['userId'],
+      req.user,
       req.user['email'],
     );
   }

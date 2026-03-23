@@ -710,6 +710,11 @@ export class CustomerOnboardingService {
                       this.config.get<string>('CLIENT_APP_URL'),
                       false,
                     ),
+                    urlSanitizer(
+                      this.config.get<string>('KYB_WIDGET_URL') ||
+                        'https://verify.business.hypersign.id',
+                      false,
+                    ),
                   ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,

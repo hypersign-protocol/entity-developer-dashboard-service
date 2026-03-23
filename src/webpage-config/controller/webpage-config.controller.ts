@@ -35,7 +35,7 @@ import { AllExceptionsFilter, VerifierParamsDto } from 'src/utils/utils';
 @ApiTags('Webpage-config')
 @UseFilters(AllExceptionsFilter)
 @UsePipes(new ValidationPipe())
-@Controller('api/v1/app/')
+@Controller('api/v1/app')
 export class WebpageConfigController {
   constructor(private readonly webpageConfigService: WebpageConfigService) {}
 

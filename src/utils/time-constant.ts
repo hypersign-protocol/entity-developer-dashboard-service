@@ -9,7 +9,7 @@ export const TIME = {
 export const COOKIE_CONFIG = {
   AUTH: {
     name: 'accessToken',
-    expiry: 30 * TIME.MINUTE * 1000,
+    expiry: 4 * TIME.HOUR * 1000,
     redisExpiryTime: TIME.WEEK,
   },
   REFRESH: {
@@ -43,12 +43,20 @@ export const getSecondsFromUnit = (time: number, unit: TIME_UNIT) => {
  *  EXPIRY_CONFIG defines the expiry times for different types of tokens and Redis cache entries used across the system.
  */
 export const EXPIRY_CONFIG = {
-  // KYC and SSI Token for context - verifier Page and Customer App
+  // KYC and SSI Token for context - kyc verifier Page and Customer App
 
   VERIFIER_CUSTOMER_APP_ACCESS: {
     jwtTime: 30,
     jwtUnit: TIME_UNIT.MINUTE,
     redisExpiryTime: 30 * TIME.MINUTE,
+  },
+
+  // KYC and SSI Token for context - kyb verifier Page and Customer App
+
+  VERIFIER_CUSTOMER_KYB_APP_ACCESS: {
+    jwtTime: 60,
+    jwtUnit: TIME_UNIT.MINUTE,
+    redisExpiryTime: 60 * TIME.MINUTE,
   },
 
   // All Tokens generated during onboarding flow

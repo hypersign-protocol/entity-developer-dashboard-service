@@ -286,12 +286,17 @@ export class AppAuthService {
       const basePipeline = this.appRepository.appDataProjectPipelineToReturn();
       const pipeline = [
         {
+          $match: { userId },
+        },
+
+        {
           $facet: {
             cavachApp: [
               {
                 $match: {
-                  userId,
-                  services: { $elemMatch: { id: SERVICE_TYPES.CAVACH_API } },
+                  services: {
+                    $elemMatch: { id: SERVICE_TYPES.CAVACH_API },
+                  },
                 },
               },
               { $sort: { _id: -1 } },
@@ -299,8 +304,8 @@ export class AppAuthService {
               { $project: basePipeline },
             ],
 
-            dependentApps: [{ $match: { userId } }, { $project: basePipeline }],
-            totalCount: [{ $match: { userId } }, { $count: 'total' }],
+            dependentApps: [{ $project: basePipeline }],
+            totalCount: [{ $count: 'total' }],
           },
         },
 
@@ -313,31 +318,51 @@ export class AppAuthService {
 
         {
           $project: {
-            totalCount: '$totalCount',
+            totalCount: {
+              $ifNull: [{ $arrayElemAt: ['$totalCount.total', 0] }, 0],
+            },
 
             data: {
-              $concatArrays: [
+              $cond: [
+                { $ifNull: ['$cavachApp', false] },
                 {
-                  $cond: [
-                    { $ifNull: ['$cavachApp', false] },
+                  $concatArrays: [
                     ['$cavachApp'],
-                    [],
-                  ],
-                },
-                {
-                  $cond: [
-                    { $ifNull: ['$cavachApp', false] },
                     {
                       $filter: {
-                        input: '$dependentApps',
+                        input: { $ifNull: ['$dependentApps', []] },
                         as: 'app',
                         cond: {
-                          $in: ['$$app.appId', '$cavachApp.dependentServices'],
+                          $in: [
+                            '$$app.appId',
+                            { $ifNull: ['$cavachApp.dependentServices', []] },
+                          ],
                         },
                       },
                     },
-                    [],
                   ],
+                },
+                {
+                  $filter: {
+                    input: { $ifNull: ['$dependentApps', []] },
+                    as: 'app',
+                    cond: {
+                      $gt: [
+                        {
+                          $size: {
+                            $filter: {
+                              input: { $ifNull: ['$$app.services', []] },
+                              as: 'service',
+                              cond: {
+                                $eq: ['$$service.id', SERVICE_TYPES.SSI_API],
+                              },
+                            },
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                  },
                 },
               ],
             },

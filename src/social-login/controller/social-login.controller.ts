@@ -84,6 +84,11 @@ export class SocialLoginController {
       const arrayString = encodeURIComponent(
         JSON.stringify(result.authenticators),
       );
+      res.cookie(
+        InSecureCookie.name,
+        'true',
+        getCookieOptions(InSecureCookie.expiry, false, InSecureCookie.httpOnly),
+      );
       return res.redirect(
         `${this.config.get(
           'MFA_REDIRECT_URL',
@@ -302,6 +307,11 @@ export class SocialLoginController {
       TOKEN.REFRESH.name,
       data.refreshToken,
       getCookieOptions(TOKEN.REFRESH.expiry),
+    );
+    res.cookie(
+      InSecureCookie.name,
+      'true',
+      getCookieOptions(InSecureCookie.expiry, false, InSecureCookie.httpOnly),
     );
     return res.json({ isVerified: data.isVerified });
   }

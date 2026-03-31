@@ -6,6 +6,11 @@ export const TIME = {
   WEEK: 7 * 24 * 60 * 60 * 1,
 };
 
+export const InSecureCookie = {
+  name: 'isLoggedIn',
+  httpOnly: false,
+  expiry: 20 * TIME.HOUR * 1000,
+};
 export const COOKIE_CONFIG = {
   AUTH: {
     name: 'accessToken',

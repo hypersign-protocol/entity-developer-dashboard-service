@@ -453,7 +453,7 @@ export class SocialLoginService {
         };
       }
       const sessionObj = JSON.parse(sessionJson);
-      sessionObj.isTwoFactorVerifed = true;
+      sessionObj.isTwoFactorVerified = true;
       sessionObj.isTwoFactorAuthenticated = true;
       sessionObj.refreshVersion += 1;
       await redisClient.set(
@@ -465,7 +465,7 @@ export class SocialLoginService {
       const newRefreshToken = uuidv4();
       await redisClient.set(
         `refresh:${newRefreshToken}`,
-        session.sid,
+        session.sessionId,
         'EX',
         COOKIE_CONFIG.REFRESH.redisExpiryTime,
       );

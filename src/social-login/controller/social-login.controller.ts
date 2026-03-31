@@ -43,7 +43,10 @@ import {
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { UserRole } from 'src/user/schema/user.schema';
 import { ERROR_MESSAGE, ERROR_MESSAGE as MFA_MESSAGE } from '../constants/en';
-import { COOKIE_CONFIG as TOKEN } from 'src/utils/time-constant';
+import {
+  InSecureCookie,
+  COOKIE_CONFIG as TOKEN,
+} from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller('api/v1')
@@ -97,6 +100,10 @@ export class SocialLoginController {
       result.refreshToken,
       getCookieOptions(TOKEN.REFRESH.expiry),
     );
+    res.cookie(InSecureCookie.name, true, {
+      httpOnly: InSecureCookie.httpOnly,
+      maxAge: InSecureCookie.expiry,
+    });
     res.redirect(`${this.config.get('REDIRECT_URL')}`);
   }
   @ApiBearerAuth('Authorization')
@@ -158,6 +165,10 @@ export class SocialLoginController {
       tokens.refreshToken,
       getCookieOptions(TOKEN.REFRESH.expiry),
     );
+    res.cookie(InSecureCookie.name, true, {
+      httpOnly: InSecureCookie.httpOnly,
+      maxAge: InSecureCookie.expiry,
+    });
     res.json({ message: 'Tokens refreshed' });
   }
 
@@ -250,6 +261,9 @@ export class SocialLoginController {
     }
     res.clearCookie(TOKEN.AUTH.name, getCookieOptions(undefined, true));
     res.clearCookie(TOKEN.REFRESH.name, getCookieOptions(undefined, true));
+    res.clearCookie(InSecureCookie.name, {
+      httpOnly: InSecureCookie.httpOnly,
+    });
     return res.status(200).json({ message: 'Logged out successfully' });
   }
 

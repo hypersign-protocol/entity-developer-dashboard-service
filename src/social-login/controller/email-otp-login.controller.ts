@@ -26,7 +26,10 @@ import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { Request } from 'express';
 import { SocialLoginService } from '../services/social-login.service';
 import { UnauthorizedError } from '../dto/response.dto';
-import { COOKIE_CONFIG as TOKEN } from 'src/utils/time-constant';
+import {
+  InSecureCookie,
+  COOKIE_CONFIG as TOKEN,
+} from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller('/api/v1/auth/email/otp')
@@ -88,6 +91,10 @@ export class EmailOtpLoginController {
         result.refreshToken,
         getCookieOptions(TOKEN.REFRESH.expiry),
       );
+      res.cookie(InSecureCookie.name, 'true', {
+        httpOnly: InSecureCookie.httpOnly,
+        maxAge: InSecureCookie.expiry,
+      });
       res.redirect(`${this.config.get('REDIRECT_URL')}`);
     } catch (err) {
       Logger.error(`Login failed: ${err.message}`, 'EmailOtpLoginController');

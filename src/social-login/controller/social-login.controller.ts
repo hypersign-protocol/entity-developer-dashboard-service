@@ -100,6 +100,11 @@ export class SocialLoginController {
       result.refreshToken,
       getCookieOptions(TOKEN.REFRESH.expiry),
     );
+    res.cookie(
+      InSecureCookie.name,
+      'true',
+      getCookieOptions(InSecureCookie.expiry, false, InSecureCookie.httpOnly),
+    );
     res.redirect(`${this.config.get('REDIRECT_URL')}`);
   }
   @ApiBearerAuth('Authorization')
@@ -161,10 +166,11 @@ export class SocialLoginController {
       tokens.refreshToken,
       getCookieOptions(TOKEN.REFRESH.expiry),
     );
-    res.cookie(InSecureCookie.name, true, {
-      httpOnly: InSecureCookie.httpOnly,
-      maxAge: InSecureCookie.expiry,
-    });
+    res.cookie(
+      InSecureCookie.name,
+      'true',
+      getCookieOptions(InSecureCookie.expiry, false, InSecureCookie.httpOnly),
+    );
     res.json({ message: 'Tokens refreshed' });
   }
 
@@ -210,6 +216,11 @@ export class SocialLoginController {
         TOKEN.REFRESH.name,
         data.refreshToken,
         getCookieOptions(TOKEN.REFRESH.expiry),
+      );
+      res.cookie(
+        InSecureCookie.name,
+        'true',
+        getCookieOptions(InSecureCookie.expiry, false, InSecureCookie.httpOnly),
       );
     }
 
@@ -257,9 +268,7 @@ export class SocialLoginController {
     }
     res.clearCookie(TOKEN.AUTH.name, getCookieOptions(undefined, true));
     res.clearCookie(TOKEN.REFRESH.name, getCookieOptions(undefined, true));
-    res.clearCookie(InSecureCookie.name, {
-      httpOnly: InSecureCookie.httpOnly,
-    });
+    res.clearCookie(InSecureCookie.name, getCookieOptions(undefined, true));
     return res.status(200).json({ message: 'Logged out successfully' });
   }
 

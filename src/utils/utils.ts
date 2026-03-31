@@ -163,11 +163,15 @@ export function mapUserAccessList(userAccessList) {
   ];
 }
 
-export function getCookieOptions(maxAge?: number, isClear = false) {
+export function getCookieOptions(
+  maxAge?: number,
+  isClear = false,
+  httpOnly = true,
+) {
   const cookieDomain = process.env.COOKIE_DOMAIN;
   const isProd = process.env.NODE_ENV || 'production';
   return {
-    httpOnly: true,
+    httpOnly: httpOnly,
     secure: isProd === 'production' ? true : false,
     sameSite: isProd === 'production' ? 'None' : 'Lax',
     domain: isProd === 'production' ? cookieDomain : undefined,

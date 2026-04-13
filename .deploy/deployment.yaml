@@ -39,8 +39,6 @@ spec:
           value: "__PORT__"
         - name: DATABASE_CONNECTION_PATH
           value: "__DATABASE_CONNECTION_PATH__"
-        - name: DB_BASE_PATH
-          value: "__DB_BASE_PATH__"
         - name: HID_NETWORK_RPC
           value: __HID_NETWORK_RPC__
         - name: HID_NETWORK_API

@@ -74,8 +74,6 @@ jobs:
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__DATABASE_CONNECTION_PATH__#${{ secrets.DATABASE_CONNECTION_PATH }}#" {} \;
     - name: "Replace Secrets"
-      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__DB_BASE_PATH__#${{ secrets.DB_BASE_PATH }}#" {} \;
-    - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i "s#__HID_NETWORK_API__#${{ secrets.HID_NETWORK_API }}#" {} \;
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i "s#__HID_NETWORK_RPC__#${{ secrets.HID_NETWORK_RPC }}#" {} \;

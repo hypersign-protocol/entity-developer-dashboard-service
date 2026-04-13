@@ -75,7 +75,7 @@ export class CustomerOnboarding {
   ssiServiceId?: string;
   @Prop({ type: String, required: false })
   kycServiceId?: string;
-  @Prop({ type: String, required: true, unique: true })
+  @Prop({ type: String, required: true })
   userId: string;
 }
 

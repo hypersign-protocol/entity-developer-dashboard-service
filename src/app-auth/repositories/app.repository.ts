@@ -113,8 +113,11 @@ export class AppRepository {
     try {
       Logger.log('findAndDeleteServiceDB() method to delte service database');
       // Establish a connection to the MongoDB server
-      const databaseUri = this.config.get<string>('DATABASE_CONNECTION_PATH')
-      const baseUri = databaseUri.replace(/(mongodb\+srv:\/\/[^\/]+)\/[^?]+/, "$1");
+      const databaseUri = this.config.get<string>('DATABASE_CONNECTION_PATH');
+      const baseUri = databaseUri.replace(
+        /(mongodb\+srv:\/\/[^\/]+)\/[^?]+/,
+        '$1',
+      );
       const mainConnection = await mongoose.connect(baseUri);
       // Switch to the target database
       const dbConnection = mainConnection.connection.useDb(

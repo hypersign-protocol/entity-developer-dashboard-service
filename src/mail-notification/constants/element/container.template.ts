@@ -3,10 +3,10 @@ import { getHeader, getSalutation } from './header.template';
 import { signature } from './signature.template';
 
 export function getContainer(
-    messageTemplate: string,
-    salutationMessage = 'KYC Approved',
+  messageTemplate: string,
+  salutationMessage = 'KYC Approved',
 ): string {
-    return `<!-- Outer background -->
+  return `<!-- Outer background -->
 <table id="u_body" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
     style="border-collapse:collapse; background-color:#F9FAFB; width:100%;">
     <tr>

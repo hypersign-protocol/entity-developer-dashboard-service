@@ -38,7 +38,14 @@ describe('mail templates render', () => {
     }
 
     try {
-      const html = creditUsage('svc-1', 85, 80, 1000, 850, new Date().toISOString());
+      const html = creditUsage(
+        'svc-1',
+        85,
+        80,
+        1000,
+        850,
+        new Date().toISOString(),
+      );
       expect(typeof html).toBe('string');
       writePreview('credit-usage-alert', html);
     } catch (e) {
@@ -62,7 +69,13 @@ describe('mail templates render', () => {
     }
 
     try {
-      const html = retryOnboarding('user-2', 'req2@example.com', 'step-1', 'network error', 'onb-2');
+      const html = retryOnboarding(
+        'user-2',
+        'req2@example.com',
+        'step-1',
+        'network error',
+        'onb-2',
+      );
       expect(typeof html).toBe('string');
       writePreview('request-retry-onboarding', html);
     } catch (e) {
@@ -72,7 +85,14 @@ describe('mail templates render', () => {
     if (errors.length > 0) {
       // print full error stacks for debugging
       // eslint-disable-next-line no-console
-      console.error('Template render errors:', errors.map((e) => ({ name: e.name, message: e.error && e.error.message, stack: e.error && e.error.stack })));
+      console.error(
+        'Template render errors:',
+        errors.map((e) => ({
+          name: e.name,
+          message: e.error && e.error.message,
+          stack: e.error && e.error.stack,
+        })),
+      );
     }
 
     expect(errors.length).toBe(0);

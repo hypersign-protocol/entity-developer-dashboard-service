@@ -8,20 +8,19 @@ export default function getEmailOtpMail(
   salutationMessage = 'Your One-Time Password (OTP)',
 ) {
   const message = `
-    <p>Dear User,</p>
-    <br>
-    <p>
+    <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">Dear User,</p>
+
+    <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">
       Use the following One-Time Password (OTP) to verify your email address and complete the login process:
     </p>
-    <br>
-    <h2 style="text-align:center; font-size:24px; color:#2c3e50;">${otp}</h2>
-    <br>
-    <p>
-      This OTP is valid for <strong>${validityMinutes} minutes</strong>.
-      Please do not share it with anyone for security reasons.
+
+    <h2 style="text-align:center; font-size:28px; color:#111827; margin:8px 0 18px; font-family:Arial,Helvetica,sans-serif;">${otp}</h2>
+
+    <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">
+      This OTP is valid for <strong>${validityMinutes} minutes</strong>. Please do not share it with anyone for security reasons.
     </p>
-    <br>
-    <p>
+
+    <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">
       If you did not request this, please ignore this email.
     </p>
   `;

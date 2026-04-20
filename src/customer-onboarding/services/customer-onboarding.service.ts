@@ -82,16 +82,25 @@ export class CustomerOnboardingService {
    */
   async createCustomerOnboardingDetail(
     createCustomerOnboardingDto: CreateCustomerOnboardingDto,
-    userId: string,
+    user,
     loggedInUserEmail,
   ) {
     try {
+      if (user.role === UserRole.ADMIN) {
+        const existingOnboarding =
+          await this.customerOnboardingRepository.findCustomerOnboardingById({
+            userId: user.userId,
+          });
+        if (existingOnboarding) {
+          throw new ConflictException['You can only create onboarding once']();
+        }
+      }
       const { interestedService, companyName, twitterUrl, telegramUrl, type } =
         createCustomerOnboardingDto;
       const onboardingData =
         await this.customerOnboardingRepository.createCustomerOnboarding({
           ...createCustomerOnboardingDto,
-          userId,
+          userId: user.userId,
         });
       const requestedServices =
         interestedService.length === 1
@@ -100,12 +109,12 @@ export class CustomerOnboardingService {
       const { customerEmail } = createCustomerOnboardingDto;
 
       const message = getCreditRequestNotificationMail(
-        userId,
+        user.userId,
         customerEmail,
         requestedServices,
         onboardingData['_id'].toString(),
         companyName,
-        type,
+        String(type),
         loggedInUserEmail,
         twitterUrl,
         telegramUrl,
@@ -1027,6 +1036,9 @@ export class CustomerOnboardingService {
       const userOnboardingDetail =
         await this.customerOnboardingRepository.findCustomerOnboardingById({
           userId: user.userId,
+          sort: {
+            createdAt: -1,
+          },
         });
       if (!userOnboardingDetail) {
         throw new BadRequestException([

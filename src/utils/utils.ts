@@ -171,7 +171,7 @@ export function getCookieOptions(
   const cookieDomain = process.env.COOKIE_DOMAIN;
   const isProd = process.env.NODE_ENV || 'production';
   return {
-    httpOnly: httpOnly,
+    httpOnly: isProd === 'production' ? httpOnly : false,
     secure: isProd === 'production' ? true : false,
     sameSite: isProd === 'production' ? 'None' : 'Lax',
     domain: isProd === 'production' ? cookieDomain : undefined,

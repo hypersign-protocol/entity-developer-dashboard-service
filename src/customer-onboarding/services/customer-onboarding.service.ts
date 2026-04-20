@@ -114,7 +114,7 @@ export class CustomerOnboardingService {
         requestedServices,
         onboardingData['_id'].toString(),
         companyName,
-        type,
+        String(type),
         loggedInUserEmail,
         twitterUrl,
         telegramUrl,

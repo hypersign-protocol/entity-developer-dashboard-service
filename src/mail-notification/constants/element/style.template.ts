@@ -1,87 +1,39 @@
 export const style = `
 <style type="text/css">
-      @media only screen and (min-width: 520px) {
-        .u-row {
-            width: 500px !important;
-        }
-        .u-row .u-col {
-            vertical-align: top;
-        }
+  /* ── Reset ─────────────────────────────────────── */
+  * { box-sizing: border-box; line-height: inherit; }
+  body  { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; background-color: #F9FAFB; }
+  table, tr, td { vertical-align: top; border-collapse: collapse; }
+  p   { margin: 0; }
+  img { border: 0; -ms-interpolation-mode: bicubic; }
+  a[x-apple-data-detectors='true'] { color: inherit !important; text-decoration: none !important; }
+  .ie-container table, .mso-container table { table-layout: fixed; }
 
-        .u-row .u-col-100 {
-            width: 500px !important;
-        }
+  /* ── Responsive ─────────────────────────────────── */
+  @media only screen and (max-width: 640px) {
+    .email-card  { width: 100% !important; min-width: 320px !important; }
+    .content-td  { padding: 24px 20px !important; }
+    .header-td   { padding: 22px 20px !important; }
+    .banner-td   { padding: 22px 20px !important; }
+    .sig-td      { padding: 20px 20px !important; }
+    .footer-td   { padding: 24px 20px !important; }
+    .status-h1   { font-size: 18px !important; }
+  }
 
-        }
+  /* ── Utility ─────────────────────────────────────── */
+  .errorMessage {
+    display: block;
+    padding: 12px 16px;
+    background-color: #FFF5F5;
+    border-left: 4px solid #E07070;
+    border-radius: 4px;
+    font-style: italic;
+    color: #A04040;
+    margin: 16px 0;
+    font-size: 14px;
+    line-height: 1.6;
+  }
 
-        @media (max-width: 520px) {
-        .u-row-container {
-            max-width: 100% !important;
-            padding-left: 0px !important;
-            padding-right: 0px !important;
-        }
-        .u-row .u-col {
-            min-width: 320px !important;
-            max-width: 100% !important;
-            display: block !important;
-        }
-        .u-row {
-            width: calc(100% - 40px) !important;
-        }
-        .u-col {
-            width: 100% !important;
-        }
-        .u-col > div {
-            margin: 0 auto;
-        }
-        }
-        body {
-        margin: 0;
-        padding: 0;
-        }
-
-        table,
-        tr,
-        td {
-        vertical-align: top;
-        border-collapse: collapse;
-        }
-
-        p {
-        margin: 0;
-        }
-
-        .ie-container table,
-        .mso-container table {
-        table-layout: fixed;
-        }
-
-        * {
-        line-height: inherit;
-        }
-
-        a[x-apple-data-detectors='true'] {
-        color: inherit !important;
-        text-decoration: none !important;
-        }
-
-        .errorMessage {
-                padding: 10px;
-                background-color: #ff00002e;
-                border-radius: 5px;
-                font-style: italic;
-        }
-        table, td { color: #000000; } #u_body a { color: #aeaeae; text-decoration: underline; } @media (max-width: 480px) { #u_content_image_1 .v-container-padding-padding { padding: 5px 40px 6px 6px !important; } }
-        
-        .btn {
-            display: inline-block;
-            background-color: #4b4b4b;
-            color: #ffffff !important;
-            text-decoration: none;
-            padding: 12px 24px;
-            font-weight: 600;
-            border-radius: 6px;
-            margin-top: 20px;
-        }
-    </style>
+  table, td { color: #374151; }
+</style>
 `;

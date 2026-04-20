@@ -1,49 +1,70 @@
 import { footer } from './footer.template';
-import { getSalutation, header } from './header.template';
+import { getHeader, getSalutation } from './header.template';
 import { signature } from './signature.template';
+
 export function getContainer(
   messageTemplate: string,
   salutationMessage = 'KYC Approved',
 ): string {
-  return `
-    <table id="u_body"
-        style="border-collapse: collapse;table-layout: fixed;border-spacing: 0;mso-table-lspace: 0pt;mso-table-rspace: 0pt;vertical-align: top;min-width: 320px;Margin: 0 auto;background-color: #e7e7e7;width:100%"
-        cellpadding="0" cellspacing="0">
-        <tbody>
-            <tr style="vertical-align: top">
-                <td style="word-break: break-word;border-collapse: collapse !important;vertical-align: top">
-                    ${header}
-                    ${getSalutation(salutationMessage)}
-                    
-                    <div class="u-row-container" style="padding: 0px;background-color: white">
-                        <div class="u-row" style="Margin: 0 auto;min-width: 320px;max-width: 500px;overflow-wrap: break-word;word-wrap: break-word;word-break: break-word;background-color: white;">
-                            <div style="border-collapse: collapse;display: table;width: 100%;height: 100%;background-color: white;">
-                                <div class="u-col u-col-100"
-                                style="max-width: 320px;min-width: 500px;display: table-cell;vertical-align: top;">
-                                    <div style="line-height: 140%; text-align: left; word-wrap: break-word;">
-                                        <table style="font-family:arial,helvetica,sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                                                <tbody>
-                                                    <tr>
-                                                        <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:10px;font-family:arial,helvetica,sans-serif;" align="left">
-                                                            ${messageTemplate}                
-                                                        </td>
-                                                    </tr>
-                                                </tbody>
-                                        </table>    
-                                    </div>                                
-                               </div>
-                            </div>
-                        </div>
-                    </div>
-                    ${signature}
-                </td>
-            </tr>
-            <tr>
-                <td>
-                    ${footer}
-                </td>
-            </tr>
-        </tbody>
-    </table>
-    `;
+  return `<!-- Outer background -->
+<table id="u_body" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+    style="border-collapse:collapse; background-color:#F9FAFB; width:100%;">
+    <tr>
+        <td align="center" style="padding:36px 16px 48px;">
+
+            <!-- Email card -->
+            <table class="email-card" role="presentation" cellpadding="0" cellspacing="0" border="0"
+                style="width:600px; max-width:100%; background-color:#FFFFFF;
+                             border-radius:16px; overflow:hidden;
+                             box-shadow:0 4px 40px rgba(0,0,0,0.10);">
+
+                ${getHeader(salutationMessage)}
+                ${getSalutation(salutationMessage)}
+
+                <!-- Body content -->
+                <tr>
+                    <td class="content-td"
+                        style="padding:36px 40px; font-family:Arial,Helvetica,sans-serif;
+                                     font-size:15px; line-height:1.75; color:#374151;
+                                     background-color:#FFFFFF;">
+                        ${messageTemplate}
+                    </td>
+                </tr>
+
+                ${signature}
+                ${footer}
+
+            </table>
+
+            <!-- Below-card: social + tagline -->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:20px auto 0;">
+                <tr>
+                    <td style="padding:0 8px;">
+                        <a href="https://www.linkedin.com/company/hypersign-id/" target="_blank" rel="noopener"
+                             style="text-decoration:none; display:inline-block;">
+                            <img src="https://img.icons8.com/ios-filled/48/888888/linkedin.png"
+                                     alt="LinkedIn" width="24" height="24"
+                                     style="display:block; border:0;" />
+                        </a>
+                    </td>
+                    <td style="padding:0 8px;">
+                        <a href="https://x.com/hypersignchain" target="_blank" rel="noopener"
+                             style="text-decoration:none; display:inline-block;">
+                            <img src="https://img.icons8.com/ios-filled/48/888888/twitterx--v1.png"
+                                     alt="X / Twitter" width="24" height="24"
+                                     style="display:block; border:0;" />
+                        </a>
+                    </td>
+                </tr>
+            </table>
+            <p style="font-family:Arial,Helvetica,sans-serif; font-size:12px; color:#6B7280;
+                                text-align:center; margin:12px 0 0; line-height:1.8; max-width:400px;
+                                margin-left:auto; margin-right:auto; font-weight:500; letter-spacing:0.1px;">
+                Hypersign helps Web3 and fintech companies prevent fraud and reduce<br>
+                KYC friction with reusable identity.
+            </p>
+
+        </td>
+    </tr>
+</table>`;
 }

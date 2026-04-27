@@ -68,7 +68,7 @@ export class SocialLoginController {
   async socialAuthRedirect(@Res() res) {
     Logger.log('socialAuthRedirect() method starts', 'SocialLoginController');
     const provider = 'google';
-    Logger.log(`Looged in with ${provider}`, 'SocialLoginController');
+    Logger.log(`Starting login flow with ${provider}`, 'SocialLoginController');
     const { authUrl } = await this.socialLoginService.generateAuthUrlByProvider(
       provider,
     );
@@ -148,7 +148,7 @@ export class SocialLoginController {
   async refreshTokenGeneration(@Req() req, @Res() res) {
     const refreshToken = req.cookies['refreshToken'];
     if (!refreshToken) {
-      throw new UnauthorizedException(['Missing refresh token']);
+      throw new UnauthorizedException(['Refresh token is missing.']);
     }
     const tokens = await this.socialLoginService.verifyAndGenerateRefreshToken(
       refreshToken,
@@ -176,7 +176,7 @@ export class SocialLoginController {
       'true',
       getCookieOptions(InSecureCookie.expiry, false, InSecureCookie.httpOnly),
     );
-    res.json({ message: 'Tokens refreshed' });
+    res.json({ message: 'Tokens refreshed successfully.' });
   }
 
   @ApiOkResponse({
@@ -274,7 +274,7 @@ export class SocialLoginController {
     res.clearCookie(TOKEN.AUTH.name, getCookieOptions(undefined, true));
     res.clearCookie(TOKEN.REFRESH.name, getCookieOptions(undefined, true));
     res.clearCookie(InSecureCookie.name, getCookieOptions(undefined, true));
-    return res.status(200).json({ message: 'Logged out successfully' });
+    return res.status(200).json({ message: 'Logged out successfully.' });
   }
 
   @ApiOkResponse({

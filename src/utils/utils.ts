@@ -49,8 +49,8 @@ export const retrive = (filePath) => {
 
 export const deleteFile = (filePath) => {
   return fs.unlink(filePath, (err) => {
-    if (err) console.log(`Could not delete the file err ${err}`);
-    console.log(`${filePath} is successfully deleted.`);
+    if (err) console.error(`Could not delete file: ${filePath}`, err);
+    console.info(`Deleted file: ${filePath}`);
   });
 };
 export function MongooseClassSerializerInterceptor(

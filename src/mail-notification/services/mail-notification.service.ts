@@ -60,7 +60,8 @@ export class MailNotificationService {
       await this.mailQueue.add(name, job);
       Logger.debug('a jobs is added in the queue');
     } catch (e) {
-      Logger.log(e);
+      const error = e instanceof Error ? e : new Error(String(e));
+      Logger.error(error.message, error.stack, 'MailNotificationService');
     }
   }
 }

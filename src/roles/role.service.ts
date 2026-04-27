@@ -15,8 +15,9 @@ export class RoleService {
       return role;
     } catch (error) {
       if (error.message.includes('duplicate key')) {
-        throw new BadRequestException(['Role alreay exists']);
+        throw new BadRequestException(['Role already exists.']);
       }
+      throw error;
     }
   }
 

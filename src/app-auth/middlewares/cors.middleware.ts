@@ -11,14 +11,14 @@ export class WhitelistAppCorsMiddleware implements NestMiddleware {
   constructor(private readonly appRepositiory: AppRepository) {}
   async use(req: Request, res: Response, next: NextFunction) {
     Logger.log(
-      'WhitelistAppCorsMiddleware: checking if call is form whitelisted domain starts',
+      'WhitelistAppCorsMiddleware: checking whether the request is from a whitelisted domain',
       'Middleware',
     );
     const whitelistedOrigins = process.env.WHITELISTED_CORS;
     const apiSecretKey = req.headers['x-api-secret-key'] as string;
     const origin = req.header('Origin');
     Logger.debug(
-      `WhitelistAppCorsMiddleware: request is comming from ${origin}`,
+      'WhitelistAppCorsMiddleware: received a request from an origin header',
       'Middleware',
     );
     if (whitelistedOrigins.includes(origin)) {
@@ -36,15 +36,15 @@ export class WhitelistAppCorsMiddleware implements NestMiddleware {
       }
       if (!appDetail.whitelistedCors.includes(origin)) {
         Logger.error(
-          'WhitelistAppCorsMiddleware: Error: origin mismatch',
+          'WhitelistAppCorsMiddleware: origin mismatch',
           'Middleware',
         );
-        throw new UnauthorizedException(['Origin mismatch']);
+        throw new UnauthorizedException(['The request origin is not allowed.']);
       }
       return next();
     } else {
       throw new UnauthorizedException([
-        'This is CORS-enabled for a whitelisted domain.',
+        'This endpoint is only available to approved domains.',
       ]);
     }
   }

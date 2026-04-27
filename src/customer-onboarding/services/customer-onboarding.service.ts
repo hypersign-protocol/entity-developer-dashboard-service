@@ -53,7 +53,7 @@ import {
 } from 'src/webpage-config/dto/create-webpage-config.dto';
 import getOnboardingRetryNotificationMail from 'src/mail-notification/constants/templates/request-retry-onboarding';
 import { redisClient } from 'src/utils/redis.provider';
-import { EXPIRY_CONFIG, TIME } from 'src/utils/time-constant';
+import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 import { TokenModule } from 'src/config/access-matrix';
 import { AuthzCreditService } from 'src/credits/services/credits.service';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';

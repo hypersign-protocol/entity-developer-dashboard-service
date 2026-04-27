@@ -13,7 +13,6 @@ import {
   ArgumentsHost,
   HttpStatus,
 } from '@nestjs/common';
-import { Did } from 'hs-ssi-sdk';
 import {
   Context,
   SERVICE_TYPES,

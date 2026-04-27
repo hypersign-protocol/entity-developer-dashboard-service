@@ -1,7 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import {
   BusinessField,
-  CountryCode,
   CreditStatus,
   CustomerType,
   InterestedService,

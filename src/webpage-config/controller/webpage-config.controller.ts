@@ -8,7 +8,6 @@ import {
   Delete,
   Logger,
   UseFilters,
-  Req,
   UsePipes,
   ValidationPipe,
   Query,

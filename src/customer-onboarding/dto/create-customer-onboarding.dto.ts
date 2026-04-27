@@ -10,7 +10,6 @@ import {
   IsOptional,
   IsString,
   ValidateNested,
-  IsUrl,
   Matches,
   ValidateIf,
 } from 'class-validator';

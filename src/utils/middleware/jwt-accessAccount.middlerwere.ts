@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import {
-  BadRequestException,
   Injectable,
   Logger,
   NestMiddleware,

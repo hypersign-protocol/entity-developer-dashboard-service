@@ -130,12 +130,13 @@ export class SocialLoginController {
       userDetail.authenticators &&
       userDetail.authenticators.length > 0
     ) {
-      const authenticator = userDetail.authenticators.map(
-        ({ secret, ...rest }) => rest,
-      );
+      const authenticator = userDetail.authenticators.map((authenticator) => {
+        const copy = { ...authenticator };
+        delete copy.secret;
+        return copy;
+      });
       userDetail.authenticators = authenticator;
       userDetail.role = userDetail.role || UserRole.ADMIN;
-      userDetail;
     }
     return {
       status: 200,

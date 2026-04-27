@@ -75,7 +75,6 @@ export class EmailOtpLoginController {
     Logger.log('verifyEmailOtp() method starts', 'EmailOtpLoginController');
     const detail = await this.emailOtpService.verifyEmailOtp(body);
     req['user'] = { email: detail.email };
-    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
     Logger.debug(
       'EmailOtpLoginController: cookie domain configured',
       'EmailOtpLoginController',

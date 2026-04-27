@@ -119,23 +119,22 @@ export class PeopleService {
       inviteCode,
     });
     if (adminPeople == null) {
-      throw new BadRequestException(['Wrong invitation code']);
+      throw new BadRequestException(['The invitation code is invalid.']);
     }
     const expiry = new Date(adminPeople.invitationValidTill);
     const now = new Date();
 
     if (expiry < now) {
-      throw new BadRequestException(['Invite code expired']);
+      throw new BadRequestException(['The invitation code has expired.']);
     }
     if (adminPeople == null) {
-      throw new BadRequestException([
-        `Wrong invite code ${inviteCode}`,
-        `Invitation doesnot exists`,
-      ]);
+      throw new BadRequestException(['The invitation code is invalid.']);
     }
 
     if (adminPeople?.accepted) {
-      throw new BadRequestException(['Invite has been accepted already']);
+      throw new BadRequestException([
+        'This invitation has already been accepted.',
+      ]);
     }
     const acceptedInvite = await this.adminPeopleService.findOneAndUpdate(
       {
@@ -160,7 +159,7 @@ export class PeopleService {
       inviteCode,
     });
     if (findInvite == null) {
-      throw new NotFoundException(['Invite not found']);
+      throw new NotFoundException(['Invitation not found.']);
     }
 
     const updateInvite = await this.adminPeopleService.findOneAndUpdate(
@@ -215,10 +214,10 @@ export class PeopleService {
     });
 
     if (adminPeople == null) {
-      throw new NotFoundException(['Member not found']);
+      throw new NotFoundException(['Member not found.']);
     }
     if (adminPeople.accepted == false) {
-      throw new BadRequestException(['Invitation is pending']);
+      throw new BadRequestException(['The invitation is still pending.']);
     }
 
     const role = await this.roleRepository.findOne({
@@ -227,7 +226,7 @@ export class PeopleService {
     });
 
     if (role == null) {
-      throw new NotFoundException(['Role not found']);
+      throw new NotFoundException(['Role not found.']);
     }
 
     return await this.adminPeopleService.findOneAndUpdate(

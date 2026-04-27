@@ -2,7 +2,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model } from 'mongoose';
 import { Role, RoleDocument } from '../schemas/role.schema';
 import { Injectable } from '@nestjs/common';
-import { AccessList } from '../dto/create-role.dto';
 
 @Injectable()
 export class RoleRepository {

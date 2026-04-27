@@ -87,7 +87,7 @@ export class AppAuthController {
       userRole,
     );
     if (appList.length === 0) {
-      throw new BadRequestException(['Application Not Found']);
+      throw new BadRequestException(['No applications were found.']);
     }
     if (appList) return appList;
   }
@@ -137,7 +137,7 @@ export class AppAuthController {
 
     const app = await this.appAuthService.getAppById(appId, userId);
     if (app) return app;
-    else throw new BadRequestException(['App not found']);
+    else throw new BadRequestException(['Application not found.']);
   }
 
   @ApiBearerAuth('Authorization')

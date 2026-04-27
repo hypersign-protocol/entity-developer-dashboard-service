@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import {
-  BadRequestException,
   Injectable,
   Logger,
   NestMiddleware,
@@ -51,13 +50,14 @@ export class JWTAccessAccountMiddleware implements NestMiddleware {
         // @ts-ignore
       }
 
-      Logger.log(JSON.stringify(req.user), 'JWTAccessAccountMiddleware');
-    } catch (e) {
-      Logger.error(
-        `JWTAccessAccountMiddleware: Error ${e}`,
+      Logger.debug(
+        'Access account context updated',
         'JWTAccessAccountMiddleware',
       );
-      throw new UnauthorizedException([e.message]);
+    } catch (e) {
+      const error = e instanceof Error ? e : new Error(String(e));
+      Logger.error(error.message, error.stack, 'JWTAccessAccountMiddleware');
+      throw new UnauthorizedException([error.message]);
     }
     next();
   }

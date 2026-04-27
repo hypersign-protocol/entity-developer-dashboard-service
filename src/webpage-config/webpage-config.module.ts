@@ -19,7 +19,6 @@ import { TrimMiddleware } from 'src/utils/middleware/trim.middleware';
 import { JWTAuthorizeMiddleware } from 'src/utils/middleware/jwt-authorization.middleware';
 import { JWTAccessAccountMiddleware } from 'src/utils/middleware/jwt-accessAccount.middlerwere';
 import { UserModule } from 'src/user/user.module';
-import { JwtModule } from '@nestjs/jwt';
 import { AdminPeopleRepository } from 'src/people/repository/people.repository';
 import {
   AdminPeople,

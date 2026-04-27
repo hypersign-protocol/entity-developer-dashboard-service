@@ -100,7 +100,8 @@ export class AuthzCreditService {
         authorization: `Bearer ${token}`,
       },
     }).catch((error) => {
-      Logger.error('Failed to grant credit:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      Logger.error('Failed to grant credit', err.stack, 'AuthZCreditService');
     });
   }
   async grantSSICredit(appId, allowance) {

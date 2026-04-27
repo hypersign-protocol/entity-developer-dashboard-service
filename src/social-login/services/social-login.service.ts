@@ -51,7 +51,7 @@ export class SocialLoginService {
         break;
       }
       default: {
-        throw new BadRequestException(['Invalid provider']);
+        throw new BadRequestException(['The selected provider is invalid.']);
       }
     }
     return { authUrl };
@@ -184,7 +184,9 @@ export class SocialLoginService {
     const sessionKey = `session:${sessionId}`;
     const sessionDetailJson = await redisClient.get(sessionKey);
     if (!sessionDetailJson) {
-      throw new BadRequestException(['Invalid or expired sessionId']);
+      throw new BadRequestException([
+        'The session ID is invalid or has expired.',
+      ]);
     }
     const sessionDetail = JSON.parse(sessionDetailJson);
     if (sessionDetail?.isTwoFactorVerified) {
@@ -301,7 +303,7 @@ export class SocialLoginService {
       const user = await this.userRepository.findOne({
         userId: sessionJson.userId,
       });
-      if (!user) throw new UnauthorizedException(['User not found']);
+      if (!user) throw new UnauthorizedException(['User not found.']);
       await redisClient.set(
         sessionKey,
         JSON.stringify(sessionJson),

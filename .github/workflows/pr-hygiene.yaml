@@ -1,0 +1,153 @@
+name: PR hygiene
+
+on:
+  pull_request:
+    types: [ opened, synchronize, reopened, labeled, unlabeled ]
+  pull_request_review:
+    types: [ submitted ]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.skip.outputs.skip }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 18
+
+    - name: changed files
+      id: changed
+      run: |
+        set -euo pipefail
+        base="${{ github.event.pull_request.base.ref }}"
+        git fetch origin "$base"
+
+        git diff --name-only "origin/$base"...HEAD | sort -u > changed.txt
+
+        echo "changed files:"
+        cat changed.txt
+
+        {
+          echo "list<<EOF"
+          cat changed.txt
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: skip?
+      id: skip
+      run: |
+        set -euo pipefail
+        labels='${{ toJson(github.event.pull_request.labels) }}'
+
+        if echo "$labels" | grep -qi 'hygiene-skip'; then
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+          echo "skipping hygiene checks"
+        else
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: changelog required
+      if: ${{ steps.skip.outputs.skip != 'true' }}
+      run: |
+        set -euo pipefail
+
+        # only enforce if non-doc changes exist
+        if grep -qvE '(^docs/|\.md$)' changed.txt; then
+          if ! grep -Eiq '(^|/)(CHANGELOG|changelog)(\.md)?$' changed.txt; then
+            echo "missing changelog update"
+            exit 1
+          fi
+        else
+          echo "docs-only change, skipping changelog check"
+        fi
+
+    - name: version bump
+      if: ${{ steps.skip.outputs.skip != 'true' }}
+      run: |
+        set -euo pipefail
+
+        base="${{ github.event.pull_request.base.ref }}"
+
+        mapfile -t pkgs < <(grep -E '(^|/)package\.json$' changed.txt | sort -u)
+
+        if [ ${#pkgs[@]} -eq 0 ]; then
+          echo "no package.json change, skipping"
+          exit 0
+        fi
+
+        for f in "${pkgs[@]}"; do
+          echo "checking $f"
+
+          base_file=$(mktemp)
+          head_file=$(mktemp)
+
+          git show "origin/$base:$f" > "$base_file" 2>/dev/null || echo '{}' > "$base_file"
+          git show "HEAD:$f" > "$head_file"
+
+          node -e '
+            const fs = require("fs");
+
+            const base = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const head = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+
+            if (!head.version) {
+              console.error("no version in package.json");
+              process.exit(1);
+            }
+
+            if (!base.version) {
+              console.log("new package, skipping compare");
+              process.exit(0);
+            }
+
+            if (base.version === head.version) {
+              console.error("version not bumped (" + base.version + ")");
+              process.exit(1);
+            }
+
+            console.log("version ok: " + base.version + " -> " + head.version);
+          ' "$base_file" "$head_file"
+
+          rm -f "$base_file" "$head_file"
+        done
+  approval:
+    needs: hygiene
+    if: ${{ github.event_name == 'pull_request_review' && needs.hygiene.outputs.skip != 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const pr = context.payload.pull_request;
+
+          const { data: reviews } = await github.rest.pulls.listReviews({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: pr.number
+          });
+
+          // take latest state per reviewer
+          const latest = {};
+          for (const r of reviews) {
+            latest[r.user.login] = r.state;
+          }
+
+          const states = Object.values(latest);
+
+          if (!states.includes('APPROVED')) {
+            core.setFailed('no approvals yet');
+          } else {
+            core.info('approval present');
+          }

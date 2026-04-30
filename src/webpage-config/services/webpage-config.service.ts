@@ -307,9 +307,6 @@ export class WebpageConfigService {
     return { expiryDate };
   }
   public async generateWebpageConfigTokens(id, appId) {
-    const redisKey = generateHash(`${REDIS_KEYS.VERIFIER_PAGE_TOKEN}${id}`);
-    const cachedData = await redisClient.get(redisKey);
-    if (cachedData) return JSON.parse(cachedData);
     const verifierConfig = await this.webPageConfigRepo.findAWebpageConfig({
       _id: new Types.ObjectId(id),
     });
@@ -384,12 +381,6 @@ export class WebpageConfigService {
     } else {
       redisPayload.kycAccessToken = pageAccessTokenDetail.access_token;
     }
-    await redisClient.set(
-      redisKey,
-      JSON.stringify(redisPayload),
-      'EX',
-      EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS.redisExpiryTime,
-    );
     return {
       ...redisPayload,
     };

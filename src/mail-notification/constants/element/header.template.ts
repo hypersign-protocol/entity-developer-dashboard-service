@@ -2,6 +2,7 @@ const LOGO_URL =
   'https://storage.googleapis.com/fyre-image-storage/download.png';
 
 export function getHeader(): string {
+
   return `<tr>
   <td class="header-td" align="center"
     style="background-color:#FFFFFF; padding:20px 40px; text-align:center; border-bottom:1px solid #E5E7EB;">

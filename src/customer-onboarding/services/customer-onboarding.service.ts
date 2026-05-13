@@ -410,27 +410,48 @@ export class CustomerOnboardingService {
                 'GIVE_DASHBOARD_ACCESS step started',
                 'CustomerOnboardingService',
               );
-              userDetail = await this.userRepository.findOneUpdate(
-                { userId },
+              userDetail = await this.userRepository.findOneUpdate({ userId }, [
                 {
-                  $push: {
+                  $set: {
                     accessList: {
-                      $each: [
+                      $concatArrays: [
+                        '$accessList',
                         {
-                          serviceType: SERVICE_TYPES.CAVACH_API,
-                          access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
-                          expiryDate: null,
-                        },
-                        {
-                          serviceType: SERVICE_TYPES.SSI_API,
-                          access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
-                          expiryDate: null,
+                          $filter: {
+                            input: [
+                              {
+                                serviceType: SERVICE_TYPES.CAVACH_API,
+                                access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
+                                expiryDate: null,
+                              },
+                              {
+                                serviceType: SERVICE_TYPES.SSI_API,
+                                access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
+                                expiryDate: null,
+                              },
+                            ],
+                            as: 'newAccess',
+                            cond: {
+                              $not: {
+                                $in: [
+                                  '$$newAccess.serviceType',
+                                  {
+                                    $map: {
+                                      input: '$accessList',
+                                      as: 'existing',
+                                      in: '$$existing.serviceType',
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          },
                         },
                       ],
                     },
                   },
                 },
-              );
+              ]);
               Logger.debug(
                 'GIVE_DASHBOARD_ACCESS step ends',
                 'CustomerOnboardingService',

@@ -17,11 +17,12 @@ export class SanitizeUrlValidator implements ValidatorConstraintInterface {
         return url;
       }
       try {
-        new URL(url);
+        const parsed = new URL(url.trim());
+        return parsed.origin.toLowerCase();
       } catch {
         invalid.push(url);
+        return url;
       }
-      return (url as string).replace(/\/$/, '');
     });
 
     if (invalid.length) {

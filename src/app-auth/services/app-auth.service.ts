@@ -90,7 +90,7 @@ export class AppAuthService {
 
     const service = this.supportedServices.fetchServiceById(serviceIds[0]);
     if (!service) {
-      throw new Error('Invalid service id ' + serviceIds[0]);
+      throw new Error('Invalid service ID: ' + serviceIds[0]);
     }
 
     if (!this.authzWalletInstance) {
@@ -134,7 +134,7 @@ export class AppAuthService {
 
       if (!globalThis.kmsVault) {
         throw new InternalServerErrorException([
-          'KMS vault is not initialized',
+          'KMS vault is not initialized.',
         ]);
       }
       const edvDocToInsert = globalThis.kmsVault.prepareEdvDocument(doc, [
@@ -669,11 +669,11 @@ export class AppAuthService {
         `Error deleting KMS or EDV vault: ${vaultError}`,
         'AppAuthService',
       );
-      throw new BadRequestException(['Failed to delete vault']);
+      throw new BadRequestException(['Failed to delete the vault.']);
     }
     // delete app db also
     if (!appDetail.services || appDetail.services.length === 0) {
-      throw new BadRequestException(['Invalid app']);
+      throw new BadRequestException(['The app is invalid.']);
     }
     const appDbConnectionSuffix = `service:${appDetail.services[0].dBSuffix}:${appDetail.subdomain}`;
     await this.appRepository.findAndDeleteServiceDB(appDbConnectionSuffix);
@@ -728,7 +728,7 @@ export class AppAuthService {
         'AppAuthService',
       );
 
-      throw new UnauthorizedException(['access_denied']);
+      throw new UnauthorizedException(['Access denied.']);
     }
     const userDetails = await this.userRepository.findOne({
       userId: appDetail.userId,
@@ -750,7 +750,7 @@ export class AppAuthService {
         'AppAuthService',
       );
 
-      throw new UnauthorizedException(['access_denied']);
+      throw new UnauthorizedException(['Access denied.']);
     }
 
     const serviceType = appDetail.services[0]?.id; // TODO: remove this later
@@ -824,7 +824,9 @@ export class AppAuthService {
         break;
       }
       default: {
-        throw new BadRequestException(['Invalid service ' + appDetail.appId]);
+        throw new BadRequestException([
+          'Invalid service ID: ' + appDetail.appId,
+        ]);
       }
     }
 
@@ -955,7 +957,7 @@ export class AppAuthService {
     const app = await this.appRepository.findOne(query);
     if (!app) {
       throw new BadRequestException([
-        'Invalid service id or you do not have access of this service',
+        'Invalid service ID or you do not have access to this service',
       ]);
     }
     const userDetails = user;
@@ -1026,7 +1028,7 @@ export class AppAuthService {
         break;
       }
       default: {
-        throw new BadRequestException(['Invalid service ' + appId]);
+        throw new BadRequestException(['Invalid service ID: ' + appId]);
       }
     }
     if (accessList.length <= 0) {

@@ -1,14 +1,10 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  ArrayUnique,
-  IsDate,
   IsDateString,
-  IsEmpty,
   IsEnum,
   IsOptional,
   IsString,
-  Validate,
   ValidateNested,
 } from 'class-validator';
 import {

@@ -1,13 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 import {
   IsArray,
   IsDefined,
   IsNotEmpty,
-  IsNumber,
   IsString,
   ValidateIf,
-  ValidateNested,
 } from 'class-validator';
 
 export class CreateIpResolverDto {

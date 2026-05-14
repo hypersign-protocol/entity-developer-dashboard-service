@@ -75,9 +75,8 @@ export class EmailOtpLoginController {
     Logger.log('verifyEmailOtp() method starts', 'EmailOtpLoginController');
     const detail = await this.emailOtpService.verifyEmailOtp(body);
     req['user'] = { email: detail.email };
-    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN');
     Logger.debug(
-      `Cookied domain set is ${cookieDomain}`,
+      'EmailOtpLoginController: cookie domain configured',
       'EmailOtpLoginController',
     );
     try {
@@ -109,8 +108,13 @@ export class EmailOtpLoginController {
         isMfaRequired: result.isMfaRequired,
       });
     } catch (err) {
-      Logger.error(`Login failed: ${err.message}`, 'EmailOtpLoginController');
-      throw new BadRequestException(['Failed to complete login']);
+      const error = err instanceof Error ? err : new Error(String(err));
+      Logger.error(
+        'Login failed while completing email OTP login',
+        error.stack,
+        'EmailOtpLoginController',
+      );
+      throw new BadRequestException(['Failed to complete login.']);
     }
   }
 }

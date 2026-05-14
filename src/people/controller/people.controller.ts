@@ -10,7 +10,6 @@ import {
   UsePipes,
   ValidationPipe,
   Req,
-  Res,
 } from '@nestjs/common';
 import { PeopleService } from '../services/people.service';
 import {
@@ -24,16 +23,12 @@ import {
 import { DeletePersonDto } from '../dto/update-person.dto';
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AllExceptionsFilter } from 'src/utils/utils';
-import { ConfigService } from '@nestjs/config';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('People')
 @ApiBearerAuth('Authorization')
 @Controller('/api/v1/tenants')
 export class PeopleController {
-  constructor(
-    private readonly peopleService: PeopleService,
-    private readonly config: ConfigService,
-  ) {}
+  constructor(private readonly peopleService: PeopleService) {}
 
   @ApiResponse({
     status: 200,

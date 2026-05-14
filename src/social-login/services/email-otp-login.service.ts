@@ -33,7 +33,7 @@ export class EmailOtpLoginService {
   async generateEmailOtp(generateEmailOtpDto: GenerateEmailOtpDto) {
     const { email } = generateEmailOtpDto;
     Logger.log(
-      `generateEmailOtp(): Generating OTP for ${email}`,
+      'generateEmailOtp(): Generating OTP request',
       'EmailOtpLoginService',
     );
     const otpCoolDownMinute = this.config.get<number>(

@@ -18,7 +18,7 @@ export function getContainer(
                              border-radius:16px; overflow:hidden;
                              box-shadow:0 4px 40px rgba(0,0,0,0.10);">
 
-                ${getHeader(salutationMessage)}
+                ${getHeader()}
                 ${getSalutation(salutationMessage)}
 
                 <!-- Body content -->

@@ -4,7 +4,7 @@ export class AppNotFoundException extends HttpException {
   constructor(/*status?: number, options?: HttpExceptionOptions, response?: string | Record<string, any>*/) {
     super(
       {
-        message: ['Application Not Found'],
+        message: ['Application not found.'],
         statusCode: HttpStatus.BAD_REQUEST,
         error: 'Bad Request',
       },

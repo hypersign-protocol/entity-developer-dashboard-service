@@ -79,7 +79,7 @@ export class EdvClientManger implements IEdvClientManager {
         : 'urn:uuid:6e8bc430-9c3a-11d9-9669-0800200c9a66',
     };
 
-    const res = await this.vault.registerEdv(config);
+    await this.vault.registerEdv(config);
     return this;
   }
 

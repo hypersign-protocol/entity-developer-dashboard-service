@@ -1,18 +1,7 @@
-import {
-  DeliverTxResponse,
-  SigningStargateClient,
-  StdFee,
-} from '@cosmjs/stargate';
+import { StdFee } from '@cosmjs/stargate';
 import { BasicAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/feegrant';
-import {
-  MsgGrantAllowance,
-  MsgRevokeAllowance,
-} from 'cosmjs-types/cosmos/feegrant/v1beta1/tx';
-import {
-  MsgExec,
-  MsgGrant,
-  MsgRevoke,
-} from 'cosmjs-types/cosmos/authz/v1beta1/tx';
+import { MsgGrantAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/tx';
+import { MsgGrant } from 'cosmjs-types/cosmos/authz/v1beta1/tx';
 import { GenericAuthorization } from 'cosmjs-types/cosmos/authz/v1beta1/authz';
 import { Timestamp } from 'cosmjs-types/google/protobuf/timestamp';
 import * as Long from 'long';

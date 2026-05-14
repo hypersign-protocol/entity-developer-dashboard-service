@@ -13,11 +13,11 @@ export class SuperAdminMiddleware implements NestMiddleware {
     Logger.log('Inside SuperAdminMiddleware', 'SuperAdminMiddleware');
     const user = req['user'];
     if (!user) {
-      throw new ForbiddenException(['User not found in request']);
+      throw new ForbiddenException(['User context not found in request.']);
     }
     if (user['role'] !== UserRole.SUPER_ADMIN) {
       throw new ForbiddenException([
-        'You are not authorized to access this resource',
+        'You are not authorized to access this resource.',
       ]);
     }
     next();

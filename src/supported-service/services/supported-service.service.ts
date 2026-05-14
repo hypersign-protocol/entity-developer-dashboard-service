@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { SupportedServiceList } from './service-list';
-import { ConfigService } from '@nestjs/config';
 @Injectable()
 export class SupportedServiceService {
   constructor(private readonly serviceList: SupportedServiceList) {}

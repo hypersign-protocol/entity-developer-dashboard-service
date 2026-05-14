@@ -87,9 +87,11 @@ export class CreditUsageNotificationProcessor extends WorkerHost {
         `Credit usage notification processed for serviceId: ${serviceId}`,
       );
     } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
       Logger.error(
         'Failed to process credit usage notification',
-        error?.stack || error,
+        err.stack,
+        'CreditUsageNotificationProcessor',
       );
     }
   }

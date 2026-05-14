@@ -12,7 +12,7 @@ export function IsUrlOrBase64Image(options?: ValidationOptions) {
       propertyName,
       options,
       validator: {
-        validate(value: any, args: ValidationArguments) {
+        validate(value: any) {
           if (!value) return true; // allow empty if optional
 
           const urlRegex = /^(https?:\/\/)[^\s]+$/i;

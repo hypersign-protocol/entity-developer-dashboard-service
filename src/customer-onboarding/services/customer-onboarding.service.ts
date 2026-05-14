@@ -29,6 +29,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import {
   CreditStatus,
+  InterestedService,
   OnboardingStep,
   StepStatus,
   SupportedDocument,
@@ -53,7 +54,7 @@ import {
 } from 'src/webpage-config/dto/create-webpage-config.dto';
 import getOnboardingRetryNotificationMail from 'src/mail-notification/constants/templates/request-retry-onboarding';
 import { redisClient } from 'src/utils/redis.provider';
-import { EXPIRY_CONFIG, TIME } from 'src/utils/time-constant';
+import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 import { TokenModule } from 'src/config/access-matrix';
 import { AuthzCreditService } from 'src/credits/services/credits.service';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
@@ -382,7 +383,19 @@ export class CustomerOnboardingService {
       const startIndex = lastStep
         ? Object.values(OnboardingStep).indexOf(lastStep) + 1
         : 0;
-      const remainingSteps = Object.values(OnboardingStep).slice(startIndex);
+      const allSteps = Object.values(OnboardingStep);
+      const filteredSteps = allSteps.filter((step) => {
+        if (
+          step === OnboardingStep.CONFIGURE_KYB_VERIFIER_PAGE ||
+          step === OnboardingStep.SETUP_KYB_WIDGET
+        ) {
+          return customerOnboardingData.interestedService?.includes(
+            InterestedService.KYB,
+          );
+        }
+        return true;
+      });
+      const remainingSteps = filteredSteps.slice(startIndex);
       if (remainingSteps.length === 0) {
         throw new BadRequestException(['Customer onboarding is already done']);
       }
@@ -397,27 +410,48 @@ export class CustomerOnboardingService {
                 'GIVE_DASHBOARD_ACCESS step started',
                 'CustomerOnboardingService',
               );
-              userDetail = await this.userRepository.findOneUpdate(
-                { userId },
+              userDetail = await this.userRepository.findOneUpdate({ userId }, [
                 {
-                  $push: {
+                  $set: {
                     accessList: {
-                      $each: [
+                      $concatArrays: [
+                        '$accessList',
                         {
-                          serviceType: SERVICE_TYPES.CAVACH_API,
-                          access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
-                          expiryDate: null,
-                        },
-                        {
-                          serviceType: SERVICE_TYPES.SSI_API,
-                          access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
-                          expiryDate: null,
+                          $filter: {
+                            input: [
+                              {
+                                serviceType: SERVICE_TYPES.CAVACH_API,
+                                access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
+                                expiryDate: null,
+                              },
+                              {
+                                serviceType: SERVICE_TYPES.SSI_API,
+                                access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
+                                expiryDate: null,
+                              },
+                            ],
+                            as: 'newAccess',
+                            cond: {
+                              $not: {
+                                $in: [
+                                  '$$newAccess.serviceType',
+                                  {
+                                    $map: {
+                                      input: '$accessList',
+                                      as: 'existing',
+                                      in: '$$existing.serviceType',
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          },
                         },
                       ],
                     },
                   },
                 },
-              );
+              ]);
               Logger.debug(
                 'GIVE_DASHBOARD_ACCESS step ends',
                 'CustomerOnboardingService',
@@ -902,7 +936,125 @@ export class CustomerOnboardingService {
               );
               break;
             }
+            case OnboardingStep.SETUP_KYB_WIDGET: {
+              Logger.log(
+                'SETUP_KYB_WIDGET step started',
+                'CustomerOnboardingService',
+              );
+              if (
+                !customerOnboardingData.interestedService?.includes(
+                  InterestedService.KYB,
+                )
+              ) {
+                break;
+              }
 
+              if (!kycService && customerOnboardingData.kycServiceId) {
+                kycService = await this.appAuthRepository.findOne({
+                  appId: customerOnboardingData.kycServiceId,
+                });
+              }
+              const defaultAccessList = getAccessListForModule(
+                TokenModule.DASHBOARD,
+                SERVICE_TYPES.CAVACH_API,
+              );
+              const accessList = evaluateAccessPolicy(
+                defaultAccessList,
+                SERVICE_TYPES.CAVACH_API,
+                userDetail.accessList,
+                Context.idDashboard,
+              );
+              const kycServiceDetail = await redisClient.get(kycRedisKey);
+              if (!kycServiceDetail) {
+                await this.appAuthService.storeDataInRedis(
+                  GRANT_TYPES.access_service_kyb,
+                  kycService,
+                  accessList,
+                  kycRedisKey,
+                );
+              }
+              kycAccessToken = await this.appAuthService.getAccessToken(
+                {
+                  appId:
+                    kycService?.appId || customerOnboardingData.kycServiceId,
+                  appName: kycService.appName,
+                  grantType: GRANT_TYPES.access_service_kyb,
+                  subdomain:
+                    kycService?.subdomain ||
+                    customerOnboardingData.kycSubdomain,
+                  sessionId: kycRedisKey,
+                },
+                EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
+                EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
+              );
+              const requestBody = {
+                issuerDID:
+                  issuerDidData?.did || customerOnboardingData.businessId,
+                issuerVerificationMethodId: `${
+                  issuerDidData?.did || customerOnboardingData.businessId
+                }#key-1`,
+                collectCertOfIncorporationDoc: true,
+                collectPowerOfAttorneyDoc: true,
+                collectAddressProofDoc: true,
+                collectZkProof: {
+                  enable: false,
+                  proofType: '',
+                  criteria: '',
+                },
+                checkAmlPep: false,
+                checkAmlSanction: true,
+                checkAmlAdversemedia: true,
+                checkBusinessRegistry: true,
+                branding: {
+                  businessName: `${companyName}`,
+                  title: '',
+                  logoUrl: companyLogo,
+                  themeColor: '#1A73E8',
+                },
+              };
+              await this.makeExternalRequest(
+                `${sanitizeUrl(
+                  kycTenantUrl,
+                  true,
+                )}api/v1/e-kyb/verification/widget-config`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'x-kyc-access-token': kycAccessToken.access_token,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(requestBody),
+                },
+                'Failed to set up widget configuration',
+              );
+              Logger.debug(
+                'SETUP_KYC_WIDGET step ends',
+                'CustomerOnboardingService',
+              );
+              break;
+            }
+            case OnboardingStep.CONFIGURE_KYB_VERIFIER_PAGE: {
+              if (
+                !customerOnboardingData.interestedService?.includes(
+                  InterestedService.KYB,
+                )
+              ) {
+                break;
+              }
+              Logger.log('CONFIGURE_KYB_VERIFIER_PAGE started');
+              const serviceId =
+                kycService?.appId || customerOnboardingData.kycServiceId;
+              await this.webPageConfig.storeWebPageConfigDetial(serviceId, {
+                pageTitle: 'KYB Verification',
+                pageDescription: 'Complete your KYB verification to proceed',
+                expiryType: ExpiryType.ONE_MONTH,
+                pageType: PageType.KYB,
+                contactEmail: customerEmail,
+                themeColor: 'vibrant',
+              });
+              Logger.debug('CONFIGURE_KYB_VERIFIER_PAGE done');
+              break;
+            }
             case OnboardingStep.COMPLETED: {
               Logger.log('COMPLETED', 'CustomerOnboardingService');
               onboardingUpdateData.onboardingStatus = CreditStatus.APPROVED;

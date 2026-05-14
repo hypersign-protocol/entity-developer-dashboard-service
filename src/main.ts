@@ -151,7 +151,7 @@ async function bootstrap() {
     }),
   );
 
-  const server = await app.listen(process.env.PORT || 3001);
+  await app.listen(process.env.PORT || 3001);
   Logger.log(
     `Server running on http://localhost:${process.env.PORT}`,
     'Bootstrap',

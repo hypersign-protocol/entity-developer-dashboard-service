@@ -1,6 +1,6 @@
 {
   "name": "entity-developer-dashboard-service",
-  "version": "3.11.12",
+  "version": "3.11.13",
   "description": "Backend service for Entity Developer Dashboard",
   "author": "",
   "private": true,
@@ -49,8 +49,8 @@
     "express-session": "1.17.3",
     "fs": "0.0.1-security",
     "hid-hd-wallet": "git+https://github.com/hypersign-protocol/hid-hd-wallet.git#main",
-    "hs-ssi-sdk": "github:hypersign-protocol/hid-ssi-js-sdk#testcase/bjj",
-    "hypersign-edv-client": "github:hypersign-protocol/hypersign-edv-client#deleteByDocumentId",
+    "hs-ssi-sdk": "github:hypersign-protocol/hid-ssi-js-sdk",
+    "hypersign-edv-client": "github:hypersign-protocol/hypersign-edv-client",
     "idb-keyval": "6.2.1",
     "mongoose": "6.8.3",
     "otplib": "12.0.1",

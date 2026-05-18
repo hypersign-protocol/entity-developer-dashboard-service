@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [3.11.13] - 2026-05-14
+### Added 
+- Update package.json to bump version to 3.11.13.
+- Updated `hypersign-vault-client` and `hs-ssi-sdk` to latest master branch
+
 ## [3.11.12] - 2026-06-28
 ### Fixed
 

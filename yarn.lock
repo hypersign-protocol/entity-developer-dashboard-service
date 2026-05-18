@@ -1098,7 +1098,7 @@
   dependencies:
     "@jridgewell/trace-mapping" "0.3.9"
 
-"@digitalbazaar/ed25519-signature-2020@^3.0.0":
+"@digitalbazaar/ed25519-signature-2020@3.0.0", "@digitalbazaar/ed25519-signature-2020@^3.0.0":
   version "3.0.0"
   resolved "https://registry.yarnpkg.com/@digitalbazaar/ed25519-signature-2020/-/ed25519-signature-2020-3.0.0.tgz#d8b6aefe83c873528ac35c45bb5b056a4c0b07e3"
   integrity sha512-Va4mJlklWe7F0LwFwcZmJszeSYkWkxnsYXpmwgqPiJyxhnp0dgOPJxWRWoxsc1809mBgAxxeD+KGnjx6oFYf2Q==
@@ -1110,12 +1110,12 @@
     esm "^3.2.25"
     jsonld-signatures "^9.0.1"
 
-"@digitalbazaar/ed25519-verification-key-2018@^3.1.2":
-  version "3.2.0"
-  resolved "https://registry.yarnpkg.com/@digitalbazaar/ed25519-verification-key-2018/-/ed25519-verification-key-2018-3.2.0.tgz#813df8f9fd06236ebf8c191af88107fe0f210314"
-  integrity sha512-j/jTA6SFXpiMofoCnhC4iD6NPBeT9b4/JiC8uM+1sVMb2dqGQjTxv7Ld5oZqLsLf6idvd5V42X3zrezRJ9J8AA==
+"@digitalbazaar/ed25519-verification-key-2018@3.1.2":
+  version "3.1.2"
+  resolved "https://registry.yarnpkg.com/@digitalbazaar/ed25519-verification-key-2018/-/ed25519-verification-key-2018-3.1.2.tgz#1673ab1d50311d82809785f3f4aa6eccf2e41328"
+  integrity sha512-UD7rETyyaHtKYeKfQu/FoeZ00EmANInX0ftmMKQJsI1q8YcRHUAiMF0sIbVM/T73+VBR2dObtfLnZTNM+PkXug==
   dependencies:
-    "@noble/ed25519" "^1.6.0"
+    "@stablelib/ed25519" "^1.0.1"
     base58-universal "^1.0.0"
     crypto-ld "^5.0.0"
     esm "^3.2.25"
@@ -2761,7 +2761,7 @@
   resolved "https://registry.yarnpkg.com/@stablelib/constant-time/-/constant-time-1.0.1.tgz#bde361465e1cf7b9753061b77e376b0ca4c77e35"
   integrity sha512-tNOs3uD0vSJcK6z1fvef4Y+buN7DXhzHDPqRLSXUel1UfqMB1PWNsnnAezrKfEwTLpN0cGH2p9NNjs6IqeD0eg==
 
-"@stablelib/ed25519@1.0.3":
+"@stablelib/ed25519@1.0.3", "@stablelib/ed25519@^1.0.1":
   version "1.0.3"
   resolved "https://registry.yarnpkg.com/@stablelib/ed25519/-/ed25519-1.0.3.tgz#f8fdeb6f77114897c887bb6a3138d659d3f35996"
   integrity sha512-puIMWaX9QlRsbhxfDc5i+mNPMY+0TmQEskunY1rZEBPi1acBCVQAhnsk/1Hk50DGPtVsZtAWQg4NHGlVaO9Hqg==
@@ -4809,15 +4809,15 @@ cross-spawn@^7.0.0, cross-spawn@^7.0.2, cross-spawn@^7.0.3:
     shebang-command "^2.0.0"
     which "^2.0.1"
 
+crypto-ld@6.0.0, crypto-ld@^6.0.0:
+  version "6.0.0"
+  resolved "https://registry.yarnpkg.com/crypto-ld/-/crypto-ld-6.0.0.tgz#cf8dcf566cb3020bdb27f0279e6cc9b46d031cd7"
+  integrity sha512-XWL1LslqggNoaCI/m3I7HcvaSt9b2tYzdrXO+jHLUj9G1BvRfvV7ZTFDVY5nifYuIGAPdAGu7unPxLRustw3VA==
+
 crypto-ld@^5.0.0, crypto-ld@^5.1.0:
   version "5.1.0"
   resolved "https://registry.yarnpkg.com/crypto-ld/-/crypto-ld-5.1.0.tgz#fbc1344c553f10aa1bcfc9d94c8c161a56c07150"
   integrity sha512-Dy1QoQzj+2K6UlGZ9l34cPp+g/YHOd+r3/DXXQTnnz5btGb0vqDlkZBn+icYmwntEmW0bvGVwFWvcwZSbk1EEQ==
-
-crypto-ld@^6.0.0:
-  version "6.0.0"
-  resolved "https://registry.yarnpkg.com/crypto-ld/-/crypto-ld-6.0.0.tgz#cf8dcf566cb3020bdb27f0279e6cc9b46d031cd7"
-  integrity sha512-XWL1LslqggNoaCI/m3I7HcvaSt9b2tYzdrXO+jHLUj9G1BvRfvV7ZTFDVY5nifYuIGAPdAGu7unPxLRustw3VA==
 
 crypto@^1.0.1:
   version "1.0.1"
@@ -6511,22 +6511,22 @@ hmac-drbg@^1.0.1:
     minimalistic-assert "^1.0.0"
     minimalistic-crypto-utils "^1.0.1"
 
-hs-ssi-sdk@^7.0.1, "hs-ssi-sdk@github:hypersign-protocol/hid-ssi-js-sdk#testcase/bjj":
+hs-ssi-sdk@^7.0.1, "hs-ssi-sdk@github:hypersign-protocol/hid-ssi-js-sdk":
   version "7.0.1"
-  resolved "https://codeload.github.com/hypersign-protocol/hid-ssi-js-sdk/tar.gz/9180794d7f62c76a66a5b4e287e5e67ac4521a8f"
+  resolved "https://codeload.github.com/hypersign-protocol/hid-ssi-js-sdk/tar.gz/d2d5fb118d9b254cab171d490e2a8c2b3b559b06"
   dependencies:
     "@cfworker/json-schema" "github:hypersign-protocol/json-schema"
     "@cosmjs/proto-signing" "^0.31.0"
     "@cosmjs/stargate" "^0.31.0"
-    "@digitalbazaar/ed25519-signature-2020" "^3.0.0"
-    "@digitalbazaar/ed25519-verification-key-2018" "^3.1.2"
-    "@digitalbazaar/ed25519-verification-key-2020" "^3.3.0"
+    "@digitalbazaar/ed25519-signature-2020" "3.0.0"
+    "@digitalbazaar/ed25519-verification-key-2018" "3.1.2"
+    "@digitalbazaar/ed25519-verification-key-2020" "3.3.0"
     "@iden3/js-jsonld-merklization" "^1.0.2"
     "@iden3/js-merkletree" "^1.1.2"
     axios "^1.6.2"
     babyjubjub2021 "^0.1.1"
     babyjubjubsignature2021 "github:hypersign-protocol/BabyJubJubSignature2021Suite"
-    crypto-ld "^6.0.0"
+    crypto-ld "6.0.0"
     ethereumeip712signature2021suite "github:hypersign-protocol/EthereumEip712Signature2021Suite.git"
     jcs "github:hypersign-protocol/JCS"
     jsonld-signatures "^9.3.1"
@@ -6534,6 +6534,7 @@ hs-ssi-sdk@^7.0.1, "hs-ssi-sdk@github:hypersign-protocol/hid-ssi-js-sdk#testcase
     multiformats "^9.9.0"
     node-fetch "^2.7.0"
     protobufjs "^6.11.2"
+    readline-sync "1.4.10"
     uuid "^8.3.0"
     vc-js "https://github.com/hypersign-protocol/vc-js"
     web3 "^1.6.0"
@@ -6639,9 +6640,9 @@ husky@^8.0.0:
   resolved "https://registry.yarnpkg.com/husky/-/husky-8.0.3.tgz#4936d7212e46d1dea28fef29bb3a108872cd9184"
   integrity sha512-+dQSyqPh4x1hlO1swXBiNb2HzTDN1I2IGLQx1GrBuiqFJfoMrnZWwVmatvSiO+Iz8fBUnf+lekwNo4c2LlXItg==
 
-"hypersign-edv-client@github:hypersign-protocol/hypersign-edv-client#deleteByDocumentId":
+"hypersign-edv-client@github:hypersign-protocol/hypersign-edv-client":
   version "1.0.0"
-  resolved "https://codeload.github.com/hypersign-protocol/hypersign-edv-client/tar.gz/6f3761426ffe7f7dc20a10dfe91e1ccbc34bd30a"
+  resolved "https://codeload.github.com/hypersign-protocol/hypersign-edv-client/tar.gz/7ea4f173f296250bab91f30d62bb5f8bd2b18761"
   dependencies:
     "@cosmjs/crypto" "^0.29.5"
     "@cosmjs/proto-signing" "^0.29.5"

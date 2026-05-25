@@ -129,7 +129,7 @@ export class AppAuthService {
         edvId: edvId,
       };
       Logger.log(
-        'createAnApp() method: Prepareing app keys to insert in kms vault',
+        'createAnApp() method: Preparing app keys to insert in kms vault',
       );
 
       if (!globalThis.kmsVault) {

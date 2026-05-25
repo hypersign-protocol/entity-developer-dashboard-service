@@ -237,7 +237,7 @@ export class CustomerOnboardingService {
         throw new Error(`${errorMessage}: ${serverError}`);
       }
       return detail;
-    } catch (error) {
+    } catch (error: any) {
       Logger.error(error, error?.stack, 'CustomerOnboardingService');
       throw error; // don't rewrap
     }
@@ -1063,8 +1063,12 @@ export class CustomerOnboardingService {
             }
           }
           this.logStepSuccess(onboardingLogs, step as OnboardingStep);
-        } catch (error) {
-          Logger.error(error.message);
+        } catch (error: any) {
+          Logger.error(
+            error,
+            error?.stack,
+            'CustomerOnboardingService',
+          );
           this.logStepFailure(onboardingLogs, step as OnboardingStep, error);
           onboardingStatus = CreditStatus.FAILED;
           break;
@@ -1104,7 +1108,8 @@ export class CustomerOnboardingService {
         });
       }
       return { message: 'Customer onboarding completed successfully' };
-    } catch (e) {
+    } catch (e: any) {
+      Logger.error(e)
       if (e instanceof HttpException) throw e;
       throw new InternalServerErrorException([e.message]);
     }

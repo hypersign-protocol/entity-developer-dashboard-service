@@ -88,12 +88,17 @@ export class EdvClientManger implements IEdvClientManager {
     indexes: Array<{ index: string; unique: boolean }>,
     recipients?: Array<IEncryptionRecipents>,
   ): EDVDocType {
+    Logger.log(
+      'Inside prepareEdvDocument to insert document in edv',
+      'EdvClientManager',
+    );
     const document: any = {
       document: { content },
       edvId: this.edvId,
       indexs: indexes,
       recipients: recipients ? recipients : this.recipient,
     };
+    Logger.debug(document, 'EdvClientManager');
     return document;
   }
 

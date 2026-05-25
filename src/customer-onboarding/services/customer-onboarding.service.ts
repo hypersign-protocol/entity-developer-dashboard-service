@@ -1064,11 +1064,7 @@ export class CustomerOnboardingService {
           }
           this.logStepSuccess(onboardingLogs, step as OnboardingStep);
         } catch (error: any) {
-          Logger.error(
-            error,
-            error?.stack,
-            'CustomerOnboardingService',
-          );
+          Logger.error(error, error?.stack, 'CustomerOnboardingService');
           this.logStepFailure(onboardingLogs, step as OnboardingStep, error);
           onboardingStatus = CreditStatus.FAILED;
           break;
@@ -1109,7 +1105,7 @@ export class CustomerOnboardingService {
       }
       return { message: 'Customer onboarding completed successfully' };
     } catch (e: any) {
-      Logger.error(e)
+      Logger.error(e);
       if (e instanceof HttpException) throw e;
       throw new InternalServerErrorException([e.message]);
     }

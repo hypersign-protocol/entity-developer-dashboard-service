@@ -909,6 +909,10 @@ export class AppAuthService {
     user,
     session?,
   ): Promise<{ access_token; expiresIn; tokenType }> {
+    Logger.log(
+      'Inside grantPermission() to provide permission',
+      'AppAuthService',
+    );
     const context = Context.idDashboard;
     let rawRedisKey = `${appId}_${context}_${session.userId}`;
     if (session && session.tenantId) {

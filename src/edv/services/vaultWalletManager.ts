@@ -1,6 +1,7 @@
 import { Bip39, EnglishMnemonic } from '@cosmjs/crypto';
 import { X25519KeyAgreementKey2020 } from '@digitalbazaar/x25519-key-agreement-key-2020';
 import { Ed25519VerificationKey2020 } from '@digitalbazaar/ed25519-verification-key-2020';
+import { Logger } from '@nestjs/common';
 
 type authenticationKeyType = {
   id: string;
@@ -26,8 +27,8 @@ export class VaultWallet {
   }
 
   async Initialize() {
+    Logger.log('Inside Initialize() to init Vault wallet', 'VaultWallet');
     const seedEntropy = Bip39.decode(this.mnemonic);
-
     this.keys = await globalThis.hsSSIdkInstance.did.generateKeys({
       seed: seedEntropy,
     });
@@ -98,6 +99,7 @@ export class VaultWalletManager {
   static async getWallet(
     mnemonic: EnglishMnemonic | string,
   ): Promise<VaultWallet> {
+    Logger.log('Inside getWallet()', 'VaultWalletManager');
     return new VaultWallet(mnemonic).Initialize();
   }
 }

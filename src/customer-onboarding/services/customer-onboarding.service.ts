@@ -87,6 +87,10 @@ export class CustomerOnboardingService {
     loggedInUserEmail,
   ) {
     try {
+      Logger.log(
+        'Inside createCustomerOnboardingDetail() to store new onbparding request detail',
+        'CustomerOnboardingService',
+      );
       if (user.role === UserRole.ADMIN) {
         const existingOnboarding =
           await this.customerOnboardingRepository.findCustomerOnboardingById({
@@ -98,6 +102,7 @@ export class CustomerOnboardingService {
       }
       const { interestedService, companyName, twitterUrl, telegramUrl, type } =
         createCustomerOnboardingDto;
+      Logger.log('Before storing data in db', 'CustomerOnboardingService');
       const onboardingData =
         await this.customerOnboardingRepository.createCustomerOnboarding({
           ...createCustomerOnboardingDto,
@@ -125,6 +130,10 @@ export class CustomerOnboardingService {
       });
       const superAdminEmails = superAdminDetails.map((admin) => admin.email);
       const subject = 'New Customer Onboarding Request Received';
+      Logger.log(
+        'Before sending mail to super admin',
+        'CustomerOnboardingService',
+      );
       await this.sendOnboardingRequestMailToSuperAdmin(
         message,
         superAdminEmails,
@@ -132,7 +141,7 @@ export class CustomerOnboardingService {
       );
 
       return onboardingData;
-    } catch (e) {
+    } catch (e: any) {
       if (e.code === 11000) {
         const field = Object.keys(e.keyValue || {})[0];
         const value = e.keyValue ? e.keyValue[field] : '';
@@ -172,7 +181,11 @@ export class CustomerOnboardingService {
         ]);
       }
       return customerOnboardingData;
-    } catch (e) {
+    } catch (e: any) {
+      Logger.error(
+        'Error occured while fetching onboarding detail',
+        'CustomerOnboardingService',
+      );
       if (e instanceof HttpException) throw e;
       else throw new BadRequestException([`${e.message}`]);
     }
@@ -190,6 +203,10 @@ export class CustomerOnboardingService {
     superAdminEmailList: string[],
     subject: string,
   ) {
+    Logger.log(
+      'Inside sendOnboardingRequestMailToSuperAdmin() to notify admin for new onboarding',
+      'CustomerOnboardingService',
+    );
     const to = superAdminEmailList[0];
     const cc = superAdminEmailList.slice(1);
     await this.mailNotificationService.addAJob(
@@ -253,9 +270,9 @@ export class CustomerOnboardingService {
     payload: any,
     secret: string,
   ): Promise<string> {
+    Logger.log('Inside generateCreditToken()', 'CustomerOnboardingService');
     const config = EXPIRY_CONFIG.CREDIT_TOKEN;
     const expiresIn = `${config.jwtTime}${config.jwtUnit}`; // e.g. "5m"
-    Logger.log('inside generateCreditToken method', 'generateCreditToken');
     return this.jwt.signAsync(payload, { expiresIn, secret });
   }
 
@@ -336,6 +353,10 @@ export class CustomerOnboardingService {
     id: string,
     customerOnboardingProcessDto: CustomerOnboardingProcessDto,
   ) {
+    Logger.log(
+      'Inside processCustomerOnboarding() to approve customer onboarding request',
+      'CustomerOnboardingService',
+    );
     const onboardingLogs: LogDetail[] = [];
     const onboardingUpdateData: Partial<CustomerOnboarding> = {};
     let ssiService: any,
@@ -1105,7 +1126,7 @@ export class CustomerOnboardingService {
       }
       return { message: 'Customer onboarding completed successfully' };
     } catch (e: any) {
-      Logger.error(e);
+      Logger.error(e, 'CustomerOnboardingService');
       if (e instanceof HttpException) throw e;
       throw new InternalServerErrorException([e.message]);
     }
@@ -1118,6 +1139,10 @@ export class CustomerOnboardingService {
     cc,
     mailType,
   }) {
+    Logger.log(
+      'Inside sendCustomerCreditRequestNotification()',
+      'CustomerOnboardingService',
+    );
     await this.mailNotificationService.addAJob(
       { to, subject, message, cc },
       mailType,
@@ -1131,6 +1156,8 @@ export class CustomerOnboardingService {
    * @returns Combined and sorted array of unique log details
    */
   private mergeLogs(existing: LogDetail[], newOnes: LogDetail[]): LogDetail[] {
+    Logger.log('Inside mergeLogs()', 'CustomerOnboardingService');
+
     const map = new Map<string, LogDetail>();
     for (const log of existing) map.set(log.step, log);
     for (const log of newOnes) map.set(log.step, log);
@@ -1145,6 +1172,8 @@ export class CustomerOnboardingService {
    * @param step - The onboarding step that was completed successfully
    */
   private logStepSuccess(logs: LogDetail[], step: OnboardingStep) {
+    Logger.log('Inside logStepSuccess()', 'CustomerOnboardingService');
+
     logs.push({ step, status: StepStatus.SUCCESS, time: new Date() });
   }
 
@@ -1155,6 +1184,8 @@ export class CustomerOnboardingService {
    * @param error - The error object containing failure details
    */
   private logStepFailure(logs: LogDetail[], step: OnboardingStep, error: any) {
+    Logger.log('Inside logStepFailure()', 'CustomerOnboardingService');
+
     logs.push({
       step,
       status: StepStatus.FAILED,
@@ -1199,7 +1230,12 @@ export class CustomerOnboardingService {
         ]);
       }
       return userOnboardingDetail;
-    } catch (e) {
+    } catch (e: any) {
+      Logger.error(
+        'Issue while fetching userOnboardingDetail',
+        e,
+        'CustomerOnboardingService',
+      );
       if (e instanceof HttpException) throw e;
       throw new BadRequestException([e.message]);
     }

@@ -2,12 +2,13 @@
 
 ## [Unreleased]
 ## [3.11.14] - 2026-05-25
-### Added 
-- Added logger for debugging
+### Added
+- Added logger statements for debugging
+- Added support for storing username during email OTP login by extracting it from the email before `@`
 
 ### Fixed
-- Fixed delete authenticator api
-- Deleting linked service as well while deleting IdService
+- Fixed delete authenticator API
+- Fixed deletion of linked SSI service while deleting IdService
 ## [3.11.13] - 2026-05-14
 ### Added 
 - Update package.json to bump version to 3.11.13.

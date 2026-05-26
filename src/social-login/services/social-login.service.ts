@@ -87,7 +87,8 @@ export class SocialLoginService {
       'Inside handleGoogleLogin() to create or fetch user detail based on login',
       'SocialLoginService',
     );
-    const { email, name, profileIcon } = req.user;
+    const { email, profileIcon } = req.user;
+    const name = req?.user?.name || email.split('@')[0];
     let user = await this.userRepository.findOne({
       email,
     });

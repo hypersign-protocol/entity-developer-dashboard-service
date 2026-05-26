@@ -925,9 +925,15 @@ export class AppAuthService {
     session?,
   ): Promise<{ access_token; expiresIn; tokenType }> {
     const context = Context.idDashboard;
+    const isTenantSession = !!session?.tenantId;
+    const effectiveAccessList =
+      isTenantSession && session?.tenantUserPermissions?.length
+        ? session.tenantUserPermissions
+        : user.accessList;
     let rawRedisKey = `${appId}_${context}_${session.userId}`;
-    if (session && session.tenantId) {
-      rawRedisKey = `${rawRedisKey}_tenant`;
+    if (isTenantSession) {
+      const permissionHash = generateHash(JSON.stringify(effectiveAccessList));
+      rawRedisKey = `${rawRedisKey}_tenant_${permissionHash}`;
     }
     const sessionId = generateHash(rawRedisKey);
     const savedSession = await redisClient.get(sessionId);
@@ -998,7 +1004,7 @@ export class AppAuthService {
         accessList = evaluateAccessPolicy(
           defaultAccessList,
           SERVICE_TYPES.SSI_API,
-          user.accessList,
+          effectiveAccessList,
           context,
         );
         break;
@@ -1019,7 +1025,7 @@ export class AppAuthService {
         accessList = evaluateAccessPolicy(
           defaultAccessList,
           SERVICE_TYPES.CAVACH_API,
-          user.accessList,
+          effectiveAccessList,
           context,
         );
         break;
@@ -1037,7 +1043,7 @@ export class AppAuthService {
         accessList = evaluateAccessPolicy(
           defaultAccessList,
           SERVICE_TYPES.QUEST,
-          user.accessList,
+          effectiveAccessList,
           context,
         );
         break;

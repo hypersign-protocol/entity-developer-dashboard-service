@@ -616,7 +616,7 @@ export class AppAuthService {
   async deleteApp(appId: string, user): Promise<DeleteAppResponse> {
     Logger.log('deleteApp() method: starts....', 'AppAuthService');
     const { userId } = user;
-    const role = user?.role || UserRole.ADMIN
+    const role = user?.role || UserRole.ADMIN;
     let linkedSSIServiceId;
     let appDetail = await this.appRepository.findOne({ appId, userId });
     if (!appDetail) {

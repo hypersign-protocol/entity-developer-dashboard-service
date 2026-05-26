@@ -247,7 +247,11 @@ export class SocialLoginController {
   @ApiBearerAuth('Authorization')
   @Delete('auth/mfa')
   async removeMFA(@Req() req, @Body() mfaremoveDto: DeleteMFADto) {
-    return this.socialLoginService.removeMFA(req.user, mfaremoveDto);
+    return this.socialLoginService.removeMFA(
+      req.user,
+      mfaremoveDto,
+      req.session.sessionId,
+    );
   }
   @ApiOkResponse({
     description: 'User is Logged out successfully',

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   UnauthorizedException,
@@ -244,8 +245,10 @@ export class SocialLoginService {
       ...tokens,
     };
   }
-
-  async removeMFA(user, deleteMfaDto: DeleteMFADto) {
+  async removeMFA(user, deleteMfaDto: DeleteMFADto, sessionId: string) {
+    if (!sessionId || sessionId == null) {
+      throw new InternalServerErrorException([ERROR_MESSAGE.SESSION_NOT_FOUND]);
+    }
     const {
       twoFactorAuthenticationCode,
       authenticatorToDelete,
@@ -272,10 +275,20 @@ export class SocialLoginService {
       ]);
     }
     user.authenticators.splice(authenticatorIndex, 1);
-    this.userRepository.findOneUpdate(
+    await this.userRepository.findOneUpdate(
       { userId: user.userId },
       { authenticators: user.authenticators },
     );
+    const sessionKey = `session:${sessionId}`;
+    const ttl = await redisClient.ttl(sessionKey);
+    const sessionData = await redisClient.get(sessionKey);
+    let parsedSession;
+    if (sessionData) {
+      parsedSession = JSON.parse(sessionData);
+      parsedSession.isTwoFactorVerified = false;
+      parsedSession.isTwoFactorAuthenticated = false;
+    }
+    await redisClient.set(sessionKey, JSON.stringify(parsedSession), 'EX', ttl);
     return { message: 'Removed authenticator successfully' };
   }
   async verifyAndGenerateRefreshToken(

@@ -1,7 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+## [3.11.14] - 2026-05-25
+### Added 
+- Added logger for debugging
 
+### Fixed
+- Fixed delete authenticator api
+- Deleting linked service as well while deleting IdService
 ## [3.11.13] - 2026-05-14
 ### Added 
 - Update package.json to bump version to 3.11.13.

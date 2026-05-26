@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+## [3.11.14] - 2026-05-26
+### Added
+- Added new service type `PROOF_OF_PERSONHOOD` in onboarding
+- Issueing BJJ issuer did if interested service is  `AGE_VERIFCATION` or `PROOF_OF_PERSONHOOD`
 
 ## [3.11.13] - 2026-05-14
 ### Added 

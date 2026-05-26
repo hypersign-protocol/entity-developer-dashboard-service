@@ -613,9 +613,11 @@ export class AppAuthService {
     return updatedapp;
   }
 
-  async deleteApp(appId: string, userId: string): Promise<DeleteAppResponse> {
+  async deleteApp(appId: string, user): Promise<DeleteAppResponse> {
     Logger.log('deleteApp() method: starts....', 'AppAuthService');
-
+    const { userId } = user;
+    const role = user?.role || UserRole.ADMIN
+    let linkedSSIServiceId;
     let appDetail = await this.appRepository.findOne({ appId, userId });
     if (!appDetail) {
       Logger.error('deleteApp() method: Error: no app found', 'AppAuthService');
@@ -685,6 +687,7 @@ export class AppAuthService {
       await this.onboardModel.deleteOne({ kycServiceId: appId });
       // delete webpage config data of that service
       await this.webpageConfigRepo.findOneAndDelete({ appId });
+      linkedSSIServiceId = appDetail.dependentServices[0];
     }
     this.authzCreditRepository.deleteAuthzDetail({ appId });
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });
@@ -693,6 +696,18 @@ export class AppAuthService {
       redisClient.del(generateHash(appId)),
       redisClient.del(generateHash(`${appId}_${Context.idDashboard}`)),
     ]);
+    // delete linked ssi service for admin role
+    if (
+      appDetail.services[0].id === SERVICE_TYPES.CAVACH_API &&
+      role === UserRole.ADMIN &&
+      linkedSSIServiceId
+    ) {
+      Logger.log(
+        `Deleting linked SSI service for Cavach app: ${linkedSSIServiceId}`,
+        'AppAuthService',
+      );
+      await this.deleteLinkedService(linkedSSIServiceId, user);
+    }
     Logger.debug(`Redis cache cleaned for appId: ${appId}`);
     return { appId: appDetail.appId };
   }
@@ -1170,5 +1185,13 @@ export class AppAuthService {
     if (updates.length) {
       await Promise.all(updates);
     }
+  }
+  private async deleteLinkedService(appId: string, user) {
+    Logger.log(
+      `Inside deleteLinkedService() for appId: ${appId}`,
+      'AppAuthService',
+    );
+
+    await this.deleteApp(appId, user);
   }
 }

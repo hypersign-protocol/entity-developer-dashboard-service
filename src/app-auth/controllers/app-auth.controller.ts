@@ -227,9 +227,7 @@ export class AppAuthController {
     @Param('appId') appId: string,
   ): Promise<DeleteAppResponse> {
     Logger.log('deleteApp() method: starts', 'AppAuthController');
-
-    const userId = req.user.userId;
-    return this.appAuthService.deleteApp(appId, userId);
+    return this.appAuthService.deleteApp(appId, req.user);
   }
 
   @ApiBearerAuth('Authorization')

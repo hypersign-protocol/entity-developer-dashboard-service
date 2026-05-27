@@ -35,6 +35,10 @@ export class SocialLoginService {
     private readonly supportedServiceList: SupportedServiceList,
   ) {}
   async generateAuthUrlByProvider(provider: string) {
+    Logger.log(
+      'Inside generateAuthUrlByProvider() to generate provider url',
+      'SocialLoginService',
+    );
     let authUrl;
     switch (provider) {
       case Providers.google: {
@@ -58,6 +62,9 @@ export class SocialLoginService {
     return { authUrl };
   }
   private isSuperAdmin(email: string): boolean {
+    Logger.log(
+      'Inside isSuperAdmin() to check if loggedin user is super admin',
+    );
     const envValue = process.env.SUPER_ADMIN_EMAILS_IDS;
     if (!envValue) {
       return false;
@@ -201,6 +208,7 @@ export class SocialLoginService {
       throw new BadRequestException([MFA_ERROR.INVALID_MFA_METHOD]);
     }
     sessionDetail.twoFactorRetryCount = sessionDetail.twoFactorRetryCount ?? 0;
+    Logger.log('Before verifying two factor', 'verifyMFACode');
     const isVerified = authenticator.verify({
       token: twoFactorAuthenticationCode,
       secret: authenticatorDetail.secret,
@@ -235,6 +243,10 @@ export class SocialLoginService {
       'EX',
       TIME.WEEK,
     );
+    Logger.log(
+      'Inside verifyMFACode() before generateTokensForSession',
+      'SocialLoginService',
+    );
     const tokens = await this.generateTokensForSession(
       sessionId,
       sessionDetail.userId,
@@ -246,6 +258,7 @@ export class SocialLoginService {
       ...tokens,
     };
   }
+
   async removeMFA(user, deleteMfaDto: DeleteMFADto, sessionId: string) {
     if (!sessionId || sessionId == null) {
       throw new InternalServerErrorException([ERROR_MESSAGE.SESSION_NOT_FOUND]);
@@ -292,6 +305,10 @@ export class SocialLoginService {
     token: string,
   ): Promise<{ error?: string; accessToken?: string; refreshToken?: string }> {
     try {
+      Logger.log(
+        'Inside verifyAndGenerateRefreshToken() to generate refresh token',
+        'SocialLoginService',
+      );
       const sessionId = await redisClient.get(`refresh:${token}`);
       if (!sessionId) {
         return { error: REFRESH_TOKEN_ERROR.REFRESH_TOKEN_NOT_FOUND };
@@ -338,6 +355,10 @@ export class SocialLoginService {
     }
   }
   async generateRefreshToken(payload: any): Promise<string> {
+    Logger.log(
+      'Inside generateRefreshToken() method to generate refresh token',
+      'generateRefreshToken',
+    );
     const tokenSecret = this.config.get('JWT_REFRESH_SECRET');
     if (!tokenSecret) {
       throw new BadRequestException([
@@ -351,6 +372,10 @@ export class SocialLoginService {
   }
 
   async generateAuthToken(payload: any, expiry = '4h'): Promise<string> {
+    Logger.log(
+      'Inside generateAuthToken() method to generate auth token',
+      'generateRefreshToken',
+    );
     const secret = this.config.get('JWT_SECRET');
     if (!secret) {
       throw new BadRequestException([
@@ -369,6 +394,10 @@ export class SocialLoginService {
     isMfaRequired: boolean;
     refreshVersion: number;
   }> {
+    Logger.log(
+      'Inside createSession() method to create new session',
+      'SocialLoginService',
+    );
     const sessionId = generateHash(`${Date.now()}-${uuidv4()}`);
     const role = user?.role || UserRole.ADMIN;
     const activeAuthenticators =
@@ -399,6 +428,10 @@ export class SocialLoginService {
   }
 
   async generateTokensForSession(sessionId, userId, role, refreshVersion) {
+    Logger.log(
+      'Inside generateTokensForSession() method to generate token for session',
+      'SocialLoginService',
+    );
     const rawUrl = this.config.get('INVITATIONURL');
     const domain = new URL(rawUrl).origin;
     const accessToken = await this.generateAuthToken({
@@ -490,6 +523,8 @@ export class SocialLoginService {
   }
   async logout(refreshToken, session) {
     try {
+      Logger.log('Inside logout()', 'SocialLoginService');
+
       const sessionId = session.sessionId;
       if (sessionId) await redisClient.del(`session:${sessionId}`);
       if (refreshToken) await redisClient.del(`refresh:${refreshToken}`);

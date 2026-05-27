@@ -129,7 +129,7 @@ export class AppAuthService {
         edvId: edvId,
       };
       Logger.log(
-        'createAnApp() method: Prepareing app keys to insert in kms vault',
+        'createAnApp() method: Preparing app keys to insert in kms vault',
       );
 
       if (!globalThis.kmsVault) {
@@ -924,6 +924,10 @@ export class AppAuthService {
     user,
     session?,
   ): Promise<{ access_token; expiresIn; tokenType }> {
+    Logger.log(
+      'Inside grantPermission() to provide permission',
+      'AppAuthService',
+    );
     const context = Context.idDashboard;
     const isTenantSession = !!session?.tenantId;
     const effectiveAccessList =

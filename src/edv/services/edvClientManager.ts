@@ -51,6 +51,7 @@ export class EdvClientManger implements IEdvClientManager {
   }
 
   async initate(): Promise<IEdvClientManager> {
+    Logger.log('Inside initate() to initiate edv client', 'EdvClientManager');
     const ed25519 = this.vaultWallet.ed25519Signer;
     const x25519 = this.vaultWallet.ed25519Signer;
     const keyAgreementKey = this.vaultWallet.keyAgreementKey;
@@ -88,16 +89,25 @@ export class EdvClientManger implements IEdvClientManager {
     indexes: Array<{ index: string; unique: boolean }>,
     recipients?: Array<IEncryptionRecipents>,
   ): EDVDocType {
+    Logger.log(
+      'Inside prepareEdvDocument to prepare document before inserting in edv',
+      'EdvClientManager',
+    );
     const document: any = {
       document: { content },
       edvId: this.edvId,
       indexs: indexes,
       recipients: recipients ? recipients : this.recipient,
     };
+    Logger.debug(document, 'EdvClientManager');
     return document;
   }
 
   async insertDocument(doc: EDVDocType): Promise<{ id: string }> {
+    Logger.log(
+      'Inside insertDocument to insert document in edv',
+      'EdvClientManager',
+    );
     if (!doc['recipients']) {
       doc['recipients'] = [];
     }
@@ -148,7 +158,6 @@ export class EdvClientManger implements IEdvClientManager {
 
   async getDecryptedDocument(id: string): Promise<any> {
     Logger.log('getDecryptedDocument() method: starts....', 'EdvService');
-
     Logger.log(
       'getDecryptedDocument() method: fetching doc from edvCLient',
       'EdvService',
@@ -169,7 +178,6 @@ export class EdvClientManger implements IEdvClientManager {
       jwe: doc.document.jwe,
     });
     Logger.log('getDecryptedDocument() method: ends....', 'EdvService');
-
     return content;
   }
 }

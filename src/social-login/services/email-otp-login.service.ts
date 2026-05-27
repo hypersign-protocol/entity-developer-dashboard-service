@@ -91,6 +91,11 @@ export class EmailOtpLoginService {
    *
    */
   private sendEmail(email: string, subject: string, message: any): void {
+    Logger.log(
+      'Inside sendEmail() method to send mail',
+      'EmailOtpLoginService',
+    );
+
     this.mailNotificationService.addAJob(
       {
         to: email,

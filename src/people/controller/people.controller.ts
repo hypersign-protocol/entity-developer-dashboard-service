@@ -18,6 +18,7 @@ import {
   InviteListResponseDTO,
   InviteResponseDTO,
   PeopleListResponseDTO,
+  TenantAccessUserResponseDTO,
   TenantLoginDTO,
 } from '../dto/create-person.dto';
 import { DeletePersonDto } from '../dto/update-person.dto';
@@ -98,6 +99,19 @@ export class PeopleController {
     const { user } = req;
     return this.peopleService.attachRole(body, user);
   }
+
+  @ApiResponse({
+    status: 200,
+    type: TenantAccessUserResponseDTO,
+    isArray: true,
+  })
+  @Get('/access/users')
+  @UsePipes(ValidationPipe)
+  async getUsersAccessingAccount(@Req() req) {
+    const { user, session } = req;
+    return this.peopleService.getUsersAccessingAccount(user, session);
+  }
+
   @Post('/access')
   @UsePipes(ValidationPipe)
   async switchTenantAccount(@Body() tenantDto: TenantLoginDTO, @Req() req) {

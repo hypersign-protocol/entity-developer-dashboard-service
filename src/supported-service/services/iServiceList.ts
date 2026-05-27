@@ -13,7 +13,7 @@ export enum APP_ENVIRONMENT {
 export const SSI_API_SERVICE_INFO = Object.freeze({
   type: SERVICE_TYPES.SSI_API,
   description: 'A SSI API service built on multi tenant architeacture',
-  name: 'SSI API Service',
+  name: 'SSI Service',
   swaggerAPIDocPath: '/',
   baseDomain: 'https://api.entity.hypersign.id',
 });
@@ -21,7 +21,7 @@ export const SSI_API_SERVICE_INFO = Object.freeze({
 export const CAVACH_API_SERVICE_INFO = Object.freeze({
   type: SERVICE_TYPES.CAVACH_API,
   description: 'A generic service interface for kyc verification',
-  name: 'KYC API Service',
+  name: 'ID Service',
   swaggerAPIDocPath: '/api',
   baseDomain: 'https://api.cavach.hypersign.id',
 });
@@ -36,7 +36,7 @@ export const DASHBOARD_INFO = Object.freeze({
 export const QUEST_SERVICE_INFO = Object.freeze({
   type: SERVICE_TYPES.QUEST,
   description: 'Verify on-chain and off-chain tasks of your users',
-  name: 'Quest API Service',
+  name: 'Quest Service',
   swaggerAPIDocPath: '/api',
   baseDomain: 'https://api.eiko.zone',
 });

@@ -115,21 +115,27 @@ export class PeopleService {
   }
 
   async acceptInvite(inviteCode: string, userDetails) {
-    const adminPeople = await this.adminPeopleService.findOne({
-      // userId: userDetails?.userId,
+    const inviteeIdentifiers = [userDetails?.userId, userDetails?.email].filter(
+      Boolean,
+    );
+    const inviteFilter = {
       inviteCode,
-    });
+      $or: [
+        { userId: { $in: inviteeIdentifiers } },
+        { inviteeEmail: userDetails?.email },
+      ],
+    };
+    const adminPeople = await this.adminPeopleService.findOne(inviteFilter);
     if (adminPeople == null) {
-      throw new BadRequestException(['The invitation code is invalid.']);
+      throw new BadRequestException([
+        TENANT_INVITE_ERRORS.INVALID_OR_UNAUTHORIZED_INVITE,
+      ]);
     }
     const expiry = new Date(adminPeople.invitationValidTill);
     const now = new Date();
 
     if (expiry < now) {
       throw new BadRequestException(['The invitation code has expired.']);
-    }
-    if (adminPeople == null) {
-      throw new BadRequestException(['The invitation code is invalid.']);
     }
 
     if (adminPeople?.accepted) {
@@ -138,10 +144,7 @@ export class PeopleService {
       ]);
     }
     const acceptedInvite = await this.adminPeopleService.findOneAndUpdate(
-      {
-        // userId: userDetails?.userId,
-        inviteCode,
-      },
+      inviteFilter,
       {
         userId: userDetails?.userId,
         accepted: true,

@@ -15,6 +15,7 @@ export class IpResolverService {
     private readonly geoLocationService: GeolocationService,
   ) {}
   async resolveIps(createIpResolverDto: CreateIpResolverDto) {
+    Logger.log('Inside resolveIps', 'IpResolverService');
     let ipArray: string[] = [];
     try {
       if (typeof createIpResolverDto.ips === 'string') {
@@ -46,7 +47,7 @@ export class IpResolverService {
         newlyResolved = validIps;
       }
       return [...cachedIpRecords, ...newlyResolved];
-    } catch (err) {
+    } catch (err: any) {
       Logger.error(
         `resolveIps failed: ${err.message}`,
         err.stack,
@@ -57,6 +58,7 @@ export class IpResolverService {
   }
 
   async resolveBulkIp(ips: string[]) {
+    Logger.log('Inside resolveBulkIp() method', 'IpResolverService');
     if (!ips || ips.length === 0) {
       throw new Error('No Ips exists');
     }
@@ -67,7 +69,8 @@ export class IpResolverService {
           return { ip, error: `Empty or invalid response` };
         }
         return response;
-      } catch (e) {
+      } catch (e: any) {
+        Logger.error('Issue while resolvingBulkIp', 'IpResolverService');
         return { ip, error: e.message || 'Fetch failed' };
       }
     });
@@ -75,6 +78,10 @@ export class IpResolverService {
     return resolvedResults;
   }
   async generateIpBasedLocationAnalytics(ipsList: IpGeolocationQueryDto) {
+    Logger.log(
+      'Inside generateIpBasedLocationAnalytics()',
+      'IpResolverService',
+    );
     let ips: string[] = [];
     if (typeof ipsList.ips === 'string') {
       ips = ipsList.ips.split(',').map((ip) => ip.trim());

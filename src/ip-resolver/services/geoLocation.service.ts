@@ -10,6 +10,7 @@ export class GeolocationService {
     this.initializeReader();
   }
   private initializeReader() {
+    Logger.log('inside initializeReader()', 'GeolocationService');
     const filePath = process.env.GEOLOCATION_DB_PATH;
     if (!filePath) {
       Logger.warn('Environment variable GEOLOCATION_DB_PATH not set');
@@ -24,14 +25,13 @@ export class GeolocationService {
       const dbBuffer = fs.readFileSync(filePath);
       this.reader = Reader.openBuffer(dbBuffer);
       Logger.log('Geolocation database initialized successfully');
-    } catch (error) {
-      Logger.error(
-        `Failed to initialize geolocation database: ${error.message}`,
-      );
+    } catch (error: any) {
+      Logger.error(`Failed to initialize geolocation database: ${error}`);
     }
   }
 
   resolveIp(ipAddress: string) {
+    Logger.log('inside resolveIp', 'GeolocationService');
     if (!this.reader) {
       Logger.warn(
         'Geolocation database reader is not initialized. Cannot resolve IP.',
@@ -52,9 +52,7 @@ export class GeolocationService {
         timeZone: rawData?.location?.timeZone || null,
       };
     } catch (error) {
-      Logger.error(
-        `Error resolving IP address (${ipAddress}): ${error.message}`,
-      );
+      Logger.error(`Error resolving IP address (${ipAddress}): ${error}`);
       return null;
     }
   }

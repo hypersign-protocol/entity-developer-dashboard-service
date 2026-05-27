@@ -45,7 +45,7 @@ export class Generate2FA {
 export class DeleteMFADto {
   @ApiProperty({
     name: 'authenticatorType',
-    description: 'Type of authenticator used for 2FA',
+    description: 'Type of authenticator to verify and remove',
     example: AuthneticatorType.google,
     enum: AuthneticatorType,
   })
@@ -60,12 +60,4 @@ export class DeleteMFADto {
   @IsString()
   @IsNotEmpty()
   twoFactorAuthenticationCode: string;
-  @ApiProperty({
-    name: 'authenticatorToDelete',
-    description: 'Type of authenticator that user want to remove',
-    example: AuthneticatorType.okta,
-    enum: AuthneticatorType,
-  })
-  @IsEnum(AuthneticatorType)
-  authenticatorToDelete: string;
 }

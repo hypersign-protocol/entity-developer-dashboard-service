@@ -11,6 +11,8 @@ import {
   Delete,
   UnauthorizedException,
   BadRequestException,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { SocialLoginService } from '../services/social-login.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -49,6 +51,7 @@ import {
 } from 'src/utils/time-constant';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
+@UsePipes(new ValidationPipe())
 @Controller('api/v1')
 export class SocialLoginController {
   constructor(
@@ -247,7 +250,11 @@ export class SocialLoginController {
   @ApiBearerAuth('Authorization')
   @Delete('auth/mfa')
   async removeMFA(@Req() req, @Body() mfaremoveDto: DeleteMFADto) {
-    return this.socialLoginService.removeMFA(req.user, mfaremoveDto);
+    return this.socialLoginService.removeMFA(
+      req.user,
+      mfaremoveDto,
+      req.session.sessionId,
+    );
   }
   @ApiOkResponse({
     description: 'User is Logged out successfully',

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   UnauthorizedException,
@@ -93,7 +94,8 @@ export class SocialLoginService {
       'Inside handleGoogleLogin() to create or fetch user detail based on login',
       'SocialLoginService',
     );
-    const { email, name, profileIcon } = req.user;
+    const { email, profileIcon } = req.user;
+    const name = req?.user?.name || email.split('@')[0];
     let user = await this.userRepository.findOne({
       email,
     });
@@ -257,16 +259,19 @@ export class SocialLoginService {
     };
   }
 
-  async removeMFA(user, deleteMfaDto: DeleteMFADto) {
-    Logger.log('Inside removeMFA() to delete MFA', 'SocialLoginService');
-    const {
-      twoFactorAuthenticationCode,
-      authenticatorToDelete,
-      authenticatorType,
-    } = deleteMfaDto;
+  async removeMFA(user, deleteMfaDto: DeleteMFADto, sessionId: string) {
+    if (!sessionId || sessionId == null) {
+      throw new InternalServerErrorException([ERROR_MESSAGE.SESSION_NOT_FOUND]);
+    }
+    const { twoFactorAuthenticationCode, authenticatorType } = deleteMfaDto;
     const authDetail = user.authenticators.find(
       (auth) => auth.type === authenticatorType,
     );
+    if (!authDetail) {
+      throw new NotFoundException([
+        `${authenticatorType} Authenticator not found`,
+      ]);
+    }
     const isVerified = authenticator.verify({
       token: twoFactorAuthenticationCode,
       secret: authDetail.secret,
@@ -277,18 +282,23 @@ export class SocialLoginService {
       ]);
     }
     const authenticatorIndex = user.authenticators.findIndex(
-      (auth) => auth.type === authenticatorToDelete,
+      (auth) => auth.type === authenticatorType,
     );
-    if (authenticatorIndex === -1) {
-      throw new NotFoundException([
-        `${authenticatorToDelete} Authenticator not found`,
-      ]);
-    }
     user.authenticators.splice(authenticatorIndex, 1);
-    this.userRepository.findOneUpdate(
+    await this.userRepository.findOneUpdate(
       { userId: user.userId },
       { authenticators: user.authenticators },
     );
+    const sessionKey = `session:${sessionId}`;
+    const ttl = await redisClient.ttl(sessionKey);
+    const sessionData = await redisClient.get(sessionKey);
+    let parsedSession;
+    if (sessionData) {
+      parsedSession = JSON.parse(sessionData);
+      parsedSession.isTwoFactorVerified = false;
+      parsedSession.isTwoFactorAuthenticated = false;
+    }
+    await redisClient.set(sessionKey, JSON.stringify(parsedSession), 'EX', ttl);
     return { message: 'Removed authenticator successfully' };
   }
   async verifyAndGenerateRefreshToken(

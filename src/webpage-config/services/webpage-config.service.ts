@@ -106,7 +106,7 @@ export class WebpageConfigService {
       generatedUrl,
       contactEmail,
     };
-
+    Logger.log('Before inserting webpage detail', 'WebpageConfigService');
     const webpageConfigData = await this.webPageConfigRepo.createwebPageConfig(
       payload,
     );
@@ -161,6 +161,10 @@ export class WebpageConfigService {
     id: string,
     pageType?: PageType,
   ): Promise<CreateWebpageConfigResponseDto> {
+    Logger.log(
+      'Inside fetchAWebPageConfigurationDetail() method to fetch webpage detail',
+      'WebpageConfigService',
+    );
     const isValidId = isValidObjectId(id);
     const query: any = {
       $or: [{ serviceId: id }],
@@ -178,7 +182,10 @@ export class WebpageConfigService {
         `No webpage configuration found for id: ${id}`,
       ]);
     }
-
+    Logger.log(
+      'Inside serviceDetail(): before making db call',
+      'WebpageConfigService',
+    );
     const serviceDetail = await this.appRepository.findOne({
       appId: webpageConfiguration.serviceId,
     });
@@ -254,6 +261,10 @@ export class WebpageConfigService {
   }
 
   async removeWebPageConfiguration(id: string, serviceId: string) {
+    Logger.log(
+      'Inside removeWebPageConfiguration() to delete webpage configuration',
+      'WebpageConfigService',
+    );
     const deletedConfig = await this.webPageConfigRepo.findOneAndDelete({
       _id: new Types.ObjectId(id),
       serviceId,
@@ -307,6 +318,10 @@ export class WebpageConfigService {
     return { expiryDate };
   }
   public async generateWebpageConfigTokens(id, appId) {
+    Logger.log(
+      'Inside generateWebpageConfigTokens() to generate webpage config token',
+      'WebpageConfigService',
+    );
     const verifierConfig = await this.webPageConfigRepo.findAWebpageConfig({
       _id: new Types.ObjectId(id),
     });

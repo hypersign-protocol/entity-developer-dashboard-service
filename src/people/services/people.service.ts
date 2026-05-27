@@ -41,6 +41,10 @@ export class PeopleService {
     private readonly mailNotificationService: MailNotificationService,
   ) {}
   async createInvitation(createPersonDto: CreateInviteDto, adminUserData) {
+    Logger.log(
+      'Inside createInvitation() to create new invitation',
+      'PeopleService',
+    );
     const { emailId } = createPersonDto;
     if (emailId === adminUserData?.email) {
       throw new BadRequestException([
@@ -115,7 +119,11 @@ export class PeopleService {
   }
 
   async acceptInvite(inviteCode: string, userDetails) {
-    const inviteeIdentifiers = [userDetails?.userId, userDetails?.email].filter(
+  Logger.log(
+      'Inside acceptInvite() to accept new invitation',
+      'PeopleService',
+    );    
+  const inviteeIdentifiers = [userDetails?.userId, userDetails?.email].filter(
       Boolean,
     );
     const inviteFilter = {
@@ -156,6 +164,8 @@ export class PeopleService {
   }
 
   async update(inviteCode: string, adminUserDetails) {
+    Logger.log('Inside update() to update invitation detail', 'PeopleService');
+
     const adminId = adminUserDetails?.userId;
 
     const findInvite = await this.adminPeopleService.findOne({
@@ -182,16 +192,30 @@ export class PeopleService {
   }
 
   async getAllPeople(user) {
+    Logger.log(
+      'Inside getAllPeople() to fetch list of teammate',
+      'PeopleService',
+    );
     return await this.adminPeopleService.findAllPeopleByAdmin(user.userId);
   }
 
   async getAllInvites(user) {
+    Logger.log(
+      'Inside getAllInvites() to fetch invited people',
+      'PeopleService',
+    );
+
     return await this.adminPeopleService.findAllAdminByUser(
       user.userId,
       user.email,
     );
   }
   async deletePerson(adminUserData, body: DeletePersonDto) {
+    Logger.log(
+      'Inside deletePerson() to delete specific people',
+      'PeopleService',
+    );
+
     const { emailId } = body;
     const userDetails = await this.userService.findOne({
       email: emailId,
@@ -210,6 +234,7 @@ export class PeopleService {
   }
 
   async attachRole(body: AttachRoleDTO, user) {
+    Logger.log('Inside attachRole()', 'PeopleService');
     const { userId: adminId } = user;
     const { userId, roleId } = body;
     const adminPeople = await this.adminPeopleService.findOne({
@@ -302,6 +327,10 @@ export class PeopleService {
     sessionDetail,
     tenantDto: TenantLoginDTO,
   ) {
+    Logger.log(
+      'Inside switchTenantAccount() to switch to admin account',
+      'PeopleService',
+    );
     const { adminId } = tenantDto;
     // switch back to own account
     if (userDetail.userId === adminId) {

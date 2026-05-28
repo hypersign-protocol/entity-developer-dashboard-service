@@ -11,6 +11,8 @@ export const TENANT_ERRORS = {
 export const TENANT_INVITE_ERRORS = {
   SELF_INVITATION_NOT_ALLOWED: 'You cannot invite your own account.',
   ALREADY_INVITED: 'This user is already associated with your tenant.',
+  INVALID_OR_UNAUTHORIZED_INVITE:
+    'The invitation code is invalid or does not belong to this user.',
   ROLE_NOT_FOUND: (roleId: string) =>
     `No role exists for the provided role ID: ${roleId}.`,
   NO_ROLE_ASSIGNED: 'A role must be assigned before inviting a member.',

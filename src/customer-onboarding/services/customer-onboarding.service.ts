@@ -58,6 +58,7 @@ import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 import { TokenModule } from 'src/config/access-matrix';
 import { AuthzCreditService } from 'src/credits/services/credits.service';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
+import { VerificationMethodTypes } from 'src/utils/generated/client/enums';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -627,6 +628,26 @@ export class CustomerOnboardingService {
                 EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
               );
 
+              const didCreateBody: {
+                namespace: string;
+                options?: {
+                  keyType: string[];
+                };
+              } = {
+                namespace: this.config.get('HID_NETWORK_NAMESPACE') || '',
+              };
+              const shouldCreateServiceSpecificDid = [
+                InterestedService.PROOF_OF_PERSONHOOD,
+                InterestedService.AGE_VERIFICATION,
+              ].some((service) =>
+                customerOnboardingData.interestedService?.includes(service),
+              );
+
+              if (shouldCreateServiceSpecificDid) {
+                didCreateBody.options = {
+                  keyType: [VerificationMethodTypes.BabyJubJubKey2021],
+                };
+              }
               const didData = await this.makeExternalRequest(
                 `${sanitizeUrl(ssiTenantUrl, true)}api/v1/did/create`,
                 {
@@ -636,9 +657,7 @@ export class CustomerOnboardingService {
                     'Content-Type': 'application/json',
                     origin: ssiService?.whitelistedCors[0],
                   },
-                  body: JSON.stringify({
-                    namespace: this.config.get('HID_NETWORK_NAMESPACE') || '',
-                  }),
+                  body: JSON.stringify(didCreateBody),
                 },
                 'Failed to create DID',
               );

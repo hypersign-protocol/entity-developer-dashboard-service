@@ -216,3 +216,43 @@ export class TenantLoginDTO {
   @IsNotEmpty()
   adminId: string;
 }
+
+export class TenantAccessUserResponseDTO {
+  @ApiProperty({
+    name: 'userId',
+    type: String,
+    example: '1773756751470-1e8e6254-825d-4fd2-a7d9-5ffe73bd9979',
+  })
+  userId: string;
+
+  @ApiProperty({
+    name: 'email',
+    type: String,
+    example: 'user@example.com',
+    required: false,
+  })
+  email?: string;
+
+  @ApiProperty({
+    name: 'name',
+    type: String,
+    example: 'Jane Doe',
+    required: false,
+  })
+  name?: string;
+
+  @ApiProperty({
+    name: 'role',
+    type: String,
+    example: 'ADMIN',
+  })
+  role: string;
+
+  @ApiProperty({
+    name: 'createdAt',
+    type: String,
+    example: '2026-05-27T03:23:23.455Z',
+    required: false,
+  })
+  createdAt?: string;
+}

@@ -249,10 +249,10 @@ export class TenantAccessUserResponseDTO {
   role: string;
 
   @ApiProperty({
-    name: 'createdAt',
+    name: 'accessActiveSince',
     type: String,
     example: '2026-05-27T03:23:23.455Z',
     required: false,
   })
-  createdAt?: string;
+  accessActiveSince?: string;
 }

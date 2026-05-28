@@ -119,11 +119,11 @@ export class PeopleService {
   }
 
   async acceptInvite(inviteCode: string, userDetails) {
-  Logger.log(
+    Logger.log(
       'Inside acceptInvite() to accept new invitation',
       'PeopleService',
-    );    
-  const inviteeIdentifiers = [userDetails?.userId, userDetails?.email].filter(
+    );
+    const inviteeIdentifiers = [userDetails?.userId, userDetails?.email].filter(
       Boolean,
     );
     const inviteFilter = {
@@ -301,15 +301,15 @@ export class PeopleService {
           email: user?.email,
           name: user?.name,
           role: session.role,
-          createdAt: session.createdAt,
+          accessActiveSince: session.createdAt,
         };
       })
       .sort((first, second) => {
-        const firstCreatedAt = first.createdAt
-          ? new Date(first.createdAt).getTime()
+        const firstCreatedAt = first.accessActiveSince
+          ? new Date(first.accessActiveSince).getTime()
           : 0;
-        const secondCreatedAt = second.createdAt
-          ? new Date(second.createdAt).getTime()
+        const secondCreatedAt = second.accessActiveSince
+          ? new Date(second.accessActiveSince).getTime()
           : 0;
         return secondCreatedAt - firstCreatedAt;
       });

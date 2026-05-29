@@ -1,7 +1,7 @@
 # Changelog
 
 ## [Unreleased]
-## [3.11.14] - 2026-05-29
+## [3.12.0] - 2026-05-29
 
 ### Added
 - Added logger statements for debugging

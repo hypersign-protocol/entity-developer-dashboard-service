@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SERVICE_TYPES, SERVICES, SERVICE_INFO } from './iServiceList';
 import { sanitizeUrl } from 'src/utils/utils';
@@ -16,6 +16,10 @@ type Serivce = {
 export class SupportedServiceList {
   constructor(private readonly config: ConfigService) {}
   getServices(): Array<Serivce> {
+    Logger.log(
+      'Inside getServices() to fetch list of services',
+      'SupportedServiceList',
+    );
     return [
       {
         id: SERVICE_INFO.SSI_API.type,
@@ -63,6 +67,11 @@ export class SupportedServiceList {
   }
 
   getDefaultServicesAccess(serviceType: SERVICE_TYPES) {
+    Logger.log(
+      'Inside getDefaultServicesAccess() to fetch default service',
+      'SupportedServiceList',
+    );
+
     const defaultServicesAccess = [];
 
     if (serviceType == SERVICE_TYPES.SSI_API) {

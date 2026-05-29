@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+## [3.11.14] - 2026-05-25
+### Added 
+- Added logger for debugging
+## [3.11.13] - 2026-05-14
+### Added 
+- Update package.json to bump version to 3.11.13.
+- Updated `hypersign-vault-client` and `hs-ssi-sdk` to latest master branch
 
 ## [3.11.13] - 2026-05-14
 ### Added 

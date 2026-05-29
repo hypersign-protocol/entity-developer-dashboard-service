@@ -281,14 +281,7 @@ export class SocialLoginService {
         "Your passcode doesn't match. Please try again",
       ]);
     }
-    const authenticatorIndex = user.authenticators.findIndex(
-      (auth) => auth.type === authenticatorType,
-    );
-    user.authenticators.splice(authenticatorIndex, 1);
-    await this.userRepository.findOneUpdate(
-      { userId: user.userId },
-      { authenticators: user.authenticators },
-    );
+    // update redis
     const sessionKey = `session:${sessionId}`;
     const ttl = await redisClient.ttl(sessionKey);
     const sessionData = await redisClient.get(sessionKey);
@@ -297,8 +290,23 @@ export class SocialLoginService {
       parsedSession = JSON.parse(sessionData);
       parsedSession.isTwoFactorVerified = false;
       parsedSession.isTwoFactorAuthenticated = false;
+      await redisClient.set(
+        sessionKey,
+        JSON.stringify(parsedSession),
+        'EX',
+        ttl,
+      );
     }
-    await redisClient.set(sessionKey, JSON.stringify(parsedSession), 'EX', ttl);
+    // update db
+    const authenticatorIndex = user.authenticators.findIndex(
+      (auth) => auth.type === authenticatorType,
+    );
+    user.authenticators.splice(authenticatorIndex, 1);
+    await this.userRepository.findOneUpdate(
+      { userId: user.userId },
+      { authenticators: user.authenticators },
+    );
+
     return { message: 'Removed authenticator successfully' };
   }
   async verifyAndGenerateRefreshToken(

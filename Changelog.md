@@ -1,7 +1,7 @@
 # Changelog
 
 ## [Unreleased]
-## [3.11.14] - 2026-05-25
+## [3.11.14] - 2026-05-29
 
 ### Added
 - Added logger statements for debugging
@@ -10,6 +10,7 @@
 - Fixed delete authenticator API
 - Fixed deletion of linked SSI service while deleting IdService
 - Fixed stale tenant permissions in generated service access tokens after role updates.
+
 
 ## [3.11.13] - 2026-05-14
 ### Added 

@@ -260,10 +260,12 @@ export class SocialLoginService {
   }
 
   async removeMFA(user, deleteMfaDto: DeleteMFADto, sessionId: string) {
+    Logger.log('Inside removeMFA() to delete MFA', 'SocialLoginService');
     if (!sessionId || sessionId == null) {
       throw new InternalServerErrorException([ERROR_MESSAGE.SESSION_NOT_FOUND]);
     }
     const { twoFactorAuthenticationCode, authenticatorType } = deleteMfaDto;
+
     const authDetail = user.authenticators.find(
       (auth) => auth.type === authenticatorType,
     );

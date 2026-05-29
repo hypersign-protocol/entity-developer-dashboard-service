@@ -1,6 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+## [3.11.14] - 2026-05-29
+
+### Added
+- Added logger statements for debugging
+- Added support for storing username during email OTP login by extracting it from the email before `@`
+### Fixed
+- Fixed delete authenticator API
+- Fixed deletion of linked SSI service while deleting IdService
+- Fixed stale tenant permissions in generated service access tokens after role updates.
+
 
 ## [3.11.14] - 2026-05-26
 ### Added

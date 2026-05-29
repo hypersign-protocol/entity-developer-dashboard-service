@@ -260,10 +260,12 @@ export class SocialLoginService {
   }
 
   async removeMFA(user, deleteMfaDto: DeleteMFADto, sessionId: string) {
+    Logger.log('Inside removeMFA() to delete MFA', 'SocialLoginService');
     if (!sessionId || sessionId == null) {
       throw new InternalServerErrorException([ERROR_MESSAGE.SESSION_NOT_FOUND]);
     }
     const { twoFactorAuthenticationCode, authenticatorType } = deleteMfaDto;
+
     const authDetail = user.authenticators.find(
       (auth) => auth.type === authenticatorType,
     );
@@ -281,14 +283,7 @@ export class SocialLoginService {
         "Your passcode doesn't match. Please try again",
       ]);
     }
-    const authenticatorIndex = user.authenticators.findIndex(
-      (auth) => auth.type === authenticatorType,
-    );
-    user.authenticators.splice(authenticatorIndex, 1);
-    await this.userRepository.findOneUpdate(
-      { userId: user.userId },
-      { authenticators: user.authenticators },
-    );
+    // update redis
     const sessionKey = `session:${sessionId}`;
     const ttl = await redisClient.ttl(sessionKey);
     const sessionData = await redisClient.get(sessionKey);
@@ -297,8 +292,22 @@ export class SocialLoginService {
       parsedSession = JSON.parse(sessionData);
       parsedSession.isTwoFactorVerified = false;
       parsedSession.isTwoFactorAuthenticated = false;
+      await redisClient.set(
+        sessionKey,
+        JSON.stringify(parsedSession),
+        'EX',
+        ttl,
+      );
     }
-    await redisClient.set(sessionKey, JSON.stringify(parsedSession), 'EX', ttl);
+    // update db
+    const authenticatorIndex = user.authenticators.findIndex(
+      (auth) => auth.type === authenticatorType,
+    );
+    user.authenticators.splice(authenticatorIndex, 1);
+    await this.userRepository.findOneUpdate(
+      { userId: user.userId },
+      { authenticators: user.authenticators },
+    );
     return { message: 'Removed authenticator successfully' };
   }
   async verifyAndGenerateRefreshToken(

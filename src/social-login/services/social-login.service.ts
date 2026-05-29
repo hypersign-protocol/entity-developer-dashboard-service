@@ -308,7 +308,6 @@ export class SocialLoginService {
       { userId: user.userId },
       { authenticators: user.authenticators },
     );
-
     return { message: 'Removed authenticator successfully' };
   }
   async verifyAndGenerateRefreshToken(

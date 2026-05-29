@@ -6,6 +6,7 @@
 ### Added
 - Added logger statements for debugging
 - Added support for storing username during email OTP login by extracting it from the email before `@`
+- Added api to get list of user accessing admin account
 ### Fixed
 - Fixed delete authenticator API
 - Fixed deletion of linked SSI service while deleting IdService

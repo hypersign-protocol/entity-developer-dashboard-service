@@ -15,6 +15,7 @@ import {
   Delete,
   Logger,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import {
   CreateAppDto,
@@ -40,9 +41,13 @@ import { AppError, GetAppList } from '../dtos/fetch-app.dto';
 import { PaginationDto } from 'src/utils/pagination.dto';
 import { TransformResponseInterceptor } from '../interceptors/transformResponse.interseptor';
 import { UserRole } from 'src/user/schema/user.schema';
+import { DashboardAccessGuard } from '../guard/validate-dashboard-access.guard';
+import { RequireDashboardAccess } from '../decorator/dashboard-access.decorator';
+import { SERVICES } from 'src/supported-service/services/iServiceList';
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Application')
 @Controller('/api/v1/app')
+@UseGuards(DashboardAccessGuard)
 export class AppAuthController {
   constructor(private readonly appAuthService: AppAuthService) {}
   @ApiBearerAuth('Authorization')
@@ -52,6 +57,7 @@ export class AppAuthController {
     }),
   )
   @UsePipes(new ValidationPipe({ transform: true }))
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.READ_SERVICE)
   @Get()
   @ApiResponse({
     status: 200,
@@ -116,6 +122,7 @@ export class AppAuthController {
     }),
   )
   @Get(':appId')
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.READ_SERVICE)
   @ApiResponse({
     status: 200,
     description: 'App details',
@@ -141,6 +148,7 @@ export class AppAuthController {
   }
 
   @ApiBearerAuth('Authorization')
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.WRITE_SERVICE)
   @Post()
   @UseInterceptors(
     MongooseClassSerializerInterceptor(createAppResponse, {
@@ -172,6 +180,7 @@ export class AppAuthController {
       excludePrefixes: ['apiKeySecret', 'apiKeyPrefix', '_', '__'],
     }),
   )
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.UPDATE_SERVICE)
   @Put(':appId')
   @ApiResponse({
     status: 200,
@@ -212,6 +221,7 @@ export class AppAuthController {
   }
 
   @ApiBearerAuth('Authorization')
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.DELETE_SERVICE)
   @Delete(':appId')
   @ApiResponse({
     status: 200,

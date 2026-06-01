@@ -451,6 +451,11 @@ export class CustomerOnboardingService {
                                 access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
                                 expiryDate: null,
                               },
+                              {
+                                serviceType: SERVICE_TYPES.DASHBOARD,
+                                access: SERVICES.DASHBOARD.ACCESS_TYPES.ALL,
+                                expiryDate: null,
+                              },
                             ],
                             as: 'newAccess',
                             cond: {

@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+## [3.12.2] - 2026-06-02
+
+### Added
+- Generating Kyb token with kyb grants
+- Implemented role based access
+- Providing dashboard access while onboarding new customer
+
 ## [3.12.0] - 2026-05-29
 
 ### Added

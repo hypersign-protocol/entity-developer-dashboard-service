@@ -128,6 +128,7 @@ export namespace SERVICES {
       READ_SERVICE = 'READ_SERVICE',
       WRITE_SERVICE = 'WRITE_SERVICE',
       UPDATE_SERVICE = 'UPDATE_SERVICE',
+      DELETE_SERVICE = 'DELETE_SERVICE',
     }
   }
   // eslint-disable-next-line

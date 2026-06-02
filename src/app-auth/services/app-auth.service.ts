@@ -695,6 +695,33 @@ export class AppAuthService {
     await Promise.all([
       redisClient.del(generateHash(appId)),
       redisClient.del(generateHash(`${appId}_${Context.idDashboard}`)),
+      redisClient.del(
+        generateHash(`${appId}_${Context.idDashboard}_${userId}`),
+      ),
+      redisClient.del(
+        generateHash(
+          `${appId}_${Context.idDashboard}_${userId}_${GRANT_TYPES.access_service_ssi}`,
+        ),
+      ),
+      redisClient.del(
+        generateHash(
+          `${appId}_${Context.idDashboard}_${userId}_${GRANT_TYPES.access_service_kyc}`,
+        ),
+      ),
+      redisClient.del(
+        generateHash(
+          `${appId}_${Context.idDashboard}_${userId}_${GRANT_TYPES.access_service_kyb}`,
+        ),
+      ),
+      redisClient.del(generateHash(`${appId}_${Context.customer}`)),
+      redisClient.del(
+        generateHash(
+          `${appId}_${Context.customer}_${GRANT_TYPES.access_service_kyb}`,
+        ),
+      ),
+      redisClient.del(
+        generateHash(`${appId}_${GRANT_TYPES.access_service_kyb}`),
+      ),
     ]);
     // delete linked ssi service for admin role
     if (
@@ -817,6 +844,7 @@ export class AppAuthService {
         const defaultAccessList = getAccessListForModule(
           TokenModule.APP_AUTH,
           SERVICE_TYPES.CAVACH_API,
+          grant_type,
         );
         accessList = evaluateAccessPolicy(
           defaultAccessList,
@@ -934,7 +962,7 @@ export class AppAuthService {
       isTenantSession && session?.tenantUserPermissions?.length
         ? session.tenantUserPermissions
         : user.accessList;
-    let rawRedisKey = `${appId}_${context}_${session.userId}`;
+    let rawRedisKey = `${appId}_${context}_${session.userId}_${grantType}`;
     if (isTenantSession) {
       const permissionHash = generateHash(JSON.stringify(effectiveAccessList));
       rawRedisKey = `${rawRedisKey}_tenant_${permissionHash}`;
@@ -1025,6 +1053,7 @@ export class AppAuthService {
         const defaultAccessList = getAccessListForModule(
           TokenModule.DASHBOARD,
           SERVICE_TYPES.CAVACH_API,
+          grantType,
         );
         accessList = evaluateAccessPolicy(
           defaultAccessList,
@@ -1112,8 +1141,17 @@ export class AppAuthService {
   ) {
     Logger.debug('Inside updateAppRedis(): Updating app redis cache...');
     const baseKey = generateHash(appId);
-    const dashboardRedisKey = generateHash(
+    const dashboardBaseKey = generateHash(
       `${appId}_${Context.idDashboard}_${userId}`,
+    );
+    const dashboardSsiKey = generateHash(
+      `${appId}_${Context.idDashboard}_${userId}_${GRANT_TYPES.access_service_ssi}`,
+    );
+    const dashboardKycKey = generateHash(
+      `${appId}_${Context.idDashboard}_${userId}_${GRANT_TYPES.access_service_kyc}`,
+    );
+    const dashboardKybKey = generateHash(
+      `${appId}_${Context.idDashboard}_${userId}_${GRANT_TYPES.access_service_kyb}`,
     );
     const customerContextCacheKey = generateHash(
       `${appId}_${Context.customer}`,
@@ -1128,12 +1166,21 @@ export class AppAuthService {
       );
     }
 
-    const [baseDataString, dashboardDataString, customerContextDataString] =
-      await Promise.all([
-        redisClient.get(baseKey),
-        redisClient.get(dashboardRedisKey),
-        redisClient.get(customerContextCacheKey),
-      ]);
+    const [
+      baseDataString,
+      dashboardDataString,
+      dashboardSsiDataString,
+      dashboardKycDataString,
+      dashboardKybDataString,
+      customerContextDataString,
+    ] = await Promise.all([
+      redisClient.get(baseKey),
+      redisClient.get(dashboardBaseKey),
+      redisClient.get(dashboardSsiKey),
+      redisClient.get(dashboardKycKey),
+      redisClient.get(dashboardKybKey),
+      redisClient.get(customerContextCacheKey),
+    ]);
 
     const updates: Promise<any>[] = [];
 
@@ -1152,8 +1199,38 @@ export class AppAuthService {
       const dashboardData = JSON.parse(dashboardDataString);
       updates.push(
         redisClient.set(
-          dashboardRedisKey,
+          dashboardBaseKey,
           JSON.stringify({ ...dashboardData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
+    if (dashboardSsiDataString) {
+      const dashboardSsiData = JSON.parse(dashboardSsiDataString);
+      updates.push(
+        redisClient.set(
+          dashboardSsiKey,
+          JSON.stringify({ ...dashboardSsiData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
+    if (dashboardKycDataString) {
+      const dashboardKycData = JSON.parse(dashboardKycDataString);
+      updates.push(
+        redisClient.set(
+          dashboardKycKey,
+          JSON.stringify({ ...dashboardKycData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
+    if (dashboardKybDataString) {
+      const dashboardKybData = JSON.parse(dashboardKybDataString);
+      updates.push(
+        redisClient.set(
+          dashboardKybKey,
+          JSON.stringify({ ...dashboardKybData, ...updatedFields }),
           'KEEPTTL',
         ),
       );

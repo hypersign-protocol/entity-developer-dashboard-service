@@ -422,7 +422,11 @@ export class WebpageConfigService {
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
       ]);
     }
-    const defaultAccessList = getAccessListForModule(tokenModule, serviceType);
+    const defaultAccessList = getAccessListForModule(
+      tokenModule,
+      serviceType,
+      grantType,
+    );
     const validateAccessList = evaluateAccessPolicy(
       defaultAccessList,
       serviceType,

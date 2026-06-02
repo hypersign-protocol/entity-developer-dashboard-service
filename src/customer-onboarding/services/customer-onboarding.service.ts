@@ -59,6 +59,7 @@ import { TokenModule } from 'src/config/access-matrix';
 import { AuthzCreditService } from 'src/credits/services/credits.service';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { VerificationMethodTypes } from 'src/utils/generated/client/enums';
+import { Types } from 'mongoose';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -358,6 +359,9 @@ export class CustomerOnboardingService {
       'Inside processCustomerOnboarding() to approve customer onboarding request',
       'CustomerOnboardingService',
     );
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException(['Invalid customer onboarding ID']);
+    }
     const onboardingLogs: LogDetail[] = [];
     const onboardingUpdateData: Partial<CustomerOnboarding> = {};
     let ssiService: any,

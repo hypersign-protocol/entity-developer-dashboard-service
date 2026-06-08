@@ -317,11 +317,14 @@ export class WebpageConfigService {
     }
     return { expiryDate };
   }
-  public async generateWebpageConfigTokens(id, appId) {
+  public async generateWebpageConfigTokens(id, appId, businessId?) {
     Logger.log(
       'Inside generateWebpageConfigTokens() to generate webpage config token',
       'WebpageConfigService',
     );
+    if (businessId && !Types.ObjectId.isValid(businessId)) {
+      throw new BadRequestException(['Invalid business ID']);
+    }
     const verifierConfig = await this.webPageConfigRepo.findAWebpageConfig({
       _id: new Types.ObjectId(id),
     });
@@ -360,6 +363,20 @@ export class WebpageConfigService {
         ? EXPIRY_CONFIG.VERIFIER_CUSTOMER_KYB_APP_ACCESS
         : EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS;
     // generate access tokens
+    const idServiceTokenPayload = {
+      appId,
+      appName: kycServiceDetail.appName,
+      grantType: serviceType,
+      sessionId: generateHash(
+        serviceType === GRANT_TYPES.access_service_kyb
+          ? `${appId}_${serviceType}`
+          : appId,
+      ),
+      subdomain: kycServiceDetail.subdomain,
+    };
+    if (businessId) {
+      idServiceTokenPayload['businessId'] = businessId;
+    }
     const [ssiAccessTokenDetail, pageAccessTokenDetail] = await Promise.all([
       this.appAuthService.getAccessToken(
         {
@@ -373,17 +390,7 @@ export class WebpageConfigService {
         expiryConfig.jwtUnit,
       ),
       this.appAuthService.getAccessToken(
-        {
-          appId,
-          appName: kycServiceDetail.appName,
-          grantType: serviceType,
-          sessionId: generateHash(
-            serviceType === GRANT_TYPES.access_service_kyb
-              ? `${appId}_${serviceType}`
-              : appId,
-          ),
-          subdomain: kycServiceDetail.subdomain,
-        },
+        idServiceTokenPayload,
         expiryConfig.jwtTime,
         expiryConfig.jwtUnit,
       ),

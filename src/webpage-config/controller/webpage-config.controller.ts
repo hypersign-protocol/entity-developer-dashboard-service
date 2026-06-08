@@ -145,13 +145,16 @@ export class WebpageConfigController {
     description: 'Verifier ID',
   })
   @ApiQuery({ name: 'appId', required: true, type: String })
+  @ApiQuery({ name: 'businessId', required: false, type: String })
   generateWebpageConfigTokens(
     @Query('appId') appId: string,
+    @Query('businessId') businessId: string,
     @Param() params: VerifierParamsDto,
   ) {
     return this.webpageConfigService.generateWebpageConfigTokens(
       params.id,
       appId,
+      businessId,
     );
   }
 }

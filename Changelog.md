@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+## [3.12.3] - 2026-06-08
+
+### Added
+- Added businessId as an optional query parameter in verifier token generation.
+
 ## [3.12.2] - 2026-06-02
 
 ### Added

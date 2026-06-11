@@ -15,6 +15,7 @@ export async function getAppVault(kmsId, edvId) {
 }
 
 export async function getAppMenemonic(kmsId): Promise<string> {
+  Logger.log('Inside getAppMenemonic()', 'getAppVault');
   const { mnemonic } = await global.kmsVault.getDecryptedDocument(kmsId);
   return mnemonic;
 }

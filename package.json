@@ -1,6 +1,6 @@
 {
   "name": "entity-developer-dashboard-service",
-  "version": "3.11.13",
+  "version": "3.12.3",
   "description": "Backend service for Entity Developer Dashboard",
   "author": "",
   "private": true,

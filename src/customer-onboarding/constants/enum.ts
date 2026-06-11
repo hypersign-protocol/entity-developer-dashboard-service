@@ -93,6 +93,7 @@ export enum InterestedService {
   AGE_VERIFICATION = 'Age Verification',
   FRAUD_PREVENTION = 'Fraud Prevention',
   COLLECT_WALLET = 'Collect Wallet Address',
+  PROOF_OF_PERSONHOOD = 'Proof of Personhood',
 }
 
 export enum YearlyVolume {

@@ -42,6 +42,10 @@ export class AuthzCreditService {
   ) {}
 
   async createAuthzCredits(authz: { userId; appId }) {
+    Logger.log(
+      'Inside createAuthzCredits() to provide authZCredit',
+      'AuthzCreditService',
+    );
     return await this.authzCreditsRepository.create({
       userId: authz.userId,
       appId: authz.appId,
@@ -63,6 +67,10 @@ export class AuthzCreditService {
   }
 
   async getCreditDetails(appId, userId) {
+    Logger.log(
+      'Inside getCreditDetails() to fetch authzCredit',
+      'AuthzCreditService',
+    );
     return this.authzCreditsRepository.find({
       userId,
       appId,
@@ -189,6 +197,11 @@ export class AuthzCreditService {
         ],
       };
     } catch (e) {
+      Logger.error(
+        'Issue while providing grantSSICredit',
+        e,
+        'AuthzCreditService',
+      );
       if (e instanceof Error) {
         throw new InternalServerErrorException(e.message);
       }

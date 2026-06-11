@@ -129,7 +129,7 @@ export class AppAuthService {
         edvId: edvId,
       };
       Logger.log(
-        'createAnApp() method: Prepareing app keys to insert in kms vault',
+        'createAnApp() method: Preparing app keys to insert in kms vault',
       );
 
       if (!globalThis.kmsVault) {
@@ -613,9 +613,11 @@ export class AppAuthService {
     return updatedapp;
   }
 
-  async deleteApp(appId: string, userId: string): Promise<DeleteAppResponse> {
+  async deleteApp(appId: string, user): Promise<DeleteAppResponse> {
     Logger.log('deleteApp() method: starts....', 'AppAuthService');
-
+    const { userId } = user;
+    const role = user?.role || UserRole.ADMIN;
+    let linkedSSIServiceId;
     let appDetail = await this.appRepository.findOne({ appId, userId });
     if (!appDetail) {
       Logger.error('deleteApp() method: Error: no app found', 'AppAuthService');
@@ -685,6 +687,7 @@ export class AppAuthService {
       await this.onboardModel.deleteOne({ kycServiceId: appId });
       // delete webpage config data of that service
       await this.webpageConfigRepo.findOneAndDelete({ appId });
+      linkedSSIServiceId = appDetail.dependentServices[0];
     }
     this.authzCreditRepository.deleteAuthzDetail({ appId });
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });
@@ -692,7 +695,46 @@ export class AppAuthService {
     await Promise.all([
       redisClient.del(generateHash(appId)),
       redisClient.del(generateHash(`${appId}_${Context.idDashboard}`)),
+      redisClient.del(
+        generateHash(`${appId}_${Context.idDashboard}_${userId}`),
+      ),
+      redisClient.del(
+        generateHash(
+          `${appId}_${Context.idDashboard}_${userId}_${GRANT_TYPES.access_service_ssi}`,
+        ),
+      ),
+      redisClient.del(
+        generateHash(
+          `${appId}_${Context.idDashboard}_${userId}_${GRANT_TYPES.access_service_kyc}`,
+        ),
+      ),
+      redisClient.del(
+        generateHash(
+          `${appId}_${Context.idDashboard}_${userId}_${GRANT_TYPES.access_service_kyb}`,
+        ),
+      ),
+      redisClient.del(generateHash(`${appId}_${Context.customer}`)),
+      redisClient.del(
+        generateHash(
+          `${appId}_${Context.customer}_${GRANT_TYPES.access_service_kyb}`,
+        ),
+      ),
+      redisClient.del(
+        generateHash(`${appId}_${GRANT_TYPES.access_service_kyb}`),
+      ),
     ]);
+    // delete linked ssi service for admin role
+    if (
+      appDetail.services[0].id === SERVICE_TYPES.CAVACH_API &&
+      role === UserRole.ADMIN &&
+      linkedSSIServiceId
+    ) {
+      Logger.log(
+        `Deleting linked SSI service for Cavach app: ${linkedSSIServiceId}`,
+        'AppAuthService',
+      );
+      await this.deleteLinkedService(linkedSSIServiceId, user);
+    }
     Logger.debug(`Redis cache cleaned for appId: ${appId}`);
     return { appId: appDetail.appId };
   }
@@ -802,6 +844,7 @@ export class AppAuthService {
         const defaultAccessList = getAccessListForModule(
           TokenModule.APP_AUTH,
           SERVICE_TYPES.CAVACH_API,
+          grant_type,
         );
         accessList = evaluateAccessPolicy(
           defaultAccessList,
@@ -909,10 +952,20 @@ export class AppAuthService {
     user,
     session?,
   ): Promise<{ access_token; expiresIn; tokenType }> {
+    Logger.log(
+      'Inside grantPermission() to provide permission',
+      'AppAuthService',
+    );
     const context = Context.idDashboard;
-    let rawRedisKey = `${appId}_${context}_${session.userId}`;
-    if (session && session.tenantId) {
-      rawRedisKey = `${rawRedisKey}_tenant`;
+    const isTenantSession = !!session?.tenantId;
+    const effectiveAccessList =
+      isTenantSession && session?.tenantUserPermissions?.length
+        ? session.tenantUserPermissions
+        : user.accessList;
+    let rawRedisKey = `${appId}_${context}_${session.userId}_${grantType}`;
+    if (isTenantSession) {
+      const permissionHash = generateHash(JSON.stringify(effectiveAccessList));
+      rawRedisKey = `${rawRedisKey}_tenant_${permissionHash}`;
     }
     const sessionId = generateHash(rawRedisKey);
     const savedSession = await redisClient.get(sessionId);
@@ -983,7 +1036,7 @@ export class AppAuthService {
         accessList = evaluateAccessPolicy(
           defaultAccessList,
           SERVICE_TYPES.SSI_API,
-          user.accessList,
+          effectiveAccessList,
           context,
         );
         break;
@@ -1000,11 +1053,12 @@ export class AppAuthService {
         const defaultAccessList = getAccessListForModule(
           TokenModule.DASHBOARD,
           SERVICE_TYPES.CAVACH_API,
+          grantType,
         );
         accessList = evaluateAccessPolicy(
           defaultAccessList,
           SERVICE_TYPES.CAVACH_API,
-          user.accessList,
+          effectiveAccessList,
           context,
         );
         break;
@@ -1022,7 +1076,7 @@ export class AppAuthService {
         accessList = evaluateAccessPolicy(
           defaultAccessList,
           SERVICE_TYPES.QUEST,
-          user.accessList,
+          effectiveAccessList,
           context,
         );
         break;
@@ -1087,8 +1141,17 @@ export class AppAuthService {
   ) {
     Logger.debug('Inside updateAppRedis(): Updating app redis cache...');
     const baseKey = generateHash(appId);
-    const dashboardRedisKey = generateHash(
+    const dashboardBaseKey = generateHash(
       `${appId}_${Context.idDashboard}_${userId}`,
+    );
+    const dashboardSsiKey = generateHash(
+      `${appId}_${Context.idDashboard}_${userId}_${GRANT_TYPES.access_service_ssi}`,
+    );
+    const dashboardKycKey = generateHash(
+      `${appId}_${Context.idDashboard}_${userId}_${GRANT_TYPES.access_service_kyc}`,
+    );
+    const dashboardKybKey = generateHash(
+      `${appId}_${Context.idDashboard}_${userId}_${GRANT_TYPES.access_service_kyb}`,
     );
     const customerContextCacheKey = generateHash(
       `${appId}_${Context.customer}`,
@@ -1103,12 +1166,21 @@ export class AppAuthService {
       );
     }
 
-    const [baseDataString, dashboardDataString, customerContextDataString] =
-      await Promise.all([
-        redisClient.get(baseKey),
-        redisClient.get(dashboardRedisKey),
-        redisClient.get(customerContextCacheKey),
-      ]);
+    const [
+      baseDataString,
+      dashboardDataString,
+      dashboardSsiDataString,
+      dashboardKycDataString,
+      dashboardKybDataString,
+      customerContextDataString,
+    ] = await Promise.all([
+      redisClient.get(baseKey),
+      redisClient.get(dashboardBaseKey),
+      redisClient.get(dashboardSsiKey),
+      redisClient.get(dashboardKycKey),
+      redisClient.get(dashboardKybKey),
+      redisClient.get(customerContextCacheKey),
+    ]);
 
     const updates: Promise<any>[] = [];
 
@@ -1127,8 +1199,38 @@ export class AppAuthService {
       const dashboardData = JSON.parse(dashboardDataString);
       updates.push(
         redisClient.set(
-          dashboardRedisKey,
+          dashboardBaseKey,
           JSON.stringify({ ...dashboardData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
+    if (dashboardSsiDataString) {
+      const dashboardSsiData = JSON.parse(dashboardSsiDataString);
+      updates.push(
+        redisClient.set(
+          dashboardSsiKey,
+          JSON.stringify({ ...dashboardSsiData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
+    if (dashboardKycDataString) {
+      const dashboardKycData = JSON.parse(dashboardKycDataString);
+      updates.push(
+        redisClient.set(
+          dashboardKycKey,
+          JSON.stringify({ ...dashboardKycData, ...updatedFields }),
+          'KEEPTTL',
+        ),
+      );
+    }
+    if (dashboardKybDataString) {
+      const dashboardKybData = JSON.parse(dashboardKybDataString);
+      updates.push(
+        redisClient.set(
+          dashboardKybKey,
+          JSON.stringify({ ...dashboardKybData, ...updatedFields }),
           'KEEPTTL',
         ),
       );
@@ -1170,5 +1272,13 @@ export class AppAuthService {
     if (updates.length) {
       await Promise.all(updates);
     }
+  }
+  private async deleteLinkedService(appId: string, user) {
+    Logger.log(
+      `Inside deleteLinkedService() for appId: ${appId}`,
+      'AppAuthService',
+    );
+
+    await this.deleteApp(appId, user);
   }
 }

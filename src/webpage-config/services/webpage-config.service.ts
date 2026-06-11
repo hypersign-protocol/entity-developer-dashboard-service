@@ -106,7 +106,7 @@ export class WebpageConfigService {
       generatedUrl,
       contactEmail,
     };
-
+    Logger.log('Before inserting webpage detail', 'WebpageConfigService');
     const webpageConfigData = await this.webPageConfigRepo.createwebPageConfig(
       payload,
     );
@@ -161,6 +161,10 @@ export class WebpageConfigService {
     id: string,
     pageType?: PageType,
   ): Promise<CreateWebpageConfigResponseDto> {
+    Logger.log(
+      'Inside fetchAWebPageConfigurationDetail() method to fetch webpage detail',
+      'WebpageConfigService',
+    );
     const isValidId = isValidObjectId(id);
     const query: any = {
       $or: [{ serviceId: id }],
@@ -178,7 +182,10 @@ export class WebpageConfigService {
         `No webpage configuration found for id: ${id}`,
       ]);
     }
-
+    Logger.log(
+      'Inside serviceDetail(): before making db call',
+      'WebpageConfigService',
+    );
     const serviceDetail = await this.appRepository.findOne({
       appId: webpageConfiguration.serviceId,
     });
@@ -254,6 +261,10 @@ export class WebpageConfigService {
   }
 
   async removeWebPageConfiguration(id: string, serviceId: string) {
+    Logger.log(
+      'Inside removeWebPageConfiguration() to delete webpage configuration',
+      'WebpageConfigService',
+    );
     const deletedConfig = await this.webPageConfigRepo.findOneAndDelete({
       _id: new Types.ObjectId(id),
       serviceId,
@@ -306,7 +317,14 @@ export class WebpageConfigService {
     }
     return { expiryDate };
   }
-  public async generateWebpageConfigTokens(id, appId) {
+  public async generateWebpageConfigTokens(id, appId, businessId?) {
+    Logger.log(
+      'Inside generateWebpageConfigTokens() to generate webpage config token',
+      'WebpageConfigService',
+    );
+    if (businessId && !Types.ObjectId.isValid(businessId)) {
+      throw new BadRequestException(['Invalid business ID']);
+    }
     const verifierConfig = await this.webPageConfigRepo.findAWebpageConfig({
       _id: new Types.ObjectId(id),
     });
@@ -345,6 +363,20 @@ export class WebpageConfigService {
         ? EXPIRY_CONFIG.VERIFIER_CUSTOMER_KYB_APP_ACCESS
         : EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS;
     // generate access tokens
+    const idServiceTokenPayload = {
+      appId,
+      appName: kycServiceDetail.appName,
+      grantType: serviceType,
+      sessionId: generateHash(
+        serviceType === GRANT_TYPES.access_service_kyb
+          ? `${appId}_${serviceType}`
+          : appId,
+      ),
+      subdomain: kycServiceDetail.subdomain,
+    };
+    if (businessId) {
+      idServiceTokenPayload['businessId'] = businessId;
+    }
     const [ssiAccessTokenDetail, pageAccessTokenDetail] = await Promise.all([
       this.appAuthService.getAccessToken(
         {
@@ -358,17 +390,7 @@ export class WebpageConfigService {
         expiryConfig.jwtUnit,
       ),
       this.appAuthService.getAccessToken(
-        {
-          appId,
-          appName: kycServiceDetail.appName,
-          grantType: serviceType,
-          sessionId: generateHash(
-            serviceType === GRANT_TYPES.access_service_kyb
-              ? `${appId}_${serviceType}`
-              : appId,
-          ),
-          subdomain: kycServiceDetail.subdomain,
-        },
+        idServiceTokenPayload,
         expiryConfig.jwtTime,
         expiryConfig.jwtUnit,
       ),
@@ -407,7 +429,11 @@ export class WebpageConfigService {
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
       ]);
     }
-    const defaultAccessList = getAccessListForModule(tokenModule, serviceType);
+    const defaultAccessList = getAccessListForModule(
+      tokenModule,
+      serviceType,
+      grantType,
+    );
     const validateAccessList = evaluateAccessPolicy(
       defaultAccessList,
       serviceType,

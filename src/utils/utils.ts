@@ -19,7 +19,8 @@ import {
   SERVICES,
 } from 'src/supported-service/services/iServiceList';
 import {
-  KYC_ACCESS_MATRIX,
+  CAVACH_KYC_ACCESS_MATRIX,
+  CAVACH_KYB_ACCESS_MATRIX,
   QUEST_ACCESS_MATRIX,
   SSI_ACCESS_MATRIX,
   TokenModule,
@@ -187,10 +188,13 @@ export const REDIS_KEYS = {
 export function getAccessListForModule(
   module: TokenModule,
   serviceType: SERVICE_TYPES,
+  grantType?: string,
 ) {
   switch (serviceType) {
     case SERVICE_TYPES.CAVACH_API:
-      return KYC_ACCESS_MATRIX[module] || [];
+      return grantType === 'access_service_kyb'
+        ? CAVACH_KYB_ACCESS_MATRIX[module] || []
+        : CAVACH_KYC_ACCESS_MATRIX[module] || [];
     case SERVICE_TYPES.SSI_API:
       return SSI_ACCESS_MATRIX[module] || [];
     case SERVICE_TYPES.QUEST:

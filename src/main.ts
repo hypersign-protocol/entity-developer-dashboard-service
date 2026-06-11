@@ -100,6 +100,8 @@ async function bootstrap() {
     Logger.log('After  keymanager initialization', 'main');
   } catch (e) {
     Logger.error(e);
+    // To ensure if key manager is not initialized it should restart
+    process.exit(1);
   }
 
   try {

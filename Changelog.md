@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+## [3.13.0] - 2026-06-24
+
+### Added
+- Added new access `WRITE_ZK_PROOF_VERIFY` for accessing zk-proof verifcation api.
+
 ## [3.12.3] - 2026-06-10
 
 ### Added

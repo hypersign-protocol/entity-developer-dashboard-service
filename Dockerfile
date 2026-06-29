@@ -9,10 +9,11 @@ COPY ./package.json .
 COPY ./tsconfig.json .
 COPY ./yarn.lock .
 COPY . .
-RUN yarn cache clean && yarn install --frozen-lockfile 
+RUN yarn install --frozen-lockfile --network-timeout 600000 --network-concurrency 1 --cache-folder /tmp/yarn-cache \
+    && yarn cache clean --cache-folder /tmp/yarn-cache \
+    && rm -rf /tmp/yarn-cache
 RUN yarn build
 CMD ["yarn", "start:prod"]
-
 
 
 

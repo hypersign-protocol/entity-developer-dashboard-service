@@ -16,5 +16,9 @@ export const ONBORDING_CONSTANT_DATA = {
       access: 'ALL',
       serviceType: SERVICE_TYPES.QUEST,
     },
+    {
+      access: 'ALL',
+      serviceType: SERVICE_TYPES.DASHBOARD,
+    },
   ],
 };

@@ -118,6 +118,8 @@ export namespace SERVICES {
 
       WRITE_COMPLIANCE = 'WRITE_COMPLIANCE',
       READ_COMPLIANCE = 'READ_COMPLIANCE',
+      //Zk verification access list
+      WRITE_ZK_PROOF_VERIFY = 'WRITE_ZK_PROOF_VERIFY',
     }
   }
 

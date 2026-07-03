@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+## [3.13.0] - 2026-06-24
+
+### Added
+- Added new access `WRITE_ZK_PROOF_VERIFY` for accessing zk-proof verifcation api.
+- Added `ed25519` and `babyJubJub` keys for ZK-proof verification.
+- Granted All dashboard access during onboarding.
+- Enabled ZKProofAge with the default age of 18 when `AgeVerification` is selected as a service.
+
 ## [3.12.3] - 2026-06-10
 
 ### Added

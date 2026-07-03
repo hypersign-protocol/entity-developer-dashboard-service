@@ -608,6 +608,8 @@ export class AppAuthService {
       env: (updatedapp.env as APP_ENVIRONMENT) ?? APP_ENVIRONMENT.dev,
       appName: updatedapp.appName,
       whitelistedCors: updatedapp.whitelistedCors,
+      issuerDid: updatedapp.issuerDid,
+      issuerVerificationMethodId: updatedapp.issuerVerificationMethodId,
     });
 
     return updatedapp;
@@ -1137,6 +1139,8 @@ export class AppAuthService {
       env: APP_ENVIRONMENT;
       appName: string;
       whitelistedCors: string[];
+      issuerDid: string;
+      issuerVerificationMethodId: string;
     }>,
   ) {
     Logger.debug('Inside updateAppRedis(): Updating app redis cache...');

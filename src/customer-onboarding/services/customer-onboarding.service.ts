@@ -337,6 +337,48 @@ export class CustomerOnboardingService {
       'Failed to credit service',
     );
   }
+
+  private shouldUseBabyJubJubIssuer(interestedService?: InterestedService[]) {
+    return [
+      InterestedService.PROOF_OF_PERSONHOOD,
+      InterestedService.AGE_VERIFICATION,
+    ].some((service) => interestedService?.includes(service));
+  }
+
+  private shouldEnableProofOfAge(interestedService?: InterestedService[]) {
+    return (
+      interestedService?.includes(InterestedService.AGE_VERIFICATION) ?? false
+    );
+  }
+
+  private getIssuerDetails(
+    did: string,
+    useBabyJubJubIssuer: boolean,
+  ): { issuerDid: string; issuerVerificationMethodId: string } {
+    return {
+      issuerDid: did,
+      issuerVerificationMethodId: `${did}#${
+        useBabyJubJubIssuer ? 'key-2' : 'key-1'
+      }`,
+    };
+  }
+
+  private getDidRegisterSignInfos(did: string, useBabyJubJubIssuer: boolean) {
+    const signInfos = [
+      {
+        verification_method_id: `${did}#key-1`,
+      },
+    ];
+
+    if (useBabyJubJubIssuer) {
+      signInfos.push({
+        verification_method_id: `${did}#key-2`,
+      });
+    }
+
+    return signInfos;
+  }
+
   /**
    * Processes a customer onboarding request through multiple steps
    * Steps include:
@@ -388,6 +430,9 @@ export class CustomerOnboardingService {
       // Initialize configuration
       const { companyName, domain, userId, companyLogo, customerEmail } =
         customerOnboardingData;
+      const useBabyJubJubIssuer = this.shouldUseBabyJubJubIssuer(
+        customerOnboardingData.interestedService,
+      );
       const ssiBaseDomain = this.config.get<string>('SSI_API_DOMAIN');
       const cavachBaseDomain = this.config.get<string>('CAVACH_API_DOMAIN');
       const secret = this.config.get('JWT_SECRET');
@@ -645,16 +690,12 @@ export class CustomerOnboardingService {
               } = {
                 namespace: this.config.get('HID_NETWORK_NAMESPACE') || '',
               };
-              const shouldCreateServiceSpecificDid = [
-                InterestedService.PROOF_OF_PERSONHOOD,
-                InterestedService.AGE_VERIFICATION,
-              ].some((service) =>
-                customerOnboardingData.interestedService?.includes(service),
-              );
-
-              if (shouldCreateServiceSpecificDid) {
+              if (useBabyJubJubIssuer) {
                 didCreateBody.options = {
-                  keyType: [VerificationMethodTypes.BabyJubJubKey2021],
+                  keyType: [
+                    VerificationMethodTypes.Ed25519VerificationKey2020,
+                    VerificationMethodTypes.BabyJubJubKey2021,
+                  ],
                 };
               }
               const didData = await this.makeExternalRequest(
@@ -759,11 +800,10 @@ export class CustomerOnboardingService {
                   },
                   body: JSON.stringify({
                     didDocument,
-                    signInfos: [
-                      {
-                        verification_method_id: `${didToRegister}#key-1`,
-                      },
-                    ],
+                    signInfos: this.getDidRegisterSignInfos(
+                      didToRegister,
+                      useBabyJubJubIssuer,
+                    ),
                   }),
                 },
                 'Failed to register DID',
@@ -779,6 +819,10 @@ export class CustomerOnboardingService {
               Logger.log(
                 'CREATE_KYC_SERVICE step started',
                 'CustomerOnboardingService',
+              );
+              const issuerDetails = this.getIssuerDetails(
+                issuerDidData?.did || customerOnboardingData.businessId,
+                useBabyJubJubIssuer,
               );
               kycService = await this.appAuthService.createAnApp(
                 {
@@ -814,11 +858,9 @@ export class CustomerOnboardingService {
                     ssiService?.appId || customerOnboardingData.ssiServiceId,
                   ],
                   logoUrl: companyLogo,
-                  issuerDid:
-                    issuerDidData?.did || customerOnboardingData.businessId,
-                  issuerVerificationMethodId: `${
-                    issuerDidData?.did || customerOnboardingData.businessId
-                  }#key-1`,
+                  issuerDid: issuerDetails.issuerDid,
+                  issuerVerificationMethodId:
+                    issuerDetails.issuerVerificationMethodId,
                 },
                 userId,
               );
@@ -915,25 +957,40 @@ export class CustomerOnboardingService {
                 EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
                 EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
               );
+              const issuerDetails = this.getIssuerDetails(
+                issuerDidData?.did || customerOnboardingData.businessId,
+                useBabyJubJubIssuer,
+              );
+              const enableProofOfAge = this.shouldEnableProofOfAge(
+                customerOnboardingData.interestedService,
+              );
               const requestBody = {
                 faceRecog: true,
                 idOcr: {
                   enabled: true,
                   documentType: SupportedDocument.PASSPORT,
                 },
-                issuerDID:
-                  issuerDidData?.did || customerOnboardingData.businessId,
-                issuerVerificationMethodId: `${
-                  issuerDidData?.did || customerOnboardingData.businessId
-                }#key-1`,
+                issuerDID: issuerDetails.issuerDid,
+                issuerVerificationMethodId:
+                  issuerDetails.issuerVerificationMethodId,
                 onChainId: {
                   enabled: false,
                   selectedOnChainKYCconfiguration: null,
                 },
-                zkProof: {
-                  enabled: false,
-                  proofs: [],
-                },
+                zkProof: enableProofOfAge
+                  ? {
+                      enabled: true,
+                      proofs: [
+                        {
+                          proofType: 'zkProofOfAge',
+                          criteria: 18,
+                        },
+                      ],
+                    }
+                  : {
+                      enabled: false,
+                      proofs: [],
+                    },
                 userConsent: {
                   domain,
                   enabled: true,
@@ -1036,12 +1093,14 @@ export class CustomerOnboardingService {
                 EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
                 EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
               );
+              const issuerDetails = this.getIssuerDetails(
+                issuerDidData?.did || customerOnboardingData.businessId,
+                useBabyJubJubIssuer,
+              );
               const requestBody = {
-                issuerDID:
-                  issuerDidData?.did || customerOnboardingData.businessId,
-                issuerVerificationMethodId: `${
-                  issuerDidData?.did || customerOnboardingData.businessId
-                }#key-1`,
+                issuerDID: issuerDetails.issuerDid,
+                issuerVerificationMethodId:
+                  issuerDetails.issuerVerificationMethodId,
                 collectCertOfIncorporationDoc: true,
                 collectPowerOfAttorneyDoc: true,
                 collectAddressProofDoc: true,

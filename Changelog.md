@@ -1,7 +1,7 @@
 # Changelog
 
 ## [Unreleased]
-## [3.13.0] - 2026-07-06
+## [3.13.1] - 2026-07-06
 ### Changed
 - Updated hypersign logo url.
 

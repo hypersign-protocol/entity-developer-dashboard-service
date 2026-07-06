@@ -1,5 +1,5 @@
 const LOGO_URL =
-  'https://storage.googleapis.com/fyre-image-storage/download.png';
+  'https://hypersign.id/imports/logo.png';
 
 export function getHeader(): string {
   return `<tr>

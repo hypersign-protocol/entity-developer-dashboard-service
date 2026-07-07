@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+## [3.14.0] - 2026-07-07
+### Added
+- Added new access for `/oauth` api for access kyb apis by thirdparty customer.
+
 ## [3.13.1] - 2026-07-06
 ### Changed
 - Updated hypersign logo url.

@@ -1,9 +1,10 @@
 # Changelog
 
 ## [Unreleased]
-## [3.14.0] - 2026-07-07
+## [3.14.0] - 2026-07-10
 ### Added
 - Added new access for `/oauth` api for access kyb apis by thirdparty customer.
+- Added `businessId` as optional query parameter in `/oauth` api.
 
 ## [3.13.1] - 2026-07-06
 ### Changed

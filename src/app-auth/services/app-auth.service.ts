@@ -32,7 +32,7 @@ import { UserRole } from 'src/user/schema/user.schema';
 import { WebPageConfigRepository } from 'src/webpage-config/repositories/webpage-config.repository';
 import { InjectModel } from '@nestjs/mongoose';
 import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import {
   DNS_RESOLVER_URL,
   evaluateAccessPolicy,
@@ -760,8 +760,12 @@ export class AppAuthService {
     appSecreatKey: string,
     expiresin = 4,
     grantType,
+    businessId?: string,
   ): Promise<{ access_token; expiresIn; tokenType }> {
     Logger.log('generateAccessToken() method: starts....', 'AppAuthService');
+    if (businessId && !Types.ObjectId.isValid(businessId)) {
+      throw new BadRequestException(['Invalid business ID']);
+    }
     const apikeyIndex = appSecreatKey.split('.')[0];
     const appDetail = await this.appRepository.findOne({
       apiKeyPrefix: apikeyIndex,
@@ -815,6 +819,7 @@ export class AppAuthService {
         grantType: grantType || sessionJson.grantType,
         subdomain: sessionJson.subdomain,
         sessionId: redisKey,
+        ...(businessId && { businessId }),
       };
       return this.getAccessToken(jwtPayload, expiresin);
     }
@@ -886,6 +891,7 @@ export class AppAuthService {
       grantType: grant_type,
       subdomain: appDetail.subdomain,
       sessionId: redisKey,
+      ...(businessId && { businessId }),
     };
     await this.storeDataInRedis(grant_type, appDetail, accessList, redisKey);
     return this.getAccessToken(jwtPayload, expiresin);

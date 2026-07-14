@@ -244,7 +244,7 @@ export class AuthzCreditService {
         accessList: isSsiService
           ? SERVICES.SSI_API.ACCESS_TYPES.WRITE_CREDIT
           : SERVICES.CAVACH_API.ACCESS_TYPES.WRITE_CREDIT,
-        creditedBy: superAdminUserId
+        creditedBy: superAdminUserId,
       };
       const { jwtTime, jwtUnit } = EXPIRY_CONFIG.CREDIT_TOKEN;
       const expiresIn = `${jwtTime}${jwtUnit}`;

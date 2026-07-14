@@ -295,6 +295,7 @@ export class CustomerOnboardingService {
     secret: string,
     whitelistedCors: string[] = ['*'],
     accessList: string[],
+    superAdminUserId
   ) {
     Logger.debug(tenantUrl);
     Logger.log(
@@ -312,6 +313,7 @@ export class CustomerOnboardingService {
       grantType,
       whitelistedCors,
       accessList,
+      creditedBy: superAdminUserId
     };
     const creditToken = await this.generateCreditToken(creditPayload, secret);
     const headers: Record<string, string> = {
@@ -396,6 +398,7 @@ export class CustomerOnboardingService {
   async processCustomerOnboarding(
     id: string,
     customerOnboardingProcessDto: CustomerOnboardingProcessDto,
+    superAdminUserId
   ) {
     Logger.log(
       'Inside processCustomerOnboarding() to approve customer onboarding request',
@@ -630,6 +633,7 @@ export class CustomerOnboardingService {
                   TokenModule.SUPER_ADMIN,
                   SERVICE_TYPES.SSI_API,
                 ),
+                superAdminUserId
               );
               Logger.debug(
                 'CREDIT_SSI_SERVICE step ends',
@@ -907,6 +911,7 @@ export class CustomerOnboardingService {
                   TokenModule.SUPER_ADMIN,
                   SERVICE_TYPES.CAVACH_API,
                 ),
+                superAdminUserId
               );
               Logger.debug(
                 'CREDIT_KYC_SERVICE step ends',

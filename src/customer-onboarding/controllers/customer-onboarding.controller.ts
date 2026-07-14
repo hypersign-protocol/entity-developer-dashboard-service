@@ -104,10 +104,12 @@ export class CustomerOnboardingController {
   processCustomerOnboarding(
     @Param('id') id: string,
     @Body() customerOnboardingProcessDto: CustomerOnboardingProcessDto,
+    @Req() req: any
   ) {
     return this.customerOnboardingService.processCustomerOnboarding(
       id,
       customerOnboardingProcessDto,
+      req.user.userId
     );
   }
 }

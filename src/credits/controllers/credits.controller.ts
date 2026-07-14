@@ -51,7 +51,12 @@ export class CreditsController {
   async grantCredit(
     @Param('appId') appId: string,
     @Body() creditRequestDto: CreditRequestDto,
+    @Req() req: any,
   ) {
-    return this.creditService.grantCredit(appId, creditRequestDto);
+    return this.creditService.grantCredit(
+      appId,
+      creditRequestDto,
+      req.user.userId,
+    );
   }
 }

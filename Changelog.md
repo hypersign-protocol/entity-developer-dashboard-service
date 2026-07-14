@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+## [3.14.0] - 2026-07-14
+### Changed
+- Added a way to trac credit issuer.
+
 ## [3.13.1] - 2026-07-06
 ### Changed
 - Updated hypersign logo url.

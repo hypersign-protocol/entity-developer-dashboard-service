@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { MailNotificationService } from './services/mail-notification.service';
 import * as dotenv from 'dotenv';
-import { CreditUsageNotificationProcessor } from './services/mail-queue-processor';
+import { CreditNotificationProcessor } from './services/mail-queue-processor';
 import { AppAuthModule } from 'src/app-auth/app-auth.module';
 dotenv.config();
 @Module({
@@ -25,7 +25,7 @@ dotenv.config();
       },
     }),
   ],
-  providers: [MailNotificationService, CreditUsageNotificationProcessor],
+  providers: [MailNotificationService, CreditNotificationProcessor],
   exports: [MailNotificationService],
 })
 export class MailNotificationModule {}

@@ -24,7 +24,7 @@ export default function getCreditUsageAlertMail(
     : null;
 
   const expiryField = formattedExpiry
-    ? `<li><strong>Expiry Date:</strong> ${formattedExpiry}</li>`
+    ? `<li style="margin:4px 0;"><strong>Expiry Date:</strong> ${formattedExpiry}</li>`
     : '';
 
   const message = `
@@ -43,7 +43,6 @@ export default function getCreditUsageAlertMail(
     <li style="margin:4px 0;"><strong>Used Credits:</strong> ${usedCredits} / ${totalCredits}</li>
     <li style="margin:4px 0;"><strong>Remaining Credits:</strong> ${remainingCredits}</li>
     <li style="margin:4px 0;"><strong>Usage Percentage:</strong> ${safePercentage}%</li>
-    <li style="margin:4px 0;"><strong>Configured Alert Threshold:</strong> ${threshold}%</li>
     ${expiryField}
   </ul>
 
@@ -56,7 +55,6 @@ export default function getCreditUsageAlertMail(
       </p>
       `
       : `
-      <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 12px;"><span style="font-size:16px;">⚠️</span> <strong>Credit Limit Approaching</strong></p>
       <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px;">
         Your service is nearing its credit limit. Please consider recharging to avoid any disruption.
       </p>

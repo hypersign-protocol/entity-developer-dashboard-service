@@ -52,7 +52,8 @@ export class CreditNotificationProcessor extends WorkerHost {
       let to: string;
       let cc: string[] = [];
       let pipeline: any[];
-
+      const isSuperAdminNotification =
+        job.data.serverName === 'HYPERSIGN_API_SERVICE';
       if (serverName === 'HYPERSIGN_API_SERVICE') {
         const users = await this.userRepository.find(
           { role: UserRole.SUPER_ADMIN },
@@ -118,6 +119,7 @@ export class CreditNotificationProcessor extends WorkerHost {
             totalCredits,
             usedCredits,
             expiresAt,
+            isSuperAdminNotification,
           );
 
           subject = `⚠️ Credit Usage Alert for Service ${serviceId}`;
@@ -134,6 +136,7 @@ export class CreditNotificationProcessor extends WorkerHost {
             totalCredits,
             usedCredits,
             expiresAt,
+            isSuperAdminNotification,
           );
 
           subject =

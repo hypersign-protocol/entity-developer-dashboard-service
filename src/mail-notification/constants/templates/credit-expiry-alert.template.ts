@@ -8,6 +8,7 @@ export default function getCreditExpiryAlertMail(
   totalCredits: number,
   usedCredits: number,
   expiresAt: string,
+  isSuperAdminNotification = false,
 ) {
   const isExpired = remainingDays === 0;
 
@@ -18,9 +19,21 @@ export default function getCreditExpiryAlertMail(
   const remainingCredits = Math.max(totalCredits - usedCredits, 0);
 
   const formattedExpiry = new Date(expiresAt).toLocaleDateString();
+  const greeting = isSuperAdminNotification
+    ? 'Dear Super Admin,'
+    : 'Dear Admin,';
 
+  const supportSection = !isSuperAdminNotification
+    ? `
+    <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:24px 0 0; line-height:1.7;">
+      If you have any questions or need assistance with renewing your credit plan,
+      please feel free to contact our support team at
+      <a href="mailto:Vikram@hypermine.in">Vikram@hypermine.in</a>.
+    </p>
+  `
+    : '';
   const message = `
-  <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">Dear Admin,</p>
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;"> ${greeting}</p>
 
   <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">
     ${
@@ -66,6 +79,7 @@ export default function getCreditExpiryAlertMail(
     <li style="margin:4px 0;">Renew or purchase a new credit plan.</li>
     <li style="margin:4px 0;">Ensure sufficient credits are available before the expiry date.</li>
   </ul>
+   ${supportSection}
 `;
 
   const container = getContainer(message, salutationMessage);

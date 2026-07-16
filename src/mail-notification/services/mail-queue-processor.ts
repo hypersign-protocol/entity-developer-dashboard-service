@@ -37,7 +37,7 @@ export class CreditNotificationProcessor extends WorkerHost {
   constructor(
     private readonly mailNotificationService: MailNotificationService,
     private readonly appAuthRepository: AppRepository,
-    private readonly userRepository: UserRepository
+    private readonly userRepository: UserRepository,
   ) {
     super();
   }
@@ -54,7 +54,10 @@ export class CreditNotificationProcessor extends WorkerHost {
       let pipeline: any[];
 
       if (serverName === 'HYPERSIGN_API_SERVICE') {
-        const users = await this.userRepository.find({ role: UserRole.SUPER_ADMIN }, { email: 1, _id: 0 });
+        const users = await this.userRepository.find(
+          { role: UserRole.SUPER_ADMIN },
+          { email: 1, _id: 0 },
+        );
         const emails = users.map((u) => u.email).filter(Boolean);
         if (!emails.length) {
           Logger.warn('No SUPER_ADMIN email found');
@@ -85,7 +88,9 @@ export class CreditNotificationProcessor extends WorkerHost {
             },
           },
         ];
-        const result = await this.appAuthRepository.findAppsByPipeline(pipeline);
+        const result = await this.appAuthRepository.findAppsByPipeline(
+          pipeline,
+        );
         if (!result?.length) {
           Logger.warn(`Admin email not found for serviceId: ${serviceId}`);
           return;

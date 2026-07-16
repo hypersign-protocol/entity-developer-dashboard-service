@@ -36,7 +36,10 @@ export class UserRepository {
       new: true,
     });
   }
-  async find(userFilterQuery: FilterQuery<User>, projection?: Record<string, any>,): Promise<User[]> {
+  async find(
+    userFilterQuery: FilterQuery<User>,
+    projection?: Record<string, any>,
+  ): Promise<User[]> {
     Logger.log(
       'find() method: starts, finding particular user from db',
       'UserRepository',

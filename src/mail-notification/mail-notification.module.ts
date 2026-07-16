@@ -4,10 +4,12 @@ import { MailNotificationService } from './services/mail-notification.service';
 import * as dotenv from 'dotenv';
 import { CreditNotificationProcessor } from './services/mail-queue-processor';
 import { AppAuthModule } from 'src/app-auth/app-auth.module';
+import { UserModule } from 'src/user/user.module';
 dotenv.config();
 @Module({
   imports: [
     AppAuthModule,
+    UserModule,
     BullModule.registerQueue({
       name: process.env.MAIL_QUEUE || 'Entity-Dashboard-Mail-Queue',
     }),

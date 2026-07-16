@@ -1,8 +1,10 @@
 # Changelog
 
 ## [Unreleased]
-## [3.15.0] - 2026-07-15
-- Added credit expiry mail processing
+## [3.15.0] - 2026-07-16
+- Added credit expiry email processing.
+- Implemented credit expiry and credit exhaustion email notifications for SUPER_ADMIN users of the API service.
+- Updated the `find()` method in `UserRepository` to support optional field projection.
 
 ## [3.14.0] - 2026-07-14
 ### Changed

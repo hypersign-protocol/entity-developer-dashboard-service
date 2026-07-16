@@ -6,6 +6,8 @@ import { AppRepository } from 'src/app-auth/repositories/app.repository';
 import getCreditUsageAlertMail from '../constants/templates/credit-usage-alert.template';
 import getCreditExpiryAlertMail from '../constants/templates/credit-expiry-alert.template';
 import { CreditNotificationJobNames } from '../dto/create-mail-notification.dto';
+import { UserRepository } from 'src/user/repository/user.repository';
+import { UserRole } from 'src/user/schema/user.schema';
 
 export type CreditUsageNotificationJob = {
   serviceId: string;
@@ -14,6 +16,7 @@ export type CreditUsageNotificationJob = {
   usedPercentage: number;
   threshold: number;
   expiresAt?: string;
+  serverName?: string;
 };
 
 export type CreditExpiryNotificationJob = {
@@ -23,6 +26,7 @@ export type CreditExpiryNotificationJob = {
   expiresAt: string;
   remainingDays: number;
   threshold: number;
+  serverName?: string;
 };
 
 @Processor(
@@ -33,6 +37,7 @@ export class CreditNotificationProcessor extends WorkerHost {
   constructor(
     private readonly mailNotificationService: MailNotificationService,
     private readonly appAuthRepository: AppRepository,
+    private readonly userRepository: UserRepository
   ) {
     super();
   }
@@ -42,36 +47,50 @@ export class CreditNotificationProcessor extends WorkerHost {
     data: CreditUsageNotificationJob | CreditExpiryNotificationJob;
   }) {
     try {
-      const { serviceId } = job.data;
+      const { serviceId, serverName } = job?.data;
 
-      const pipeline = [
-        {
-          $match: { appId: serviceId },
-        },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'userId',
-            foreignField: 'userId',
-            as: 'userDetails',
+      let to: string;
+      let cc: string[] = [];
+      let pipeline: any[];
+
+      if (serverName === 'HYPERSIGN_API_SERVICE') {
+        const users = await this.userRepository.find({ role: UserRole.SUPER_ADMIN }, { email: 1, _id: 0 });
+        const emails = users.map((u) => u.email).filter(Boolean);
+        if (!emails.length) {
+          Logger.warn('No SUPER_ADMIN email found');
+          return;
+        }
+        to = emails[0];
+        cc = emails.slice(1);
+      } else {
+        pipeline = [
+          {
+            $match: { appId: serviceId },
           },
-        },
-        {
-          $unwind: '$userDetails',
-        },
-        {
-          $project: {
-            _id: 0,
-            serviceId: 1,
-            adminEmail: '$userDetails.email',
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'userId',
+              foreignField: 'userId',
+              as: 'userDetails',
+            },
           },
-        },
-      ];
-      const result = await this.appAuthRepository.findAppsByPipeline(pipeline);
-      const adminEmail = result?.[0]?.adminEmail;
-      if (!adminEmail) {
-        Logger.warn(`Admin email not found for serviceId: ${serviceId}`);
-        return;
+          {
+            $unwind: '$userDetails',
+          },
+          {
+            $project: {
+              _id: 0,
+              adminEmail: '$userDetails.email',
+            },
+          },
+        ];
+        const result = await this.appAuthRepository.findAppsByPipeline(pipeline);
+        if (!result?.length) {
+          Logger.warn(`Admin email not found for serviceId: ${serviceId}`);
+          return;
+        }
+        to = result[0]?.adminEmail;
       }
 
       let html: string;
@@ -124,13 +143,14 @@ export class CreditNotificationProcessor extends WorkerHost {
           Logger.warn(`Unknown notification job: ${job.name}`);
           return;
       }
-
+      const mailJob = {
+        to,
+        subject,
+        message: html,
+        ...(cc.length > 0 && { cc }),
+      };
       await this.mailNotificationService.addAJob(
-        {
-          to: adminEmail,
-          subject,
-          message: html,
-        },
+        mailJob,
         JobNames.SEND_CREDIT_USAGE_NOTIFICATION,
       );
 

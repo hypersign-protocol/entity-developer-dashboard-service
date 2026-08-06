@@ -56,7 +56,7 @@ import getOnboardingRetryNotificationMail from 'src/mail-notification/constants/
 import { redisClient } from 'src/utils/redis.provider';
 import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 import { TokenModule } from 'src/config/access-matrix';
-import { AuthzCreditService } from 'src/credits/services/credits.service';
+import { CreditService } from 'src/credits/services/credits.service';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { VerificationMethodTypes } from 'src/utils/generated/client/enums';
 import { Types } from 'mongoose';
@@ -73,7 +73,7 @@ export class CustomerOnboardingService {
     private readonly appAuthRepository: AppRepository,
     private readonly roleRepository: RoleRepository,
     private readonly webPageConfig: WebpageConfigService,
-    private readonly authzService: AuthzCreditService,
+    private readonly creditService: CreditService,
   ) {}
   /**
    * Creates a new customer onboarding record and notifies super admins
@@ -325,7 +325,7 @@ export class CustomerOnboardingService {
       headers,
     };
     if (grantType === GRANT_TYPES.access_service_ssi) {
-      const authzCreditDetail = await this.authzService.grantSSICredit(
+      const authzCreditDetail = await this.creditService.grantSSICredit(
         serviceInfo.appId,
         '5000000',
       );

@@ -25,7 +25,7 @@ import {
   SERVICE_TYPES,
 } from 'src/supported-service/services/iServiceList';
 import { UserRepository } from 'src/user/repository/user.repository';
-import { AuthzCreditService } from 'src/credits/services/credits.service';
+import { CreditService } from 'src/credits/services/credits.service';
 import { EdvClientKeysManager } from 'src/edv/services/edv.singleton';
 import { UserRole } from 'src/user/schema/user.schema';
 import { WebPageConfigRepository } from 'src/webpage-config/repositories/webpage-config.repository';
@@ -66,7 +66,7 @@ export class AppAuthService {
     private readonly appAuthApiKeyService: AppAuthApiKeyService,
     private readonly supportedServices: SupportedServiceService,
     private readonly userRepository: UserRepository,
-    private readonly authzCreditService: AuthzCreditService,
+    private readonly creditService: CreditService,
     @InjectModel(CustomerOnboarding.name)
     private readonly onboardModel: Model<CustomerOnboarding>,
     private readonly webpageConfigRepo: WebPageConfigRepository,
@@ -189,7 +189,7 @@ export class AppAuthService {
     Logger.log('App created successfully', 'app-auth-service');
     const appResponse = this.getAppResponse(appData, apiSecretKey);
     if (service.id == SERVICE_TYPES.CAVACH_API) {
-      this.authzCreditService.grantCavachCredit(
+      this.creditService.grantCavachCredit(
         subdomain,
         appId,
         createAppDto.env ? createAppDto.env : APP_ENVIRONMENT.dev,

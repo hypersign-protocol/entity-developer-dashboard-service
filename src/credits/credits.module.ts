@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthZCredits, AuthZCreditsSchema } from './schemas/authz.schema';
-import { AuthzCreditService } from './services/credits.service';
+import { CreditService } from './services/credits.service';
 import { CreditsController } from './controllers/credits.controller';
 import { JWTAuthorizeMiddleware } from 'src/utils/middleware/jwt-authorization.middleware';
 import { UserModule } from 'src/user/user.module';
@@ -38,8 +38,8 @@ import { SuperAdminMiddleware } from 'src/utils/middleware/super-admin.middlewar
     HidWalletModule,
   ],
   controllers: [CreditsController],
-  providers: [AdminPeopleRepository, AuthzCreditService],
-  exports: [AuthzCreditService],
+  providers: [AdminPeopleRepository, CreditService],
+  exports: [CreditService],
 })
 export class CreditModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

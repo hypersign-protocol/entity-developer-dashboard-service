@@ -16,7 +16,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AllExceptionsFilter } from 'src/utils/utils';
-import { AuthzCreditService } from '../services/credits.service';
+import { CreditService } from '../services/credits.service';
 import {
   CreditRequestDto,
   CreditResponseDto,
@@ -27,7 +27,7 @@ import {
 @ApiTags('Credits')
 @Controller('/api/v1/credits')
 export class CreditsController {
-  constructor(private readonly creditService: AuthzCreditService) {}
+  constructor(private readonly creditService: CreditService) {}
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({
     description: 'Credit granted successfully',

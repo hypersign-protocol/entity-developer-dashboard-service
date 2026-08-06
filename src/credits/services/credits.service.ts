@@ -29,7 +29,7 @@ import { GRANT_TYPES } from 'src/app-auth/services/app-auth.service';
 import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 
 @Injectable()
-export class AuthzCreditService {
+export class CreditService {
   private authzWalletInstance;
   private granterClient: SigningStargateClient;
   constructor(
@@ -47,7 +47,7 @@ export class AuthzCreditService {
   ) {
     Logger.log(
       'grantCavachCredit() method to grant free credit to cavach service',
-      'AuthZCreditService',
+      'CreditService',
     );
     const payload = {
       purpose: 'CreditRecharge',
@@ -71,14 +71,11 @@ export class AuthzCreditService {
       },
     }).catch((error) => {
       const err = error instanceof Error ? error : new Error(String(error));
-      Logger.error('Failed to grant credit', err.stack, 'AuthZCreditService');
+      Logger.error('Failed to grant credit', err.stack, 'CreditService');
     });
   }
   async grantSSICredit(appId, allowance) {
-    Logger.log(
-      'Inside grantSSICredit to provide Authz grant',
-      'AuthzCreditService',
-    );
+    Logger.log('Inside grantSSICredit to provide Authz grant', 'CreditService');
     let appDetail;
     try {
       appDetail = await this.appRepository.findOne({ appId });
@@ -159,11 +156,7 @@ export class AuthzCreditService {
         ],
       };
     } catch (e) {
-      Logger.error(
-        'Issue while providing grantSSICredit',
-        e,
-        'AuthzCreditService',
-      );
+      Logger.error('Issue while providing grantSSICredit', e, 'CreditService');
       if (e instanceof Error) {
         throw new InternalServerErrorException(e.message);
       }
@@ -242,13 +235,13 @@ export class AuthzCreditService {
   }
 
   private async makeExternalRequest(url: string, options: RequestInit) {
-    Logger.log('Inside makeExternalRequest()', 'AuthzCreditService');
+    Logger.log('Inside makeExternalRequest()', 'CreditService');
     try {
-      Logger.log(`Making request to ${url}`, 'AuthzCreditService');
+      Logger.log(`Making request to ${url}`, 'CreditService');
       const response = await fetch(url, options);
       Logger.log(
         `Received response with status ${response.status}`,
-        'AuthzCreditService',
+        'CreditService',
       );
       const text = await response.text();
       const detail = text ? JSON.parse(text) : null;
@@ -264,7 +257,7 @@ export class AuthzCreditService {
       }
       return detail;
     } catch (error) {
-      Logger.error(error, error?.stack, 'AuthzCreditService');
+      Logger.error(error, error?.stack, 'CreditService');
       throw error;
     }
   }

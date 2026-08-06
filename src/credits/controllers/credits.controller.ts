@@ -29,20 +29,6 @@ import {
 export class CreditsController {
   constructor(private readonly creditService: AuthzCreditService) {}
   @ApiBearerAuth('Authorization')
-  @ApiExcludeEndpoint()
-  @Get('/app')
-  @ApiQuery({
-    name: 'appId',
-    example: 'appId',
-    description: 'Provide appId',
-  })
-  async getCreditByAppId(@Req() req: any, @Query() query: GetCreditsDto) {
-    const userId = req.user.userId;
-
-    const appId = query.appId;
-    return this.creditService.getCreditDetails(appId, userId);
-  }
-  @ApiBearerAuth('Authorization')
   @ApiOkResponse({
     description: 'Credit granted successfully',
     type: CreditResponseDto,

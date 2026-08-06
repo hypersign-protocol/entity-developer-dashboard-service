@@ -4,7 +4,6 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
-import { AuthZCreditsRepository } from '../repositories/authz.repository';
 import { scope } from '../../credits/schemas/authz.schema';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -34,48 +33,11 @@ export class AuthzCreditService {
   private authzWalletInstance;
   private granterClient: SigningStargateClient;
   constructor(
-    private readonly authzCreditsRepository: AuthZCreditsRepository,
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
     private readonly appRepository: AppRepository,
     private readonly hidWalletService: HidWalletService,
   ) {}
-
-  async createAuthzCredits(authz: { userId; appId }) {
-    Logger.log(
-      'Inside createAuthzCredits() to provide authZCredit',
-      'AuthzCreditService',
-    );
-    return await this.authzCreditsRepository.create({
-      userId: authz.userId,
-      appId: authz.appId,
-      expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      // created: new Date().toISOString(),
-      credit: {
-        amount: this.config.get('BASIC_ALLOWANCE') || '5000000',
-        denom: 'uhid',
-      },
-      creditScope: [
-        scope.MsgRegisterDID,
-        scope.MsgDeactivateDID,
-        scope.MsgRegisterCredentialSchema,
-        scope.MsgUpdateDID,
-        scope.MsgUpdateCredentialStatus,
-        scope.MsgRegisterCredentialStatus,
-      ],
-    });
-  }
-
-  async getCreditDetails(appId, userId) {
-    Logger.log(
-      'Inside getCreditDetails() to fetch authzCredit',
-      'AuthzCreditService',
-    );
-    return this.authzCreditsRepository.find({
-      userId,
-      appId,
-    });
-  }
 
   async grantCavachCredit(
     subdomain: string,

@@ -39,41 +39,6 @@ export class CreditService {
     private readonly hidWalletService: HidWalletService,
   ) {}
 
-  async grantCavachCredit(
-    subdomain: string,
-    appId: string,
-    environmentMode: APP_ENVIRONMENT,
-    tenantUrl: string,
-  ) {
-    Logger.log(
-      'grantCavachCredit() method to grant free credit to cavach service',
-      'CreditService',
-    );
-    const payload = {
-      purpose: 'CreditRecharge',
-      amount: 1501, // will take this as function parameter later
-      amountDenom: 'uHID',
-      validityPeriod: 6,
-      serviceId: appId,
-      validityPeriodUnit: 'MONTH',
-      env: environmentMode,
-      subdomain,
-    };
-    const token = await this.jwt.signAsync(payload, {
-      expiresIn: '5m',
-      secret: this.config.get('JWT_SECRET'),
-    });
-    fetch(`${sanitizeUrl(tenantUrl, true)}api/v1/credit`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'Application/json',
-        authorization: `Bearer ${token}`,
-      },
-    }).catch((error) => {
-      const err = error instanceof Error ? error : new Error(String(error));
-      Logger.error('Failed to grant credit', err.stack, 'CreditService');
-    });
-  }
   async grantSSICredit(appId, allowance) {
     Logger.log('Inside grantSSICredit to provide Authz grant', 'CreditService');
     let appDetail;

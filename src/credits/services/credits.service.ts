@@ -27,6 +27,7 @@ import {
 import { sanitizeUrl } from 'src/utils/utils';
 import { GRANT_TYPES } from 'src/app-auth/services/app-auth.service';
 import { EXPIRY_CONFIG } from 'src/utils/time-constant';
+import { CreditRequestDto } from '../dtos/credits.dto';
 
 @Injectable()
 export class CreditService {
@@ -39,8 +40,11 @@ export class CreditService {
     private readonly hidWalletService: HidWalletService,
   ) {}
 
-  async grantSSICredit(appId, allowance) {
-    Logger.log('Inside grantSSICredit to provide Authz grant', 'CreditService');
+  async grantSSIAllowance(appId: string, allowance: string) {
+    Logger.log(
+      'Inside grantSSIAllowance to provide Authz grant',
+      'CreditService',
+    );
     let appDetail;
     try {
       appDetail = await this.appRepository.findOne({ appId });
@@ -121,14 +125,22 @@ export class CreditService {
         ],
       };
     } catch (e) {
-      Logger.error('Issue while providing grantSSICredit', e, 'CreditService');
+      Logger.error(
+        'Issue while providing grantSSIAllowance',
+        e,
+        'CreditService',
+      );
       if (e instanceof Error) {
         throw new InternalServerErrorException(e.message);
       }
       throw new InternalServerErrorException([e]);
     }
   }
-  async grantCredit(appId, creditDto, superAdminUserId) {
+  async grantCredit(
+    appId: string,
+    creditDto: CreditRequestDto,
+    superAdminUserId: string,
+  ) {
     let appDetail;
     try {
       appDetail = await this.appRepository.findOne({ appId });
@@ -180,7 +192,7 @@ export class CreditService {
         },
       };
       if (isSsiService) {
-        const authzCreditDetail = await this.grantSSICredit(appId, amount);
+        const authzCreditDetail = await this.grantSSIAllowance(appId, amount); // Decide if we have to send multiple requests
         requestOptions.body = JSON.stringify({
           ...authzCreditDetail,
         });

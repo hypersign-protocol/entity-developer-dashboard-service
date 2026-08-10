@@ -14,7 +14,10 @@ import getOnboardingApprovedNotificationMail from 'src/mail-notification/constan
 import { UserRepository } from 'src/user/repository/user.repository';
 import { UserRole } from 'src/user/schema/user.schema';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
-import { CustomerOnboardingProcessDto } from '../dto/customer-onboarding-process.dto';
+import {
+  CreditDetail,
+  CustomerOnboardingProcessDto,
+} from '../dto/customer-onboarding-process.dto';
 import {
   AppAuthService,
   GRANT_TYPES,
@@ -288,56 +291,60 @@ export class CustomerOnboardingService {
    * @param whitelistedCors - CORS whitelist array (defaults to ['*'])
    */
   private async handleCreditService(
-    creditDetail: any,
+    creditDetail: CreditDetail,
     serviceInfo: { appId: string; subdomain: string },
-    grantType: string,
-    tenantUrl: string,
-    secret: string,
-    whitelistedCors: string[] = ['*'],
-    accessList: string[],
-    superAdminUserId,
+    superAdminUserId: string,
   ) {
-    Logger.debug(tenantUrl);
     Logger.log(
-      `Inside handleCreditService() to fund credit to the service with tenantUrl ${tenantUrl}`,
+      `Inside handleCreditService() to fund credit to the service with appId ${serviceInfo.appId}`,
       'CustomerOnboardingService',
     );
-    const creditPayload = {
-      serviceId: serviceInfo.appId,
-      purpose: 'CreditRecharge',
-      amount: creditDetail.amount,
-      validityPeriod: creditDetail.validityPeriod,
-      validityPeriodUnit: creditDetail.validityPeriodUnit,
-      amountDenom: creditDetail.amountDenom,
-      subdomain: serviceInfo.subdomain,
-      grantType,
-      whitelistedCors,
-      accessList,
-      creditedBy: superAdminUserId,
-    };
-    const creditToken = await this.generateCreditToken(creditPayload, secret);
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-api-credit-token': creditToken,
-    };
-    const requestOptions: any = {
-      method: 'POST',
-      headers,
-    };
-    if (grantType === GRANT_TYPES.access_service_ssi) {
-      const authzCreditDetail = await this.creditService.grantSSICredit(
-        serviceInfo.appId,
-        '5000000',
-      );
-      requestOptions.body = JSON.stringify({
-        ...authzCreditDetail,
-      });
-    }
-    await this.makeExternalRequest(
-      `${sanitizeUrl(tenantUrl, true)}api/v1/credit`,
-      requestOptions,
-      'Failed to credit service',
+    await this.creditService.grantCredit(
+      serviceInfo.appId,
+      {
+        amount: creditDetail.amount.toString(),
+        validityPeriod: creditDetail.validityPeriod,
+        validityPeriodUnit: creditDetail.validityPeriodUnit,
+        amountDenom: creditDetail.amountDenom,
+      },
+      superAdminUserId,
     );
+    // const creditPayload = {
+    //   serviceId: serviceInfo.appId,
+    //   purpose: 'CreditRecharge',
+    //   amount: creditDetail.amount,
+    //   validityPeriod: creditDetail.validityPeriod,
+    //   validityPeriodUnit: creditDetail.validityPeriodUnit,
+    //   amountDenom: creditDetail.amountDenom,
+    //   subdomain: serviceInfo.subdomain,
+    //   grantType,
+    //   whitelistedCors,
+    //   accessList,
+    //   creditedBy: superAdminUserId,
+    // };
+    // const creditToken = await this.generateCreditToken(creditPayload, secret);
+    // const headers: Record<string, string> = {
+    //   'Content-Type': 'application/json',
+    //   'x-api-credit-token': creditToken,
+    // };
+    // const requestOptions: any = {
+    //   method: 'POST',
+    //   headers,
+    // };
+    // if (grantType === GRANT_TYPES.access_service_ssi) {
+    //   const authzCreditDetail = await this.creditService.grantSSIAllowance(
+    //     serviceInfo.appId,
+    //     '5000000',
+    //   );
+    //   requestOptions.body = JSON.stringify({
+    //     ...authzCreditDetail,
+    //   });
+    // }
+    // await this.makeExternalRequest(
+    //   `${sanitizeUrl(tenantUrl, true)}api/v1/credit`,
+    //   requestOptions,
+    //   'Failed to credit service',
+    // );
   }
 
   private shouldUseBabyJubJubIssuer(interestedService?: InterestedService[]) {
@@ -417,7 +424,10 @@ export class CustomerOnboardingService {
       didDocument: any;
 
     try {
-      const { ssiCreditDetail, kycCreditDetail } = customerOnboardingProcessDto;
+      const ssiCreditDetail: CreditDetail =
+        customerOnboardingProcessDto.ssiCreditDetail;
+      const kycCreditDetail: CreditDetail =
+        customerOnboardingProcessDto.kycCreditDetail;
 
       // Validate and fetch customer onboarding details
       const customerOnboardingData =
@@ -625,14 +635,6 @@ export class CustomerOnboardingService {
                     ssiService?.subdomain ||
                     customerOnboardingData.ssiSubdomain,
                 },
-                GRANT_TYPES.access_service_ssi,
-                ssiTenantUrl,
-                secret,
-                ssiService?.whitelistedCors,
-                getAccessListForModule(
-                  TokenModule.SUPER_ADMIN,
-                  SERVICE_TYPES.SSI_API,
-                ),
                 superAdminUserId,
               );
               Logger.debug(
@@ -903,14 +905,6 @@ export class CustomerOnboardingService {
                     kycService?.subdomain ||
                     customerOnboardingData.kycSubdomain,
                 },
-                GRANT_TYPES.access_service_kyc,
-                kycTenantUrl,
-                secret,
-                kycService?.whitelistedCors,
-                getAccessListForModule(
-                  TokenModule.SUPER_ADMIN,
-                  SERVICE_TYPES.CAVACH_API,
-                ),
                 superAdminUserId,
               );
               Logger.debug(

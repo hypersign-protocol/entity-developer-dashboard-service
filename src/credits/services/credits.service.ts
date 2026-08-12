@@ -28,6 +28,7 @@ import { sanitizeUrl } from 'src/utils/utils';
 import { GRANT_TYPES } from 'src/app-auth/services/app-auth.service';
 import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 import { CreditRequestDto } from '../dtos/credits.dto';
+import { TimeUnit } from 'src/customer-onboarding/constants/enum';
 
 @Injectable()
 export class CreditService {
@@ -40,7 +41,7 @@ export class CreditService {
     private readonly hidWalletService: HidWalletService,
   ) {}
 
-  async grantSSIAllowance(appId: string, allowance: string) {
+  async grantSSIAllowance(appId: string, allowance: string, periodInYears = 1) {
     Logger.log(
       'Inside grantSSIAllowance to provide Authz grant',
       'CreditService',
@@ -68,28 +69,33 @@ export class CreditService {
         walletAddress,
         this.authzWalletInstance.address,
         MSG_CREATE_DID_TYPEURL,
+        periodInYears,
       );
       const authGrantTxnMsgAndFeeDIDUpdate = await generateAuthzGrantTxnMessage(
         walletAddress,
         this.authzWalletInstance.address,
         MSG_UPDATE_DID_TYPEURL,
+        periodInYears,
       );
       const authGrantTxnMsgAndFeeUpdateCredStatus =
         await generateAuthzGrantTxnMessage(
           walletAddress,
           this.authzWalletInstance.address,
           MSG_UPDATE_CREDENTIAL_STATUS,
+          periodInYears,
         );
 
       const authGrantTxnMsgAndFeeSchema = await generateAuthzGrantTxnMessage(
         walletAddress,
         this.authzWalletInstance.address,
         MSG_REGISTER_CREDENTIAL_SCHEMA,
+        periodInYears,
       );
       const authGrantTxnMsgAndFeeCred = await generateAuthzGrantTxnMessage(
         walletAddress,
         this.authzWalletInstance.address,
         MSG_REGISTER_CREDENTIAL_STATUS,
+        periodInYears,
       );
       // Perform FeeGrant Allowence
       const performFeegrantAllowence =
@@ -97,6 +103,7 @@ export class CreditService {
           walletAddress,
           this.authzWalletInstance.address,
           `${allowance}uhid`,
+          periodInYears,
         );
       await this.granterClient.signAndBroadcast(
         this.authzWalletInstance.address,
@@ -192,7 +199,15 @@ export class CreditService {
         },
       };
       if (isSsiService) {
-        const authzCreditDetail = await this.grantSSIAllowance(appId, amount); // Decide if we have to send multiple requests
+        const periodInYears = this.getPeriodInYears(
+          validityPeriod,
+          validityPeriodUnit,
+        );
+        const authzCreditDetail = await this.grantSSIAllowance(
+          appId,
+          amount,
+          periodInYears,
+        );
         requestOptions.body = JSON.stringify({
           ...authzCreditDetail,
         });
@@ -208,6 +223,28 @@ export class CreditService {
         throw new InternalServerErrorException([e.message]);
       }
       throw new InternalServerErrorException([e]);
+    }
+  }
+
+  private getPeriodInYears(
+    validityPeriod?: number,
+    validityPeriodUnit?: TimeUnit,
+  ): number {
+    if (validityPeriod === undefined || validityPeriodUnit === undefined) {
+      return 1;
+    }
+
+    switch (validityPeriodUnit) {
+      case TimeUnit.Days:
+        return validityPeriod / 365;
+      case TimeUnit.Month:
+        return validityPeriod / 12;
+      case TimeUnit.Year:
+        return validityPeriod;
+      default:
+        throw new BadRequestException([
+          `Invalid validityPeriodUnit: ${validityPeriodUnit}`,
+        ]);
     }
   }
 

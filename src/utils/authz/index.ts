@@ -16,18 +16,17 @@ export const MSG_REGISTER_CREDENTIAL_SCHEMA =
 export const MSG_UPDATE_CREDENTIAL_STATUS =
   '/hypersign.ssi.v1.MsgUpdateCredentialStatus';
 
-function getExpirationDateInSeconds(periodInYears: number): Long {
-  const timeNowUnixTimestamp = Math.floor(Date.now() / 1000); // Get the current unix timestamp
-  const timeFutureUnixTimestamp: Long = Long.fromNumber(
+function getExpirationDateInSeconds(periodInYears = 1): Long {
+  const timeNowUnixTimestamp = Math.floor(Date.now() / 1000);
+  return Long.fromNumber(
     timeNowUnixTimestamp + 365 * 24 * 60 * 60 * periodInYears,
   );
-
-  return timeFutureUnixTimestamp;
 }
 export async function generateAuthzGrantTxnMessage(
   granteeAddress: string,
   granterAddress: string,
   grantMsgTypeUrl: string,
+  periodInYears = 1,
 ) {
   const authGrantMsg: MsgGrant = {
     granter: granterAddress,
@@ -42,7 +41,7 @@ export async function generateAuthzGrantTxnMessage(
         ).finish(),
       },
       expiration: Timestamp.fromPartial({
-        seconds: getExpirationDateInSeconds(1),
+        seconds: getExpirationDateInSeconds(periodInYears),
       }),
     },
   };
@@ -71,6 +70,7 @@ export async function generatePerformFeegrantAllowanceTxn(
   granteeAddress: string,
   granterAddress: string,
   feeAllowanceInUhid: string,
+  periodInYears = 1,
 ) {
   const feeAllowanceAmount = feeAllowanceInUhid.split('u')[0];
   const feeAllowanceDenom = 'u' + feeAllowanceInUhid.split('u')[1];
@@ -95,7 +95,7 @@ export async function generatePerformFeegrantAllowanceTxn(
             }),
           ],
           expiration: Timestamp.fromPartial({
-            seconds: getExpirationDateInSeconds(1),
+            seconds: getExpirationDateInSeconds(periodInYears),
           }),
         }),
       ).finish(),

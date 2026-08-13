@@ -9,6 +9,7 @@ export default function getCreditUsageAlertMail(
   totalCredits: number,
   usedCredits: number,
   expiresAt?: string,
+  isSuperAdminNotification = false,
 ) {
   const isExhausted = usedPercentage >= 100;
 
@@ -24,11 +25,23 @@ export default function getCreditUsageAlertMail(
     : null;
 
   const expiryField = formattedExpiry
-    ? `<li><strong>Expiry Date:</strong> ${formattedExpiry}</li>`
+    ? `<li style="margin:4px 0;"><strong>Expiry Date:</strong> ${formattedExpiry}</li>`
     : '';
+  const greeting = isSuperAdminNotification
+    ? 'Dear Super Admin,'
+    : 'Dear Admin,';
 
+  const supportSection = !isSuperAdminNotification
+    ? `
+    <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:24px 0 0; line-height:1.7;">
+      If you have any questions or need assistance with renewing your credit plan,
+      please feel free to contact our support team at
+      <a href="mailto:Vikram@hypermine.in">Vikram@hypermine.in</a>.
+    </p>
+  `
+    : '';
   const message = `
-  <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">Dear Admin,</p>
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">${greeting}</p>
 
   <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">
     The following service has ${
@@ -43,7 +56,6 @@ export default function getCreditUsageAlertMail(
     <li style="margin:4px 0;"><strong>Used Credits:</strong> ${usedCredits} / ${totalCredits}</li>
     <li style="margin:4px 0;"><strong>Remaining Credits:</strong> ${remainingCredits}</li>
     <li style="margin:4px 0;"><strong>Usage Percentage:</strong> ${safePercentage}%</li>
-    <li style="margin:4px 0;"><strong>Configured Alert Threshold:</strong> ${threshold}%</li>
     ${expiryField}
   </ul>
 
@@ -56,7 +68,6 @@ export default function getCreditUsageAlertMail(
       </p>
       `
       : `
-      <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 12px;"><span style="font-size:16px;">⚠️</span> <strong>Credit Limit Approaching</strong></p>
       <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px;">
         Your service is nearing its credit limit. Please consider recharging to avoid any disruption.
       </p>
@@ -68,7 +79,7 @@ export default function getCreditUsageAlertMail(
     <li style="margin:4px 0;">Recharge or top-up credits</li>
     <li style="margin:4px 0;">Ensure sufficient balance for uninterrupted service</li>
   </ul>
-
+ ${supportSection}
 `;
   const container = getContainer(message, salutationMessage);
   const body = getBody(container);

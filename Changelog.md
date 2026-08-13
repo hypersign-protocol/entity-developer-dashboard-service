@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+## [3.16.0] - 2026-08-13
+### Added
+- Api to fetch credit list
+- Api to activate specific credit
+
+## [Unreleased]
 ## [3.15.0] - 2026-07-16
 - Added credit expiry email processing.
 - Implemented credit expiry and credit exhaustion email notifications for SUPER_ADMIN users of the API service.

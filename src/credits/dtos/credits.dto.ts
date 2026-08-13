@@ -1,13 +1,138 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsInt,
   IsEnum,
   IsNotEmpty,
-  IsNumber,
+  IsOptional,
+  IsPositive,
   IsString,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { TimeUnit } from 'src/customer-onboarding/constants/enum';
+import {
+  CreditSourceEnum,
+  CreditStatus,
+  scope,
+} from '../schemas/credit.schema';
+
+export class ApiCreditDto {
+  @ApiProperty({ example: 15000, description: 'Total API credits granted' })
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  total: number;
+
+  @ApiProperty({
+    example: 0,
+    required: false,
+    description: 'Credits already used',
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  used?: number;
+}
+
+export class CreateCreditDto {
+  @ApiProperty({
+    example: 'app-123',
+    description: 'Application/service identifier',
+  })
+  @IsString()
+  @IsNotEmpty()
+  serviceId: string;
+
+  @ApiProperty({ type: ApiCreditDto })
+  @Type(() => ApiCreditDto)
+  @ValidateNested()
+  apiCredit: ApiCreditDto;
+
+  @ApiProperty({ example: 30, description: 'Credit validity in calendar days' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  validityDays: number;
+}
+
+export class ListCreditsDto {
+  @ApiProperty({ required: false, example: 'app-123' })
+  @IsOptional()
+  @IsString()
+  serviceId?: string;
+}
+
+export class CreditListResponseDto {
+  @ApiProperty({ type: [CreateCreditDto] })
+  data: CreateCreditDto[];
+
+  @ApiProperty({ example: 42 })
+  total: number;
+
+  @ApiProperty({ example: 1 })
+  page: number;
+
+  @ApiProperty({ example: 20 })
+  limit: number;
+}
+
+export class OnChainAllowanceResponseDto {
+  @ApiProperty({ example: 500 })
+  amount: number;
+
+  @ApiProperty({ example: 'uhid' })
+  denom: string;
+
+  @ApiPropertyOptional({ example: 0 })
+  usedAmount?: number;
+}
+
+export class CreditPlanResponseDto {
+  @ApiProperty({ example: '6a7d5998ce4c1a1d6a4aafd0' })
+  _id: string;
+
+  @ApiProperty({ example: 'bf34d591632f37e1facc5ba40f91d27340ce' })
+  serviceId: string;
+
+  @ApiProperty({ type: ApiCreditDto })
+  apiCredit: ApiCreditDto;
+
+  @ApiProperty({ example: 60 })
+  validityDays: number;
+
+  @ApiPropertyOptional({ format: 'date-time' })
+  expiresAt?: string;
+
+  @ApiProperty({ enum: CreditStatus, example: CreditStatus.ACTIVE })
+  status: CreditStatus;
+
+  @ApiPropertyOptional({ type: OnChainAllowanceResponseDto })
+  onChainAllowance?: OnChainAllowanceResponseDto;
+
+  @ApiPropertyOptional({ type: [String], enum: scope })
+  onChainAllowanceScopes?: scope[];
+
+  @ApiPropertyOptional({
+    example: '1784098395195-bc9b1a4f-39f4-4ccd-8dd4-e087efdf040c',
+  })
+  creditedBy?: string;
+
+  @ApiPropertyOptional({
+    enum: CreditSourceEnum,
+  })
+  source?: CreditSourceEnum;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt: string;
+
+  @ApiProperty({ format: 'date-time' })
+  updatedAt: string;
+
+  @ApiProperty({ example: 0 })
+  __v: number;
+}
 
 export class GetCreditsDto {
   @ApiProperty({
@@ -66,7 +191,7 @@ export class CreditRequestDto {
     description: 'Time till credit will be valie',
     example: '60',
   })
-  @IsNumber()
+  @Type(() => Number)
   validityPeriod: number;
   @ApiProperty({
     name: 'validityPeriodUnit',
@@ -80,7 +205,7 @@ export class CreditRequestDto {
     description: 'denom',
     example: 'uHid',
   })
-  @IsNumber()
+  @IsString()
   amountDenom: string;
 }
 
@@ -92,4 +217,16 @@ export class CreditResponseDto {
   })
   @IsString()
   message: string;
+}
+
+export class GetCreditsQueryDto {
+  @ApiPropertyOptional({
+    description: 'Filter credits by status',
+    enum: [CreditStatus.ACTIVE],
+    example: CreditStatus.ACTIVE,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum([CreditStatus.ACTIVE])
+  status?: CreditStatus;
 }

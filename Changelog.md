@@ -5,7 +5,7 @@
 ### Added
 - Api to fetch credit list
 - Api to activate specific credit
-
+- Storing credit detail in respective service queue
 ## [Unreleased]
 ## [3.15.0] - 2026-07-16
 - Added credit expiry email processing.

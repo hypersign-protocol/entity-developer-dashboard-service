@@ -23,6 +23,12 @@ import { AppAuthModule } from 'src/app-auth/app-auth.module';
 import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
 import { SuperAdminMiddleware } from 'src/utils/middleware/super-admin.middleware';
 import { CreditRepository } from './repositories/credit.repository';
+import { BullModule } from '@nestjs/bullmq';
+import {
+  CreditAllocationQueueService,
+  ID_CREDIT_ALLOCATION_QUEUE,
+  SSI_CREDIT_ALLOCATION_QUEUE,
+} from './services/credit-allocation-queue.service';
 
 @Module({
   imports: [
@@ -37,9 +43,18 @@ import { CreditRepository } from './repositories/credit.repository';
     HidWalletModule,
     forwardRef(() => AppAuthModule),
     HidWalletModule,
+    BullModule.registerQueue(
+      { name: SSI_CREDIT_ALLOCATION_QUEUE },
+      { name: ID_CREDIT_ALLOCATION_QUEUE },
+    ),
   ],
   controllers: [CreditsController],
-  providers: [AdminPeopleRepository, CreditRepository, CreditService],
+  providers: [
+    AdminPeopleRepository,
+    CreditRepository,
+    CreditAllocationQueueService,
+    CreditService,
+  ],
   exports: [CreditService],
 })
 export class CreditModule implements NestModule {

@@ -29,6 +29,7 @@ import {
 import { TimeUnit } from 'src/customer-onboarding/constants/enum';
 import { CreditRepository } from '../repositories/credit.repository';
 import { CreditStatus } from '../schemas/credit.schema';
+import { CreditAllocationQueueService } from './credit-allocation-queue.service';
 
 @Injectable()
 export class CreditService {
@@ -39,6 +40,7 @@ export class CreditService {
     private readonly appRepository: AppRepository,
     private readonly hidWalletService: HidWalletService,
     private readonly creditRepository: CreditRepository,
+    private readonly creditAllocationQueueService: CreditAllocationQueueService,
   ) {}
 
   async fetchCreditDetails(appId: string, status?: CreditStatus) {
@@ -96,9 +98,23 @@ export class CreditService {
       expiresAt.setUTCDate(expiresAt.getUTCDate() + credit.validityDays);
     }
 
-    return this.creditRepository.findByIdAndUpdate(creditId, {
-      $set: { status: CreditStatus.ACTIVE, expiresAt },
-    });
+    const activatedCredit = await this.creditRepository.findByIdAndUpdate(
+      creditId,
+      {
+        $set: { status: CreditStatus.ACTIVE, expiresAt },
+      },
+    );
+
+    const appDetail = await this.appRepository.findOne({ appId });
+    const serviceType = appDetail?.services?.[0]?.id;
+    if (activatedCredit && serviceType) {
+      await this.creditAllocationQueueService.addActiveCredit(
+        activatedCredit,
+        serviceType,
+      );
+    }
+
+    return activatedCredit;
   }
 
   async grantSSIAllowance(appId: string, allowance: string, periodInYears = 1) {
@@ -259,7 +275,7 @@ export class CreditService {
         onChainAllowanceScopes = authzCreditDetail.creditScope;
       }
 
-      await this.creditRepository.create({
+      const credit = await this.creditRepository.create({
         serviceId: appDetail.appId,
         apiCredit: { total: totalCredit, used: 0 },
         validityDays,
@@ -270,6 +286,13 @@ export class CreditService {
         creditedBy: superAdminUserId,
         source,
       });
+
+      if (status === CreditStatus.ACTIVE) {
+        await this.creditAllocationQueueService.addActiveCredit(
+          credit,
+          serviceInfo.id,
+        );
+      }
 
       return { message: `Credit is successfully granted for service ${appId}` };
     } catch (e) {

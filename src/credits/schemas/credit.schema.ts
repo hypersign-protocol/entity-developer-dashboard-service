@@ -69,7 +69,7 @@ export class CreditPlan {
   migrationSource?: 'ID_SERVICE' | 'SSI_SERVICE';
   @Prop({ required: false })
   legacyCreditId?: string;
-
+  // TODO: Discuss how to track processed commit reservation IDs and prevent duplicate credit deductions.
   // ToDo:- check if we need credit for spellOver and its expiry
   @Prop({ required: false, type: CreditNotificationState })
   notification?: CreditNotificationState;

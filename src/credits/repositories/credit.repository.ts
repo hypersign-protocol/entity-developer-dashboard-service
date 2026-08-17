@@ -58,6 +58,29 @@ export class CreditRepository {
       .lean()
       .exec();
   }
+
+  async applyCreditCommit(
+    creditId: string,
+    appId: string,
+    amount: number,
+  ): Promise<CreditPlan> {
+    return this.creditModel
+      .findOneAndUpdate(
+        {
+          _id: creditId,
+          serviceId: appId,
+          $expr: {
+            $lte: [{ $add: ['$apiCredit.used', amount] }, '$apiCredit.total'],
+          },
+        },
+        {
+          $inc: { 'apiCredit.used': amount },
+        },
+        { new: true },
+      )
+      .lean()
+      .exec();
+  }
   async findBasedOnAggregationPipeline(pipeline): Promise<any[]> {
     Logger.log(
       'Inside findBasedOnAggregationPipeline() to fetch credit based on aggregation',

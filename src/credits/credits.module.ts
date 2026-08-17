@@ -29,6 +29,10 @@ import {
   ID_CREDIT_ALLOCATION_QUEUE,
   SSI_CREDIT_ALLOCATION_QUEUE,
 } from './services/credit-allocation-queue.service';
+import {
+  CreditEventQueueProcessor,
+  CREDIT_EVENT_QUEUE,
+} from './services/credit-event-queue.processor';
 
 @Module({
   imports: [
@@ -46,6 +50,7 @@ import {
     BullModule.registerQueue(
       { name: SSI_CREDIT_ALLOCATION_QUEUE },
       { name: ID_CREDIT_ALLOCATION_QUEUE },
+      { name: CREDIT_EVENT_QUEUE },
     ),
   ],
   controllers: [CreditsController],
@@ -53,6 +58,7 @@ import {
     AdminPeopleRepository,
     CreditRepository,
     CreditAllocationQueueService,
+    CreditEventQueueProcessor,
     CreditService,
   ],
   exports: [CreditService],

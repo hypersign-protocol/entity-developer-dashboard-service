@@ -33,54 +33,54 @@ export class CreditRepository {
     return this.creditModel.findOne(creditFilterQuery);
   }
 
-  async updateMany(
-    filter: FilterQuery<CreditPlan>,
-    update: UpdateQuery<CreditPlan>,
-  ) {
-    Logger.log(
-      'Inside updateMany() to update multiple credit at a time',
-      'CreditRepository',
-    );
-    return this.creditModel.updateMany(filter, update).exec();
-  }
-
   async findByIdAndUpdate(
     id: string,
     update: UpdateQuery<CreditPlan>,
   ): Promise<CreditPlan> {
     Logger.log(
-      'Inside findByIdAndUpdate() to update  credit detail',
+      'Inside findByIdAndUpdate() to update credit detail',
       'CreditRepository',
     );
-
     return this.creditModel
       .findByIdAndUpdate(id, update, { new: true })
       .lean()
       .exec();
   }
 
-  async applyCreditCommit(
-    creditId: string,
+  async applyPlanCreditCommit(
     appId: string,
+    planId: string,
     amount: number,
+    eventId: string,
   ): Promise<CreditPlan> {
     return this.creditModel
       .findOneAndUpdate(
         {
-          _id: creditId,
+          _id: planId,
           serviceId: appId,
+          processedCommitEventIds: { $ne: eventId },
           $expr: {
             $lte: [{ $add: ['$apiCredit.used', amount] }, '$apiCredit.total'],
           },
         },
         {
           $inc: { 'apiCredit.used': amount },
+          $addToSet: { processedCommitEventIds: eventId },
         },
         { new: true },
       )
       .lean()
       .exec();
   }
+
+  async hasProcessedCommit(appId: string, eventId: string): Promise<boolean> {
+    return Boolean(
+      await this.creditModel
+        .exists({ serviceId: appId, processedCommitEventIds: eventId })
+        .exec(),
+    );
+  }
+
   async findBasedOnAggregationPipeline(pipeline): Promise<any[]> {
     Logger.log(
       'Inside findBasedOnAggregationPipeline() to fetch credit based on aggregation',

@@ -29,7 +29,7 @@ import {
 import { TimeUnit } from 'src/customer-onboarding/constants/enum';
 import { CreditRepository } from '../repositories/credit.repository';
 import { CreditStatus } from '../schemas/credit.schema';
-import { CreditAllocationQueueService } from './credit-allocation-queue.service';
+import { CreditCommandService } from './credit-command.service';
 
 @Injectable()
 export class CreditService {
@@ -40,7 +40,7 @@ export class CreditService {
     private readonly appRepository: AppRepository,
     private readonly hidWalletService: HidWalletService,
     private readonly creditRepository: CreditRepository,
-    private readonly creditAllocationQueueService: CreditAllocationQueueService,
+    private readonly creditCommandService: CreditCommandService,
   ) {}
 
   async fetchCreditDetails(appId: string, status?: CreditStatus) {
@@ -68,7 +68,6 @@ export class CreditService {
       `Activating credit plan for app with Id: ${appId} and creditId ${creditId}`,
       'CreditService',
     );
-
     if (!Types.ObjectId.isValid(creditId)) {
       throw new BadRequestException(['Invalid credit id']);
     }
@@ -84,36 +83,23 @@ export class CreditService {
     if (credit.expiresAt && credit.expiresAt <= new Date()) {
       throw new BadRequestException(['Expired credit cannot be activated']);
     }
-    await this.creditRepository.updateMany(
-      {
-        serviceId: appId,
-        _id: { $ne: creditId },
-        status: CreditStatus.ACTIVE,
-      },
-      { $set: { status: CreditStatus.INACTIVE } },
-    );
-
     const expiresAt = credit.expiresAt ?? new Date();
     if (!credit.expiresAt) {
       expiresAt.setUTCDate(expiresAt.getUTCDate() + credit.validityDays);
     }
-
     const activatedCredit = await this.creditRepository.findByIdAndUpdate(
       creditId,
-      {
-        $set: { status: CreditStatus.ACTIVE, expiresAt },
-      },
+      { $set: { status: CreditStatus.ACTIVE, expiresAt } },
     );
-
     const appDetail = await this.appRepository.findOne({ appId });
     const serviceType = appDetail?.services?.[0]?.id;
     if (activatedCredit && serviceType) {
-      await this.creditAllocationQueueService.addActiveCredit(
+      await this.creditCommandService.grantCreditPlan(
         activatedCredit,
         serviceType,
+        appDetail.subdomain,
       );
     }
-
     return activatedCredit;
   }
 
@@ -240,8 +226,10 @@ export class CreditService {
       const { amount, validityPeriod, validityPeriodUnit } = creditDto;
 
       const totalCredit = Number(amount);
-      if (!Number.isFinite(totalCredit) || totalCredit <= 0) {
-        throw new BadRequestException(['amount must be a positive number']);
+      if (!Number.isSafeInteger(totalCredit) || totalCredit <= 0) {
+        throw new BadRequestException([
+          'amount must be a positive safe integer',
+        ]);
       }
 
       const { validityDays, expiresAt } = this.getCreditValidity(
@@ -249,12 +237,7 @@ export class CreditService {
         validityPeriodUnit,
       );
 
-      const activeCredit =
-        await this.creditRepository.findParticularCreditDetail({
-          serviceId: appDetail.appId,
-          status: CreditStatus.ACTIVE,
-        });
-      const status = activeCredit ? CreditStatus.INACTIVE : CreditStatus.ACTIVE;
+      const status = CreditStatus.ACTIVE;
 
       let onChainAllowance;
       let onChainAllowanceScopes;
@@ -280,19 +263,18 @@ export class CreditService {
         apiCredit: { total: totalCredit, used: 0 },
         validityDays,
         status,
-        ...(status === CreditStatus.ACTIVE && { expiresAt }),
+        expiresAt,
         ...(onChainAllowance && { onChainAllowance }),
         ...(onChainAllowanceScopes && { onChainAllowanceScopes }),
         creditedBy: superAdminUserId,
         source,
       });
 
-      if (status === CreditStatus.ACTIVE) {
-        await this.creditAllocationQueueService.addActiveCredit(
-          credit,
-          serviceInfo.id,
-        );
-      }
+      await this.creditCommandService.grantCreditPlan(
+        credit,
+        serviceInfo.id,
+        appDetail.subdomain,
+      );
 
       return { message: `Credit is successfully granted for service ${appId}` };
     } catch (e) {

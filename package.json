@@ -27,6 +27,7 @@
     "@cosmjs/stargate": "0.31.0",
     "@digitalbazaar/ed25519-verification-key-2020": "3.3.0",
     "@digitalbazaar/x25519-key-agreement-key-2020": "2.1.0",
+    "@hypersign-protocol/credit-middleware": "../nestjs-interceptor/hypersign-protocol-credit-middleware-4.0.2.tgz",
     "@maxmind/geoip2-node": "6.1.0",
     "@nestjs/bull": "10.2.0",
     "@nestjs/bullmq": "10.1.1",
@@ -52,6 +53,7 @@
     "hs-ssi-sdk": "github:hypersign-protocol/hid-ssi-js-sdk",
     "hypersign-edv-client": "github:hypersign-protocol/hypersign-edv-client",
     "idb-keyval": "6.2.1",
+    "ioredis": "^5.8.1",
     "mongoose": "6.8.3",
     "otplib": "12.0.1",
     "passport": "0.6.0",
@@ -90,7 +92,7 @@
     "ts-loader": "^9.2.3",
     "ts-node": "^10.0.0",
     "tsconfig-paths": "4.1.1",
-    "typescript": "^4.7.4"
+    "typescript": "5.1.6"
   },
   "jest": {
     "moduleFileExtensions": [

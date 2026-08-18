@@ -23,42 +23,46 @@ import { AppAuthModule } from 'src/app-auth/app-auth.module';
 import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
 import { SuperAdminMiddleware } from 'src/utils/middleware/super-admin.middleware';
 import { CreditRepository } from './repositories/credit.repository';
-import { BullModule } from '@nestjs/bullmq';
-import {
-  CreditAllocationQueueService,
-  ID_CREDIT_ALLOCATION_QUEUE,
-  SSI_CREDIT_ALLOCATION_QUEUE,
-} from './services/credit-allocation-queue.service';
-import {
-  CreditEventQueueProcessor,
-  CREDIT_EVENT_QUEUE,
-} from './services/credit-event-queue.processor';
+import { CreditBullMqProvider } from './services/credit-bullmq.provider';
+import { CreditCommandService } from './services/credit-command.service';
+import { CreditEventStore } from './services/credit-event-store.service';
+import { CreditLifecycleConsumer } from './services/credit-lifecycle-consumer.service';
+
+const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
 
 @Module({
   imports: [
     UserModule,
     MongooseModule.forFeature([
-      { name: CreditPlan.name, schema: CreditsSchema },
-    ]),
-    MongooseModule.forFeature([
       { name: AdminPeople.name, schema: AdminPeopleSchema },
+      { name: CreditPlan.name, schema: CreditsSchema },
     ]),
     JwtModule.register({}),
     HidWalletModule,
     forwardRef(() => AppAuthModule),
     HidWalletModule,
-    BullModule.registerQueue(
-      { name: SSI_CREDIT_ALLOCATION_QUEUE },
-      { name: ID_CREDIT_ALLOCATION_QUEUE },
-      { name: CREDIT_EVENT_QUEUE },
-    ),
   ],
   controllers: [CreditsController],
   providers: [
+    {
+      provide: CREDIT_REDIS_URL,
+      useFactory: (): string =>
+        process.env.CREDIT_REDIS_URL ||
+        `redis://${
+          process.env.REDIS_HOST ||
+          'redis-stack-service.hypermine-development.svc.cluster.local'
+        }:${process.env.REDIS_PORT || '6379'}`,
+    },
+    {
+      provide: CreditBullMqProvider,
+      inject: [CREDIT_REDIS_URL],
+      useFactory: (redisUrl: string) => new CreditBullMqProvider(redisUrl),
+    },
     AdminPeopleRepository,
     CreditRepository,
-    CreditAllocationQueueService,
-    CreditEventQueueProcessor,
+    CreditCommandService,
+    CreditEventStore,
+    CreditLifecycleConsumer,
     CreditService,
   ],
   exports: [CreditService],

@@ -19,11 +19,7 @@ describe('CreditCommandService', () => {
       createdAt: new Date('2026-08-01T00:00:00.000Z'),
     } as CreditPlan;
 
-    await service.grantCreditPlan(
-      credit,
-      SERVICE_TYPES.CAVACH_API,
-      'tenant-1',
-    );
+    await service.grantCreditPlan(credit, SERVICE_TYPES.CAVACH_API, 'tenant-1');
 
     expect(bullMq.add).toHaveBeenCalledTimes(1);
     const [queueName, jobName, command, options] = bullMq.add.mock.calls[0];

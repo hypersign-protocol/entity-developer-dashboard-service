@@ -23,7 +23,7 @@ export class CreditCommandService {
         `No SDK credit catalog configured for service type: ${serviceType}`,
       );
     }
-    const catalogId = 'KYC';
+    const catalogId = 'hypersign-kyc-api-pricing';
 
     const planId = String((credit as CreditPlan & { _id?: unknown })._id ?? '');
     if (!planId) throw new Error('Credit plan must have an id');

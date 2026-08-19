@@ -29,7 +29,7 @@ describe('CreditEventStore', () => {
         eventId: 'event-1',
         schemaVersion: 2,
         catalogVersion: '2026-08-14',
-        catalogId: 'KYC',
+        catalogId: 'hypersign-kyc-api-pricing',
         event: {
           type: 'COMMITTED',
           appId: 'app-1',
@@ -58,7 +58,7 @@ describe('CreditEventStore', () => {
           eventId: 'event-1',
           schemaVersion: 2,
           catalogVersion: '2026-08-14',
-          catalogId: 'KYC',
+          catalogId: 'hypersign-kyc-api-pricing',
           event: {
             type: 'COMMITTED',
             appId: 'app-1',
@@ -78,7 +78,7 @@ describe('CreditEventStore', () => {
           eventId: 'event-1',
           schemaVersion: 2,
           catalogVersion: '2026-08-14',
-          catalogId: 'KYC',
+          catalogId: 'hypersign-kyc-api-pricing',
           event: {
             type: 'COMMITTED',
             appId: 'app-1',
@@ -155,7 +155,7 @@ function lifecycleJob(name: string, type: 'PLAN_EXPIRED' | 'CRITICAL_BALANCE') {
     eventId: 'event-1',
     schemaVersion: 2,
     catalogVersion: '2026-08-14',
-    catalogId: 'KYC',
+    catalogId: 'hypersign-kyc-api-pricing',
     event: {
       type,
       appId: 'app-1',

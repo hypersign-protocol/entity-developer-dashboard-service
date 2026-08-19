@@ -29,7 +29,7 @@ describe('CreditCommandService', () => {
       expect.objectContaining({
         schemaVersion: 2,
         commandId: 'grant-KYC-credit-1',
-        catalogId: 'KYC',
+        catalogId: 'hypersign-kyc-api-pricing',
         payload: expect.objectContaining({
           subject: {
             appId: 'app-1',

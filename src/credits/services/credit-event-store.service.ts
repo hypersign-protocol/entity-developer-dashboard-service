@@ -6,6 +6,8 @@ import {
   type CreditLifecycleEventEnvelope,
 } from '@hypersign-protocol/credit-middleware';
 import { CreditRepository } from '../repositories/credit.repository';
+import { CreditStatus } from '../schemas/credit.schema';
+import { CreditService } from './credits.service';
 
 export const CREDIT_EVENT_QUEUE = 'credit.lifecycle';
 
@@ -15,7 +17,10 @@ type CreditLifecycleEnvelope = Omit<CreditLifecycleEventEnvelope, 'event'> & {
 
 @Injectable()
 export class CreditEventStore {
-  constructor(private readonly creditRepository: CreditRepository) {}
+  constructor(
+    private readonly creditRepository: CreditRepository,
+    private readonly creditService: CreditService,
+  ) {}
 
   async append(job: CreditBullMqJob): Promise<void> {
     if (job.name === CREDIT_EVENT_NAMES.COMMAND_REJECTED) {
@@ -51,6 +56,10 @@ export class CreditEventStore {
         return;
       case CREDIT_EVENT_NAMES.PLAN_EXPIRED:
         this.validateLifecycleEventType(envelope, 'PLAN_EXPIRED');
+        await this.processPlanExpired(
+          envelope.event.appId,
+          this.planId(envelope),
+        );
         return;
       case CREDIT_EVENT_NAMES.RESERVED:
         this.validateLifecycleEventType(envelope, 'RESERVED');
@@ -66,6 +75,10 @@ export class CreditEventStore {
         break;
       case CREDIT_EVENT_NAMES.CRITICAL_BALANCE:
         this.validateLifecycleEventType(envelope, 'CRITICAL_BALANCE');
+        await this.processCriticalBalance(
+          envelope.event.appId,
+          this.planId(envelope),
+        );
         break;
       default:
         throw new Error(`Unsupported credit lifecycle job: ${jobName}`);
@@ -97,6 +110,30 @@ export class CreditEventStore {
       `Credit commit applied for appId ${appId} and reservation ${reservationId}`,
       CreditEventStore.name,
     );
+  }
+
+  private async processPlanExpired(appId: string, planId: string) {
+    await this.creditRepository.findOneAndUpdate(
+      { _id: planId, serviceId: appId, status: CreditStatus.ACTIVE },
+      { $set: { status: CreditStatus.INACTIVE } },
+    );
+  }
+
+  private async processCriticalBalance(appId: string, planId: string) {
+    const activeReplacement =
+      await this.creditRepository.findActiveCreditForService(appId, planId);
+    if (activeReplacement) return;
+
+    const replacement = await this.creditRepository.findParticularCreditDetail({
+      serviceId: appId,
+      status: CreditStatus.INACTIVE,
+      expiresAt: { $exists: false },
+    });
+    if (!replacement) return;
+    const replacementId = String(
+      (replacement as unknown as CreditPlanWithId)._id,
+    );
+    await this.creditService.activateCredit(replacementId, appId);
   }
 
   private lifecycleEnvelope(event: unknown): CreditLifecycleEnvelope {
@@ -172,3 +209,5 @@ export class CreditEventStore {
     }
   }
 }
+
+type CreditPlanWithId = { _id: unknown };

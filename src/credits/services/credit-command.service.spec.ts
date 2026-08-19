@@ -38,7 +38,7 @@ describe('CreditCommandService', () => {
             creditType: 'API_CREDIT',
           },
           planId: 'credit-1',
-          amount: 100,
+          amount: 75,
           grantedAt: new Date('2026-08-01T00:00:00.000Z').getTime(),
           expiresAt: new Date('2026-09-01T00:00:00.000Z').getTime(),
           referenceId: 'credit-1',
@@ -61,6 +61,29 @@ describe('CreditCommandService', () => {
       ),
     ).rejects.toThrow('Only an active credit plan can be granted');
 
+    expect(bullMq.add).not.toHaveBeenCalled();
+  });
+
+  it('rejects an exhausted credit plan', async () => {
+    const bullMq = { add: jest.fn() };
+    const service = new CreditCommandService(
+      bullMq as unknown as CreditBullMqProvider,
+    );
+
+    await expect(
+      service.grantCreditPlan(
+        {
+          _id: 'credit-1',
+          status: CreditStatus.ACTIVE,
+          serviceId: 'app-1',
+          apiCredit: { total: 100, used: 100 },
+          validityDays: 30,
+          expiresAt: new Date('2026-09-01T00:00:00.000Z'),
+          createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        } as CreditPlan,
+        SERVICE_TYPES.CAVACH_API,
+      ),
+    ).rejects.toThrow('Credit plan must have a positive remaining balance');
     expect(bullMq.add).not.toHaveBeenCalled();
   });
 

@@ -29,10 +29,17 @@ export class CreditCommandService {
     if (!planId) throw new Error('Credit plan must have an id');
     const appId = credit.serviceId;
 
-    const amount = credit.apiCredit.total;
-    if (!Number.isSafeInteger(amount) || amount <= 0) {
-      throw new Error('Credit plan amount must be a positive safe integer');
+    const { total, used } = credit.apiCredit;
+    if (
+      !Number.isSafeInteger(total) ||
+      total <= 0 ||
+      !Number.isSafeInteger(used) ||
+      used < 0 ||
+      used >= total
+    ) {
+      throw new Error('Credit plan must have a positive remaining balance');
     }
+    const amount = total - used;
     const grantedAt = new Date(
       (credit as CreditPlan & { createdAt?: Date }).createdAt ?? Date.now(),
     ).getTime();

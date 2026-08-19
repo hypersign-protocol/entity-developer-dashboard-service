@@ -69,9 +69,6 @@ export class CreditPlan {
   migrationSource?: 'ID_SERVICE' | 'SSI_SERVICE';
   @Prop({ required: false })
   legacyCreditId?: string;
-  @Prop({ required: false, type: [String], default: [], select: false })
-  processedCommitEventIds?: string[];
-  // ToDo:- check if we need credit for spellOver and its expiry
   @Prop({ required: false, type: CreditNotificationState })
   notification?: CreditNotificationState;
 }

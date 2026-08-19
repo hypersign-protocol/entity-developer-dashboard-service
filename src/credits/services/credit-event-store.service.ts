@@ -46,12 +46,34 @@ export class CreditEventStore {
     switch (jobName) {
       case CREDIT_EVENT_NAMES.COMMITTED:
         this.validateLifecycleEventType(envelope, 'COMMITTED');
-        await this.processCommit(
+        return;
+      case CREDIT_EVENT_NAMES.RESERVED:
+        this.validateLifecycleEventType(envelope, 'RESERVED');
+        await this.processReservation(
           envelope.event.appId,
           this.planId(envelope),
           this.eventAmount(envelope),
-          envelope.eventId,
           this.reservationId(envelope),
+        );
+        return;
+      case CREDIT_EVENT_NAMES.ROLLED_BACK:
+        this.validateLifecycleEventType(envelope, 'ROLLED_BACK');
+        await this.processReservationRelease(
+          envelope.event.appId,
+          this.planId(envelope),
+          this.restoredAmount(envelope),
+          this.reservationId(envelope),
+          'rolled back',
+        );
+        return;
+      case CREDIT_EVENT_NAMES.EXPIRED:
+        this.validateLifecycleEventType(envelope, 'EXPIRED');
+        await this.processReservationRelease(
+          envelope.event.appId,
+          this.planId(envelope),
+          this.restoredAmount(envelope),
+          this.reservationId(envelope),
+          'expired',
         );
         return;
       case CREDIT_EVENT_NAMES.PLAN_EXPIRED:
@@ -61,15 +83,6 @@ export class CreditEventStore {
           this.planId(envelope),
         );
         return;
-      case CREDIT_EVENT_NAMES.RESERVED:
-        this.validateLifecycleEventType(envelope, 'RESERVED');
-        break;
-      case CREDIT_EVENT_NAMES.ROLLED_BACK:
-        this.validateLifecycleEventType(envelope, 'ROLLED_BACK');
-        break;
-      case CREDIT_EVENT_NAMES.EXPIRED:
-        this.validateLifecycleEventType(envelope, 'EXPIRED');
-        break;
       case CREDIT_EVENT_NAMES.CREDIT_GRANTED:
         this.validateLifecycleEventType(envelope, 'CREDIT_GRANTED');
         break;
@@ -85,29 +98,49 @@ export class CreditEventStore {
     }
   }
 
-  private async processCommit(
+  private async processReservation(
     appId: string,
     planId: string,
     amount: number,
-    eventId: string,
     reservationId?: string,
   ) {
-    const updatedCredit = await this.creditRepository.applyPlanCreditCommit(
-      appId,
-      planId,
-      amount,
-      eventId,
-    );
+    const updatedCredit =
+      await this.creditRepository.applyPlanCreditReservation(
+        appId,
+        planId,
+        amount,
+      );
     if (!updatedCredit) {
-      if (await this.creditRepository.hasProcessedCommit(appId, eventId)) {
-        return;
-      }
       throw new Error(
-        `Credit commit could not be applied for appId ${appId}, planId ${planId}`,
+        `Credit reservation could not be applied for appId ${appId}, planId ${planId}`,
       );
     }
     Logger.log(
-      `Credit commit applied for appId ${appId} and reservation ${reservationId}`,
+      `Credit reservation applied for appId ${appId} and reservation ${reservationId}`,
+      CreditEventStore.name,
+    );
+  }
+
+  private async processReservationRelease(
+    appId: string,
+    planId: string,
+    restoredAmount: number,
+    reservationId: string,
+    reason: 'rolled back' | 'expired',
+  ) {
+    const updatedCredit =
+      await this.creditRepository.releasePlanCreditReservation(
+        appId,
+        planId,
+        restoredAmount,
+      );
+    if (!updatedCredit) {
+      throw new Error(
+        `Credit reservation ${reason} event could not be applied for appId ${appId}, planId ${planId}`,
+      );
+    }
+    Logger.log(
+      `Credit reservation ${reason} for appId ${appId} and reservation ${reservationId}`,
       CreditEventStore.name,
     );
   }
@@ -144,6 +177,11 @@ export class CreditEventStore {
   }
 
   private validateLifecycleEnvelope(envelope: CreditLifecycleEnvelope) {
+    const event = envelope.event as AnyCreditEvent & {
+      amount?: unknown;
+      restoredAmount?: unknown;
+      reservationId?: unknown;
+    };
     if (
       envelope.schemaVersion !== 2 ||
       !envelope.eventId ||
@@ -154,13 +192,22 @@ export class CreditEventStore {
       throw new Error('Invalid credit lifecycle event envelope');
     }
     if (
-      envelope.event.type === 'COMMITTED' &&
-      (!Number.isSafeInteger(envelope.event.amount) ||
-        Number(envelope.event.amount) <= 0 ||
-        !envelope.event.reservationId ||
-        !envelope.event.planId)
+      ['COMMITTED', 'RESERVED'].includes(event.type) &&
+      (!Number.isSafeInteger(event.amount) ||
+        Number(event.amount) <= 0 ||
+        !event.reservationId ||
+        !event.planId)
     ) {
       throw new Error('Invalid committed credit lifecycle event');
+    }
+    if (
+      ['ROLLED_BACK', 'EXPIRED'].includes(event.type) &&
+      (!Number.isSafeInteger(event.restoredAmount) ||
+        Number(event.restoredAmount) < 0 ||
+        !event.reservationId ||
+        !event.planId)
+    ) {
+      throw new Error('Invalid credit reservation release lifecycle event');
     }
   }
 
@@ -174,13 +221,30 @@ export class CreditEventStore {
   }
 
   private eventAmount(envelope: CreditLifecycleEnvelope): number {
-    return (envelope.event as Extract<AnyCreditEvent, { type: 'COMMITTED' }>)
-      .amount;
+    return (
+      envelope.event as Extract<
+        AnyCreditEvent,
+        { type: 'COMMITTED' | 'RESERVED' }
+      >
+    ).amount;
   }
 
   private reservationId(envelope: CreditLifecycleEnvelope): string {
-    return (envelope.event as Extract<AnyCreditEvent, { type: 'COMMITTED' }>)
-      .reservationId;
+    return (
+      envelope.event as Extract<
+        AnyCreditEvent,
+        { type: 'COMMITTED' | 'RESERVED' | 'ROLLED_BACK' | 'EXPIRED' }
+      >
+    ).reservationId;
+  }
+
+  private restoredAmount(envelope: CreditLifecycleEnvelope): number {
+    return (
+      envelope.event as Extract<
+        AnyCreditEvent,
+        { type: 'ROLLED_BACK' | 'EXPIRED' }
+      >
+    ).restoredAmount;
   }
 
   private planId(envelope: CreditLifecycleEnvelope): string {

@@ -69,18 +69,16 @@ export class CreditRepository {
       .exec();
   }
 
-  async applyPlanCreditCommit(
+  async applyPlanCreditReservation(
     appId: string,
     planId: string,
     amount: number,
-    eventId: string,
   ): Promise<CreditPlan> {
     return this.creditModel
       .findOneAndUpdate(
         {
           _id: planId,
           serviceId: appId,
-          processedCommitEventIds: { $ne: eventId },
           $expr: {
             $lte: [{ $add: ['$apiCredit.used', amount] }, '$apiCredit.total'],
           },
@@ -101,12 +99,6 @@ export class CreditRepository {
                   '$status',
                 ],
               },
-              processedCommitEventIds: {
-                $setUnion: [
-                  { $ifNull: ['$processedCommitEventIds', []] },
-                  [eventId],
-                ],
-              },
             },
           },
         ],
@@ -116,12 +108,54 @@ export class CreditRepository {
       .exec();
   }
 
-  async hasProcessedCommit(appId: string, eventId: string): Promise<boolean> {
-    return Boolean(
-      await this.creditModel
-        .exists({ serviceId: appId, processedCommitEventIds: eventId })
-        .exec(),
-    );
+  async releasePlanCreditReservation(
+    appId: string,
+    planId: string,
+    restoredAmount: number,
+  ): Promise<CreditPlan> {
+    return this.creditModel
+      .findOneAndUpdate(
+        {
+          _id: planId,
+          serviceId: appId,
+          $expr: { $gte: ['$apiCredit.used', restoredAmount] },
+        },
+        [
+          {
+            $set: {
+              'apiCredit.used': {
+                $subtract: ['$apiCredit.used', restoredAmount],
+              },
+              status: {
+                $cond: [
+                  {
+                    $and: [
+                      {
+                        $lt: [
+                          { $subtract: ['$apiCredit.used', restoredAmount] },
+                          '$apiCredit.total',
+                        ],
+                      },
+                      {
+                        $or: [
+                          { $gt: ['$expiresAt', '$$NOW'] },
+                          { $eq: ['$expiresAt', null] },
+                          { $eq: [{ $type: '$expiresAt' }, 'missing'] },
+                        ],
+                      },
+                    ],
+                  },
+                  CreditStatus.ACTIVE,
+                  '$status',
+                ],
+              },
+            },
+          },
+        ],
+        { new: true },
+      )
+      .lean()
+      .exec();
   }
 
   async findBasedOnAggregationPipeline(pipeline): Promise<any[]> {

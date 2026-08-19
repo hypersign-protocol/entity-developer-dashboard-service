@@ -9,8 +9,8 @@ describe('CreditEventStore', () => {
 
   beforeEach(() => {
     repository = {
-      applyPlanCreditCommit: jest.fn(),
-      hasProcessedCommit: jest.fn(),
+      applyPlanCreditReservation: jest.fn(),
+      releasePlanCreditReservation: jest.fn(),
       findOneAndUpdate: jest.fn(),
       findParticularCreditDetail: jest.fn(),
       findActiveCreditForService: jest.fn(),
@@ -21,17 +21,17 @@ describe('CreditEventStore', () => {
     store = new CreditEventStore(repository, creditService);
   });
 
-  it('applies a middleware committed event to the active app credit', async () => {
-    repository.applyPlanCreditCommit.mockResolvedValue({} as never);
+  it('applies a middleware reserved event to the app credit', async () => {
+    repository.applyPlanCreditReservation.mockResolvedValue({} as never);
 
     await store.append(
-      job('credit.committed', {
+      job('credit.reserved', {
         eventId: 'event-1',
         schemaVersion: 2,
         catalogVersion: '2026-08-14',
         catalogId: 'hypersign-kyc-api-pricing',
         event: {
-          type: 'COMMITTED',
+          type: 'RESERVED',
           appId: 'app-1',
           planId: 'plan-1',
           amount: 2,
@@ -40,36 +40,41 @@ describe('CreditEventStore', () => {
       }),
     );
 
-    expect(repository.applyPlanCreditCommit).toHaveBeenCalledWith(
+    expect(repository.applyPlanCreditReservation).toHaveBeenCalledWith(
       'app-1',
       'plan-1',
       2,
-      'event-1',
     );
   });
 
-  it('acknowledges a retried event that was already committed', async () => {
-    repository.applyPlanCreditCommit.mockResolvedValue(null);
-    repository.hasProcessedCommit.mockResolvedValue(true);
+  it.each(['ROLLED_BACK', 'EXPIRED'] as const)(
+    'restores used credit when a reservation is %s',
+    async (type) => {
+      repository.releasePlanCreditReservation.mockResolvedValue({} as never);
 
-    await expect(
-      store.append(
-        job('credit.committed', {
-          eventId: 'event-1',
+      await store.append(
+        job(`credit.${type.toLowerCase().replace('_', '-')}`, {
+          eventId: 'event-2',
           schemaVersion: 2,
           catalogVersion: '2026-08-14',
           catalogId: 'hypersign-kyc-api-pricing',
           event: {
-            type: 'COMMITTED',
+            type,
             appId: 'app-1',
             planId: 'plan-1',
-            amount: 2,
             reservationId: 'reservation-1',
+            restoredAmount: 2,
           },
         }),
-      ),
-    ).resolves.toBeUndefined();
-  });
+      );
+
+      expect(repository.releasePlanCreditReservation).toHaveBeenCalledWith(
+        'app-1',
+        'plan-1',
+        2,
+      );
+    },
+  );
 
   it('rejects malformed committed lifecycle events', async () => {
     await expect(

@@ -85,10 +85,31 @@ export class CreditRepository {
             $lte: [{ $add: ['$apiCredit.used', amount] }, '$apiCredit.total'],
           },
         },
-        {
-          $inc: { 'apiCredit.used': amount },
-          $addToSet: { processedCommitEventIds: eventId },
-        },
+        [
+          {
+            $set: {
+              'apiCredit.used': { $add: ['$apiCredit.used', amount] },
+              status: {
+                $cond: [
+                  {
+                    $eq: [
+                      { $add: ['$apiCredit.used', amount] },
+                      '$apiCredit.total',
+                    ],
+                  },
+                  CreditStatus.INACTIVE,
+                  '$status',
+                ],
+              },
+              processedCommitEventIds: {
+                $setUnion: [
+                  { $ifNull: ['$processedCommitEventIds', []] },
+                  [eventId],
+                ],
+              },
+            },
+          },
+        ],
         { new: true },
       )
       .lean()

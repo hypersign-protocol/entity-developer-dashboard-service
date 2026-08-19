@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { Types } from 'mongoose';
 import { CreditSourceEnum, scope } from '../schemas/credit.schema';
 import { ConfigService } from '@nestjs/config';
@@ -38,9 +39,9 @@ export class CreditService {
   constructor(
     private readonly config: ConfigService,
     private readonly appRepository: AppRepository,
-    private readonly hidWalletService: HidWalletService,
     private readonly creditRepository: CreditRepository,
     private readonly creditCommandService: CreditCommandService,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   async fetchCreditDetails(appId: string, status?: CreditStatus) {
@@ -88,9 +89,6 @@ export class CreditService {
         'Fully used credit plan cannot be activated',
       ]);
     }
-    // if (credit.status === CreditStatus.ACTIVE) {
-    //   throw new BadRequestException(['Credit is already active']);
-    // }
     const expiresAt = credit.expiresAt ?? new Date();
     if (!credit.expiresAt) {
       expiresAt.setUTCDate(expiresAt.getUTCDate() + credit.validityDays);
@@ -146,11 +144,10 @@ export class CreditService {
         throw new BadRequestException([`No app found for appId ${appId}`]);
       }
       const walletAddress = appDetail.walletAddress;
-      if (!this.authzWalletInstance) {
-        this.authzWalletInstance = await this.hidWalletService.generateWallet(
-          this.config.get('MNEMONIC'),
-        );
-      }
+      const hidWalletService = await this.moduleRef.resolve(HidWalletService);
+      this.authzWalletInstance = await hidWalletService.generateWallet(
+        this.config.get('MNEMONIC'),
+      );
       if (!this.granterClient) {
         this.granterClient = await SigningStargateClient.connectWithSigner(
           this.config.get('HID_NETWORK_RPC'),

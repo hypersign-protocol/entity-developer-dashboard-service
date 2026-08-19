@@ -83,17 +83,48 @@ export class CreditService {
     if (credit.expiresAt && credit.expiresAt <= new Date()) {
       throw new BadRequestException(['Expired credit cannot be activated']);
     }
+    if (credit.apiCredit.used >= credit.apiCredit.total) {
+      throw new BadRequestException([
+        'Fully used credit plan cannot be activated',
+      ]);
+    }
+    // if (credit.status === CreditStatus.ACTIVE) {
+    //   throw new BadRequestException(['Credit is already active']);
+    // }
     const expiresAt = credit.expiresAt ?? new Date();
     if (!credit.expiresAt) {
       expiresAt.setUTCDate(expiresAt.getUTCDate() + credit.validityDays);
     }
-    const activatedCredit = await this.creditRepository.findByIdAndUpdate(
-      creditId,
-      { $set: { status: CreditStatus.ACTIVE, expiresAt } },
-    );
+
     const appDetail = await this.appRepository.findOne({ appId });
     const serviceType = appDetail?.services?.[0]?.id;
-    if (activatedCredit && serviceType) {
+    let onChainAllowance;
+    let onChainAllowanceScopes;
+    if (serviceType === SERVICE_TYPES.SSI_API) {
+      const authzCreditDetail = await this.grantSSIAllowance(
+        appId,
+        String(credit.apiCredit.total - credit.apiCredit.used),
+        credit.validityDays / 365,
+      );
+      onChainAllowance = {
+        amount: Number(authzCreditDetail.credit.amount),
+        denom: authzCreditDetail.credit.denom,
+      };
+      onChainAllowanceScopes = authzCreditDetail.creditScope;
+    }
+
+    const activatedCredit = await this.creditRepository.findOneAndUpdate(
+      { _id: creditId, serviceId: appId },
+      {
+        $set: {
+          status: CreditStatus.ACTIVE,
+          expiresAt,
+          ...(onChainAllowance && { onChainAllowance }),
+          ...(onChainAllowanceScopes && { onChainAllowanceScopes }),
+        },
+      },
+    );
+    if (activatedCredit && serviceType === SERVICE_TYPES.CAVACH_API) {
       await this.creditCommandService.grantCreditPlan(
         activatedCredit,
         serviceType,
@@ -222,6 +253,9 @@ export class CreditService {
           `No service configured for appId ${appId}`,
         );
       }
+
+      const activeCredit =
+        await this.creditRepository.findActiveCreditForService(appId);
       const isSsiService = serviceInfo.id === SERVICE_TYPES.SSI_API;
       const { amount, validityPeriod, validityPeriodUnit } = creditDto;
 
@@ -235,13 +269,14 @@ export class CreditService {
       const { validityDays, expiresAt } = this.getCreditValidity(
         validityPeriod,
         validityPeriodUnit,
+        !activeCredit,
       );
 
-      const status = CreditStatus.ACTIVE;
+      const status = activeCredit ? CreditStatus.INACTIVE : CreditStatus.ACTIVE;
 
       let onChainAllowance;
       let onChainAllowanceScopes;
-      if (isSsiService) {
+      if (isSsiService && status === CreditStatus.ACTIVE) {
         const periodInYears = this.getPeriodInYears(
           validityPeriod,
           validityPeriodUnit,
@@ -263,18 +298,20 @@ export class CreditService {
         apiCredit: { total: totalCredit, used: 0 },
         validityDays,
         status,
-        expiresAt,
+        ...(expiresAt && { expiresAt }),
         ...(onChainAllowance && { onChainAllowance }),
         ...(onChainAllowanceScopes && { onChainAllowanceScopes }),
         creditedBy: superAdminUserId,
         source,
       });
 
-      await this.creditCommandService.grantCreditPlan(
-        credit,
-        serviceInfo.id,
-        appDetail.subdomain,
-      );
+      if (status === CreditStatus.ACTIVE && !isSsiService) {
+        await this.creditCommandService.grantCreditPlan(
+          credit,
+          serviceInfo.id,
+          appDetail.subdomain,
+        );
+      }
 
       return { message: `Credit is successfully granted for service ${appId}` };
     } catch (e) {
@@ -291,23 +328,24 @@ export class CreditService {
   private getCreditValidity(
     validityPeriod: number,
     validityPeriodUnit: TimeUnit,
-  ): { validityDays: number; expiresAt: Date } {
+    setExpiry = true,
+  ): { validityDays: number; expiresAt?: Date } {
     if (!Number.isFinite(validityPeriod) || validityPeriod <= 0) {
       throw new BadRequestException([
         'validityPeriod must be a positive number',
       ]);
     }
 
-    const expiresAt = new Date();
+    const expiresAt = setExpiry ? new Date() : undefined;
     switch (validityPeriodUnit) {
       case TimeUnit.Days:
-        expiresAt.setUTCDate(expiresAt.getUTCDate() + validityPeriod);
+        expiresAt?.setUTCDate(expiresAt.getUTCDate() + validityPeriod);
         return { validityDays: validityPeriod, expiresAt };
       case TimeUnit.Month:
-        expiresAt.setUTCMonth(expiresAt.getUTCMonth() + validityPeriod);
+        expiresAt?.setUTCMonth(expiresAt.getUTCMonth() + validityPeriod);
         return { validityDays: Math.ceil(validityPeriod * 30.4375), expiresAt };
       case TimeUnit.Year:
-        expiresAt.setUTCFullYear(expiresAt.getUTCFullYear() + validityPeriod);
+        expiresAt?.setUTCFullYear(expiresAt.getUTCFullYear() + validityPeriod);
         return { validityDays: Math.ceil(validityPeriod * 365.25), expiresAt };
       default:
         throw new BadRequestException([

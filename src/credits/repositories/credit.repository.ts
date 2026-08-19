@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, UpdateQuery } from 'mongoose';
-import { CreditPlan, CreditPlanDocument } from '../schemas/credit.schema';
+import {
+  CreditPlan,
+  CreditPlanDocument,
+  CreditStatus,
+} from '../schemas/credit.schema';
 
 @Injectable()
 export class CreditRepository {
@@ -33,16 +37,34 @@ export class CreditRepository {
     return this.creditModel.findOne(creditFilterQuery);
   }
 
-  async findByIdAndUpdate(
-    id: string,
+  async findActiveCreditForService(
+    serviceId: string,
+    excludeCreditId?: string,
+  ): Promise<CreditPlan> {
+    const now = new Date();
+    return this.creditModel
+      .findOne({
+        serviceId,
+        status: CreditStatus.ACTIVE,
+        ...(excludeCreditId && { _id: { $ne: excludeCreditId } }),
+        $or: [
+          { expiresAt: { $gt: now } },
+          { expiresAt: { $exists: false } },
+          { expiresAt: null },
+        ],
+        $expr: { $lt: ['$apiCredit.used', '$apiCredit.total'] },
+      })
+      .lean()
+      .exec();
+  }
+
+  async findOneAndUpdate(
+    filter: FilterQuery<CreditPlan>,
     update: UpdateQuery<CreditPlan>,
   ): Promise<CreditPlan> {
-    Logger.log(
-      'Inside findByIdAndUpdate() to update credit detail',
-      'CreditRepository',
-    );
+    Logger.log('Updating one credit detail', 'CreditRepository');
     return this.creditModel
-      .findByIdAndUpdate(id, update, { new: true })
+      .findOneAndUpdate(filter, update, { new: true })
       .lean()
       .exec();
   }

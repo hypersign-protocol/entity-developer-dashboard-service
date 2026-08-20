@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { Types } from 'mongoose';
-import { CreditSourceEnum, scope } from '../schemas/credit.schema';
+import { CreditPlan, CreditSourceEnum, scope } from '../schemas/credit.schema';
 import { ConfigService } from '@nestjs/config';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
@@ -111,7 +111,16 @@ export class CreditService {
       onChainAllowanceScopes = authzCreditDetail.creditScope;
     }
 
-    const activatedCredit = await this.creditRepository.findOneAndUpdate(
+    if (serviceType === SERVICE_TYPES.CAVACH_API) {
+      await this.creditCommandService.grantCreditPlan(
+        this.creditForMiddlewareGrant(credit, expiresAt),
+        serviceType,
+        appDetail.subdomain,
+      );
+      return credit;
+    }
+
+    return this.creditRepository.findOneAndUpdate(
       { _id: creditId, serviceId: appId },
       {
         $set: {
@@ -122,14 +131,6 @@ export class CreditService {
         },
       },
     );
-    if (activatedCredit && serviceType === SERVICE_TYPES.CAVACH_API) {
-      await this.creditCommandService.grantCreditPlan(
-        activatedCredit,
-        serviceType,
-        appDetail.subdomain,
-      );
-    }
-    return activatedCredit;
   }
 
   async grantSSIAllowance(appId: string, allowance: string, periodInYears = 1) {
@@ -269,7 +270,13 @@ export class CreditService {
         !activeCredit,
       );
 
-      const status = activeCredit ? CreditStatus.INACTIVE : CreditStatus.ACTIVE;
+      const shouldActivate = !activeCredit;
+      const status =
+        shouldActivate && !isSsiService
+          ? CreditStatus.INACTIVE
+          : shouldActivate
+          ? CreditStatus.ACTIVE
+          : CreditStatus.INACTIVE;
 
       let onChainAllowance;
       let onChainAllowanceScopes;
@@ -295,16 +302,15 @@ export class CreditService {
         apiCredit: { total: totalCredit, used: 0 },
         validityDays,
         status,
-        ...(expiresAt && { expiresAt }),
+        ...(status === CreditStatus.ACTIVE && expiresAt && { expiresAt }),
         ...(onChainAllowance && { onChainAllowance }),
         ...(onChainAllowanceScopes && { onChainAllowanceScopes }),
         creditedBy: superAdminUserId,
         source,
       });
-
-      if (status === CreditStatus.ACTIVE && !isSsiService) {
+      if (shouldActivate && !isSsiService) {
         await this.creditCommandService.grantCreditPlan(
-          credit,
+          this.creditForMiddlewareGrant(credit, expiresAt),
           serviceInfo.id,
           appDetail.subdomain,
         );
@@ -349,6 +355,14 @@ export class CreditService {
           `Invalid validityPeriodUnit: ${validityPeriodUnit}`,
         ]);
     }
+  }
+
+  private creditForMiddlewareGrant(credit: CreditPlan, expiresAt: Date) {
+    const creditDocument = credit as CreditPlan & {
+      toObject?: () => CreditPlan;
+    };
+    const value = creditDocument.toObject?.() ?? credit;
+    return { ...value, status: CreditStatus.ACTIVE, expiresAt } as CreditPlan;
   }
 
   private getPeriodInYears(

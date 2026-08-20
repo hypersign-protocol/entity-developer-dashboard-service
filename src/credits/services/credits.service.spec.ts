@@ -36,9 +36,9 @@ describe('CreditService', () => {
     service = new CreditService(
       {} as never,
       appRepository as never,
-      {} as never,
       repository,
       commandService,
+      {} as never,
     );
   });
 
@@ -66,21 +66,56 @@ describe('CreditService', () => {
     },
   );
 
-  it('activates an inactive selected plan without deactivating existing active plans', async () => {
+  it('queues a CAVACH grant without activating the selected plan locally', async () => {
     const credit = plan({ status: CreditStatus.INACTIVE });
     repository.findParticularCreditDetail.mockResolvedValue(credit as never);
-    repository.findOneAndUpdate.mockResolvedValue(credit as never);
 
     await service.activateCredit(credit._id as string, 'app-1');
 
-    expect(repository.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: credit._id, serviceId: 'app-1' },
+    expect(repository.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(commandService.grantCreditPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        _id: credit._id,
+        status: CreditStatus.ACTIVE,
+        expiresAt: credit.expiresAt,
+      }),
+      SERVICE_TYPES.CAVACH_API,
+      'tenant-1',
+    );
+  });
+
+  it('stores a first CAVACH credit inactive without expiry until middleware confirms it', async () => {
+    const createdCredit = plan({ expiresAt: undefined });
+    repository.create.mockResolvedValue(createdCredit as never);
+
+    await service.grantCredit(
+      'app-1',
       {
-        $set: {
-          status: CreditStatus.ACTIVE,
-          expiresAt: credit.expiresAt,
-        },
+        amount: '100',
+        validityPeriod: 30,
+        validityPeriodUnit: TimeUnit.Days,
+        amountDenom: 'uhid',
       },
+      'admin-1',
+      CreditSourceEnum.MANUAL_RECHARGE,
+    );
+
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: CreditStatus.INACTIVE,
+        validityDays: 30,
+      }),
+    );
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.not.objectContaining({ expiresAt: expect.any(Date) }),
+    );
+    expect(commandService.grantCreditPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: CreditStatus.ACTIVE,
+        expiresAt: expect.any(Date),
+      }),
+      SERVICE_TYPES.CAVACH_API,
+      'tenant-1',
     );
   });
 

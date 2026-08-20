@@ -100,6 +100,30 @@ describe('CreditEventStore', () => {
     );
   });
 
+  it('activates the database plan with the middleware grant expiry', async () => {
+    const expiresAt = Date.now() + 60_000;
+
+    await store.append(
+      job('credit.granted', {
+        eventId: 'event-1',
+        schemaVersion: 2,
+        catalogVersion: '2026-08-14',
+        catalogId: 'hypersign-kyc-api-pricing',
+        event: {
+          type: 'CREDIT_GRANTED',
+          appId: 'app-1',
+          planId: 'plan-1',
+          expiresAt,
+        },
+      }),
+    );
+
+    expect(repository.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'plan-1', serviceId: 'app-1', status: 'Inactive' },
+      { $set: { status: 'Active', expiresAt: new Date(expiresAt) } },
+    );
+  });
+
   it('activates one valid inactive replacement after a critical balance event', async () => {
     repository.findParticularCreditDetail.mockResolvedValue({
       _id: 'plan-2',

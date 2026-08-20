@@ -72,7 +72,12 @@ export class CreditEventStore {
         break;
       case CREDIT_EVENT_NAMES.CREDIT_GRANTED:
         this.validateLifecycleEventType(envelope, 'CREDIT_GRANTED');
-        break;
+        await this.processCreditGranted(
+          envelope.event.appId,
+          this.planId(envelope),
+          this.grantExpiry(envelope),
+        );
+        return;
       case CREDIT_EVENT_NAMES.CRITICAL_BALANCE:
         this.validateLifecycleEventType(envelope, 'CRITICAL_BALANCE');
         await this.processCriticalBalance(
@@ -116,6 +121,17 @@ export class CreditEventStore {
     await this.creditRepository.findOneAndUpdate(
       { _id: planId, serviceId: appId, status: CreditStatus.ACTIVE },
       { $set: { status: CreditStatus.INACTIVE } },
+    );
+  }
+
+  private async processCreditGranted(
+    appId: string,
+    planId: string,
+    expiresAt: Date,
+  ) {
+    await this.creditRepository.findOneAndUpdate(
+      { _id: planId, serviceId: appId, status: CreditStatus.INACTIVE },
+      { $set: { status: CreditStatus.ACTIVE, expiresAt } },
     );
   }
 
@@ -181,6 +197,16 @@ export class CreditEventStore {
   private reservationId(envelope: CreditLifecycleEnvelope): string {
     return (envelope.event as Extract<AnyCreditEvent, { type: 'COMMITTED' }>)
       .reservationId;
+  }
+
+  private grantExpiry(envelope: CreditLifecycleEnvelope): Date {
+    const expiresAt = (
+      envelope.event as Extract<AnyCreditEvent, { type: 'CREDIT_GRANTED' }>
+    ).expiresAt;
+    if (!Number.isSafeInteger(expiresAt) || expiresAt <= 0) {
+      throw new Error('Credit granted lifecycle event has an invalid expiry');
+    }
+    return new Date(expiresAt);
   }
 
   private planId(envelope: CreditLifecycleEnvelope): string {

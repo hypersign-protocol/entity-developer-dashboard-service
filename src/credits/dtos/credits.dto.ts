@@ -55,6 +55,15 @@ export class CreateCreditDto {
   @IsInt()
   @Min(1)
   validityDays: number;
+
+  @ApiProperty({
+    example: 100,
+    description: 'Plan-specific remaining-credit alert threshold',
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  criticalBalance: number;
 }
 
 export class ListCreditsDto {
@@ -101,6 +110,9 @@ export class CreditPlanResponseDto {
 
   @ApiProperty({ example: 60 })
   validityDays: number;
+
+  @ApiProperty({ example: 100 })
+  criticalBalance: number;
 
   @ApiPropertyOptional({ format: 'date-time' })
   expiresAt?: string;
@@ -186,6 +198,15 @@ export class CreditRequestDto {
     example: '15000',
   })
   amount: string;
+  @ApiProperty({
+    name: 'criticalBalance',
+    description: 'Plan-specific remaining-credit alert threshold',
+    example: 100,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  criticalBalance: number;
   @ApiProperty({
     name: 'validityPeriod',
     description: 'Time till credit will be valie',

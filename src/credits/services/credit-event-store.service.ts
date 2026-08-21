@@ -8,8 +8,7 @@ import {
 import { CreditRepository } from '../repositories/credit.repository';
 import { CreditStatus } from '../schemas/credit.schema';
 import { CreditService } from './credits.service';
-
-export const CREDIT_EVENT_QUEUE = 'credit.lifecycle';
+import { KYC_CREDIT_SERVICE_TYPE } from '../credit.constants';
 
 type CreditLifecycleEnvelope = Omit<CreditLifecycleEventEnvelope, 'event'> & {
   event: AnyCreditEvent;
@@ -85,6 +84,10 @@ export class CreditEventStore {
           this.planId(envelope),
         );
         break;
+      case CREDIT_EVENT_NAMES.CREDIT_OBSERVED:
+        this.validateLifecycleEventType(envelope, 'CREDIT_OBSERVED');
+        this.validateObservedEvent(envelope);
+        return;
       default:
         throw new Error(`Unsupported credit lifecycle job: ${jobName}`);
     }
@@ -161,10 +164,10 @@ export class CreditEventStore {
 
   private validateLifecycleEnvelope(envelope: CreditLifecycleEnvelope) {
     if (
-      envelope.schemaVersion !== 2 ||
+      envelope.schemaVersion !== 3 ||
       !envelope.eventId ||
       !envelope.catalogVersion ||
-      !envelope.catalogId ||
+      envelope.serviceType !== KYC_CREDIT_SERVICE_TYPE ||
       !envelope.event?.appId
     ) {
       throw new Error('Invalid credit lifecycle event envelope');
@@ -177,6 +180,23 @@ export class CreditEventStore {
         !envelope.event.planId)
     ) {
       throw new Error('Invalid committed credit lifecycle event');
+    }
+  }
+
+  private validateObservedEvent(envelope: CreditLifecycleEnvelope): void {
+    const event = envelope.event as Extract<
+      AnyCreditEvent,
+      { type: 'CREDIT_OBSERVED' }
+    >;
+    if (
+      event.environment !== 'DEV' ||
+      event.billingMode !== 'OBSERVE' ||
+      event.deductedAmount !== 0 ||
+      !Number.isSafeInteger(event.requestedAmount) ||
+      event.requestedAmount <= 0 ||
+      !event.requestId
+    ) {
+      throw new Error('Invalid observed credit lifecycle event');
     }
   }
 
@@ -220,14 +240,14 @@ export class CreditEventStore {
   private validateCommandRejection(value: unknown): void {
     const rejection = value as {
       schemaVersion?: unknown;
-      catalogId?: unknown;
+      serviceType?: unknown;
       commandId?: unknown;
       reason?: unknown;
     };
     if (
       !rejection ||
-      rejection.schemaVersion !== 2 ||
-      typeof rejection.catalogId !== 'string' ||
+      rejection.schemaVersion !== 3 ||
+      rejection.serviceType !== KYC_CREDIT_SERVICE_TYPE ||
       typeof rejection.commandId !== 'string' ||
       typeof rejection.reason !== 'string'
     ) {

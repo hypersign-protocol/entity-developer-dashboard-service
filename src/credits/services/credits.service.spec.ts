@@ -92,6 +92,7 @@ describe('CreditService', () => {
       'app-1',
       {
         amount: '100',
+        criticalBalance: 20,
         validityPeriod: 30,
         validityPeriodUnit: TimeUnit.Days,
         amountDenom: 'uhid',
@@ -104,6 +105,7 @@ describe('CreditService', () => {
       expect.objectContaining({
         status: CreditStatus.INACTIVE,
         validityDays: 30,
+        criticalBalance: 20,
       }),
     );
     expect(repository.create).toHaveBeenCalledWith(
@@ -135,6 +137,7 @@ describe('CreditService', () => {
       'app-1',
       {
         amount: '100',
+        criticalBalance: 20,
         validityPeriod: 30,
         validityPeriodUnit: TimeUnit.Days,
         amountDenom: 'uhid',
@@ -149,6 +152,7 @@ describe('CreditService', () => {
         apiCredit: { total: 100, used: 0 },
         status: CreditStatus.INACTIVE,
         validityDays: 30,
+        criticalBalance: 20,
       }),
     );
     expect(repository.create).toHaveBeenCalledWith(
@@ -201,6 +205,7 @@ function plan(overrides: Partial<CreditPlan> = {}) {
     serviceId: 'app-1',
     status: CreditStatus.INACTIVE,
     apiCredit: { total: 100, used: 0 },
+    criticalBalance: 20,
     validityDays: 30,
     createdAt: new Date('2026-08-01T00:00:00.000Z'),
     expiresAt: new Date('2026-09-01T00:00:00.000Z'),

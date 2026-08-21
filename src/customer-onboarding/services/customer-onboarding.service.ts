@@ -304,6 +304,7 @@ export class CustomerOnboardingService {
       serviceInfo.appId,
       {
         amount: creditDetail.amount.toString(),
+        criticalBalance: creditDetail.criticalBalance,
         validityPeriod: creditDetail.validityPeriod,
         validityPeriodUnit: creditDetail.validityPeriodUnit,
         amountDenom: creditDetail.amountDenom,

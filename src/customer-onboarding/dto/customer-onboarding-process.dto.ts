@@ -1,9 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsString,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { TimeUnit } from '../constants/enum';
@@ -16,6 +18,15 @@ export class CreditDetail {
     example: 500,
   })
   amount: number;
+  @ApiProperty({
+    name: 'criticalBalance',
+    description: 'Plan-specific remaining-credit alert threshold',
+    example: 100,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  criticalBalance: number;
   @ApiProperty({
     name: 'validityPeriod',
     description: 'Credit validity period',

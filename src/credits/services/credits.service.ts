@@ -255,12 +255,18 @@ export class CreditService {
       const activeCredit =
         await this.creditRepository.findActiveCreditForService(appId);
       const isSsiService = serviceInfo.id === SERVICE_TYPES.SSI_API;
-      const { amount, validityPeriod, validityPeriodUnit } = creditDto;
+      const { amount, criticalBalance, validityPeriod, validityPeriodUnit } =
+        creditDto;
 
       const totalCredit = Number(amount);
       if (!Number.isSafeInteger(totalCredit) || totalCredit <= 0) {
         throw new BadRequestException([
           'amount must be a positive safe integer',
+        ]);
+      }
+      if (!Number.isSafeInteger(criticalBalance) || criticalBalance < 0) {
+        throw new BadRequestException([
+          'criticalBalance must be a non-negative safe integer',
         ]);
       }
 
@@ -301,6 +307,7 @@ export class CreditService {
         serviceId: appDetail.appId,
         apiCredit: { total: totalCredit, used: 0 },
         validityDays,
+        criticalBalance,
         status,
         ...(status === CreditStatus.ACTIVE && expiresAt && { expiresAt }),
         ...(onChainAllowance && { onChainAllowance }),

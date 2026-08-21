@@ -49,6 +49,8 @@ export class CreditPlan {
   apiCredit: ApiCredit;
   @Prop({ required: true, type: Number })
   validityDays: number;
+  @Prop({ required: true, type: Number, min: 0 })
+  criticalBalance: number;
   @Prop({ required: false, type: Date })
   expiresAt?: Date;
   @Prop({

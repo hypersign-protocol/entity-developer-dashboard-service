@@ -31,12 +31,12 @@ describe('CreditCommandService', () => {
       expect.objectContaining({
         schemaVersion: 3,
         commandId: 'grant-KYC_SERVICE-credit-1',
-        serviceType: 'KYC_SERVICE',
+        serviceType:SERVICE_TYPES.CAVACH_API,
         payload: expect.objectContaining({
           subject: {
             appId: 'app-1',
             tenantId: 'tenant-1',
-            appType: 'KYC_SERVICE',
+            appType:SERVICE_TYPES.CAVACH_API,
             creditType: 'API_CREDIT',
           },
           planId: 'credit-1',

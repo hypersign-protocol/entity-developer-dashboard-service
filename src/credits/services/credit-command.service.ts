@@ -3,7 +3,6 @@ import { CREDIT_EVENT_NAMES } from '@hypersign-protocol/credit-middleware';
 import type { CreditCommandEnvelope } from '@hypersign-protocol/credit-middleware';
 import { SERVICE_TYPES } from '../../supported-service/services/iServiceList';
 import { CreditPlan, CreditStatus } from '../schemas/credit.schema';
-import { KYC_CREDIT_SERVICE_TYPE } from '../credit.constants';
 import { CreditBullMqProvider } from './credit-bullmq.provider';
 
 @Injectable()
@@ -62,19 +61,19 @@ export class CreditCommandService {
       throw new Error('Credit plan must expire after it was created');
     }
 
-    const commandId = `grant-${KYC_CREDIT_SERVICE_TYPE}-${planId}`;
-    const queueName = `credit.commands.${KYC_CREDIT_SERVICE_TYPE}`;
+    const commandId = `grant-${ SERVICE_TYPES.CAVACH_API}-${planId}`;
+    const queueName = `credit.commands.${ SERVICE_TYPES.CAVACH_API}`;
     const command: CreditCommandEnvelope = {
       schemaVersion: 3,
       commandId,
-      serviceType: KYC_CREDIT_SERVICE_TYPE,
+      serviceType:  SERVICE_TYPES.CAVACH_API,
       source: 'entity-developer-dashboard-service',
       requestedAt: new Date().toISOString(),
       payload: {
         subject: {
           appId,
           ...(tenantId ? { tenantId } : {}),
-          appType: 'KYC_SERVICE',
+          appType: SERVICE_TYPES.CAVACH_API,
           creditType: 'API_CREDIT',
         },
         planId,

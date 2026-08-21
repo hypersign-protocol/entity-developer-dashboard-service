@@ -8,7 +8,7 @@ import {
 import { CreditRepository } from '../repositories/credit.repository';
 import { CreditStatus } from '../schemas/credit.schema';
 import { CreditService } from './credits.service';
-import { KYC_CREDIT_SERVICE_TYPE } from '../credit.constants';
+import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 
 type CreditLifecycleEnvelope = Omit<CreditLifecycleEventEnvelope, 'event'> & {
   event: AnyCreditEvent;
@@ -167,7 +167,7 @@ export class CreditEventStore {
       envelope.schemaVersion !== 3 ||
       !envelope.eventId ||
       !envelope.catalogVersion ||
-      envelope.serviceType !== KYC_CREDIT_SERVICE_TYPE ||
+      envelope.serviceType !== SERVICE_TYPES.CAVACH_API ||
       !envelope.event?.appId
     ) {
       throw new Error('Invalid credit lifecycle event envelope');
@@ -247,7 +247,7 @@ export class CreditEventStore {
     if (
       !rejection ||
       rejection.schemaVersion !== 3 ||
-      rejection.serviceType !== KYC_CREDIT_SERVICE_TYPE ||
+      rejection.serviceType !==  SERVICE_TYPES.CAVACH_API ||
       typeof rejection.commandId !== 'string' ||
       typeof rejection.reason !== 'string'
     ) {

@@ -1,4 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 
 export enum scope {
   MsgRegisterDID = 'MsgRegisterDID',
@@ -45,6 +46,8 @@ export class ApiCredit {
 export class CreditPlan {
   @Prop({ required: true })
   serviceId: string;
+  @Prop({ required: true, type: String, enum: SERVICE_TYPES })
+  serviceType: SERVICE_TYPES;
   @Prop({ required: true, type: ApiCredit })
   apiCredit: ApiCredit;
   @Prop({ required: true, type: Number })
@@ -71,7 +74,6 @@ export class CreditPlan {
   legacyCreditId?: string;
   @Prop({ required: false, type: [String], default: [], select: false })
   processedCommitEventIds?: string[];
-  // ToDo:- check if we need credit for spellOver and its expiry
   @Prop({ required: false, type: CreditNotificationState })
   notification?: CreditNotificationState;
 }
@@ -80,3 +82,4 @@ export const CreditsSchema = SchemaFactory.createForClass(CreditPlan);
 CreditsSchema.index({ serviceId: 1, status: 1 });
 CreditsSchema.index({ serviceId: 1, createdAt: 1 });
 CreditsSchema.index({ legacyCreditId: 1, migrationSource: 1 });
+CreditsSchema.index({ status: 1, expiresAt: 1 });

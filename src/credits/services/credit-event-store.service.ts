@@ -8,6 +8,7 @@ import {
 import { CreditRepository } from '../repositories/credit.repository';
 import { CreditStatus } from '../schemas/credit.schema';
 import { CreditService } from './credits.service';
+import { CreditNotificationService } from './credit-notification.service';
 
 export const CREDIT_EVENT_QUEUE = 'credit.lifecycle';
 
@@ -20,6 +21,7 @@ export class CreditEventStore {
   constructor(
     private readonly creditRepository: CreditRepository,
     private readonly creditService: CreditService,
+    private readonly creditNotificationService: CreditNotificationService,
   ) {}
 
   async append(job: CreditBullMqJob): Promise<void> {
@@ -111,6 +113,7 @@ export class CreditEventStore {
         `Credit commit could not be applied for appId ${appId}, planId ${planId}`,
       );
     }
+    await this.creditNotificationService.notifyUsageThreshold(updatedCredit);
     Logger.log(
       `Credit commit applied for appId ${appId} and reservation ${reservationId}`,
       CreditEventStore.name,

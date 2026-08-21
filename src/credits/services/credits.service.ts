@@ -251,10 +251,11 @@ export class CreditService {
           `No service configured for appId ${appId}`,
         );
       }
+      const serviceType = serviceInfo.id as SERVICE_TYPES;
 
       const activeCredit =
         await this.creditRepository.findActiveCreditForService(appId);
-      const isSsiService = serviceInfo.id === SERVICE_TYPES.SSI_API;
+      const isSsiService = serviceType === SERVICE_TYPES.SSI_API;
       const { amount, validityPeriod, validityPeriodUnit } = creditDto;
 
       const totalCredit = Number(amount);
@@ -299,6 +300,7 @@ export class CreditService {
 
       const credit = await this.creditRepository.create({
         serviceId: appDetail.appId,
+        serviceType,
         apiCredit: { total: totalCredit, used: 0 },
         validityDays,
         status,
@@ -311,7 +313,7 @@ export class CreditService {
       if (shouldActivate && !isSsiService) {
         await this.creditCommandService.grantCreditPlan(
           this.creditForMiddlewareGrant(credit, expiresAt),
-          serviceInfo.id,
+          serviceType,
           appDetail.subdomain,
         );
       }

@@ -1,10 +1,12 @@
 import { CreditRepository } from '../repositories/credit.repository';
 import { CreditService } from './credits.service';
 import { CreditEventStore } from './credit-event-store.service';
+import { CreditNotificationService } from './credit-notification.service';
 
 describe('CreditEventStore', () => {
   let repository: jest.Mocked<CreditRepository>;
   let creditService: jest.Mocked<CreditService>;
+  let creditNotificationService: jest.Mocked<CreditNotificationService>;
   let store: CreditEventStore;
 
   beforeEach(() => {
@@ -18,7 +20,14 @@ describe('CreditEventStore', () => {
     creditService = {
       activateCredit: jest.fn(),
     } as unknown as jest.Mocked<CreditService>;
-    store = new CreditEventStore(repository, creditService);
+    creditNotificationService = {
+      notifyUsageThreshold: jest.fn(),
+    } as unknown as jest.Mocked<CreditNotificationService>;
+    store = new CreditEventStore(
+      repository,
+      creditService,
+      creditNotificationService,
+    );
   });
 
   it('applies a middleware committed event to the active app credit', async () => {
@@ -46,6 +55,7 @@ describe('CreditEventStore', () => {
       2,
       'event-1',
     );
+    expect(creditNotificationService.notifyUsageThreshold).toHaveBeenCalled();
   });
 
   it('acknowledges a retried event that was already committed', async () => {

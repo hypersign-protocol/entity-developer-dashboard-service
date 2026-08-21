@@ -6,10 +6,10 @@ export class CreditCommitEventMetadata {
   tenantId: string;
 
   @Prop({ required: true, type: String })
-  appId: string;
+  serviceId: string;
 
   @Prop({ required: true, type: String })
-  appType: string;
+  serviceType: string;
 
   @Prop({ required: true, type: String })
   creditType: string;

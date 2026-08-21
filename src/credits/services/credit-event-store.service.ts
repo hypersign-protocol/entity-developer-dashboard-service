@@ -216,8 +216,8 @@ export class CreditEventStore {
       timestamp: new Date(event.timestamp),
       metadata: {
         tenantId: event.tenantId,
-        appId: event.appId,
-        appType: event.appType,
+        serviceId: event.appId,
+        serviceType: event.appType,
         creditType: event.creditType,
       },
       planId: event.planId,

@@ -72,7 +72,7 @@ describe('CreditEventStore', () => {
         timestamp: new Date(1787287938626),
         metadata: expect.objectContaining({
           tenantId: 'tenant-1',
-          appId: 'app-1',
+          serviceId: 'app-1',
         }),
         operation: 'POST /api/v1/e-kyc/verification/session',
       }),
@@ -92,6 +92,7 @@ describe('CreditEventStore', () => {
           serviceType: SERVICE_TYPES.CAVACH_API,
           event: {
             type: 'COMMITTED',
+            environment: 'PROD',
             appId: 'app-1',
             planId: 'plan-1',
             amount: 2,
@@ -122,6 +123,7 @@ describe('CreditEventStore', () => {
           serviceType: SERVICE_TYPES.CAVACH_API,
           event: {
             type: 'COMMITTED',
+            environment: 'PROD',
             appId: 'app-1',
             planId: 'plan-1',
             amount: 0,
@@ -137,11 +139,12 @@ describe('CreditEventStore', () => {
       store.append(
         job('credit.committed', {
           eventId: 'event-1',
-          schemaVersion: 2,
+          schemaVersion: 3,
           catalogVersion: '2026-08-14',
-          catalogId: 'hypersign-kyc-api-pricing',
+          serviceType: SERVICE_TYPES.CAVACH_API,
           event: {
             type: 'COMMITTED',
+            environment: 'PROD',
             appId: 'app-1',
             planId: 'plan-1',
             amount: 2,
@@ -275,6 +278,34 @@ describe('CreditEventStore', () => {
     );
 
     expect(creditService.activateCredit).not.toHaveBeenCalled();
+  });
+
+  it('ignores observed events without storing analytics', async () => {
+    await store.append(
+      job('credit.observed', {
+        eventId: 'event-dev-1',
+        schemaVersion: 3,
+        catalogVersion: '2026-08-14',
+        serviceType: SERVICE_TYPES.CAVACH_API,
+        event: {
+          type: 'CREDIT_OBSERVED',
+          appId: 'app-1',
+          tenantId: 'tenant-1',
+          appType: 'KYC_SERVICE',
+          creditType: 'API_CREDIT',
+          timestamp: 1787287938626,
+          operation: 'POST /api/v1/e-kyc/verification/session',
+          requestId: 'request-dev-1:api',
+          environment: 'DEV',
+          billingMode: 'OBSERVE',
+          requestedAmount: 2,
+          deductedAmount: 0,
+        },
+      }),
+    );
+
+    expect(repository.applyPlanCreditCommit).not.toHaveBeenCalled();
+    expect(commitEventRepository.create).not.toHaveBeenCalled();
   });
 });
 

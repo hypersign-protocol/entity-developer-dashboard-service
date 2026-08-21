@@ -14,7 +14,6 @@ export type CreateCreditCommitEvent = {
   eventId: string;
   schemaVersion: number;
   catalogVersion: string;
-  catalogId: string;
   reservationId: string;
   amount: number;
   totalAmount: number;

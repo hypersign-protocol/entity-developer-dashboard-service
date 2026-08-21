@@ -247,7 +247,6 @@ export class CreditEventStore {
       eventId: envelope.eventId,
       schemaVersion: envelope.schemaVersion,
       catalogVersion: envelope.catalogVersion,
-      catalogId: envelope.catalogId,
       reservationId: event.reservationId,
       amount: event.amount,
       totalAmount: event.totalAmount,

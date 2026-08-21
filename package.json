@@ -27,7 +27,7 @@
     "@cosmjs/stargate": "0.31.0",
     "@digitalbazaar/ed25519-verification-key-2020": "3.3.0",
     "@digitalbazaar/x25519-key-agreement-key-2020": "2.1.0",
-    "@hypersign-protocol/credit-middleware": "../nestjs-interceptor/hypersign-protocol-credit-middleware-4.0.2.tgz",
+    "@hypersign-protocol/credit-middleware": "../nestjs-interceptor/hypersign-protocol-credit-middleware-5.0.0.tgz",
     "@maxmind/geoip2-node": "6.1.0",
     "@nestjs/bull": "10.2.0",
     "@nestjs/bullmq": "10.1.1",
@@ -104,6 +104,9 @@
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "moduleNameMapper": {
+      "^src/(.*)$": "<rootDir>/$1"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

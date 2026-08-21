@@ -16,6 +16,15 @@ export class CreditRepository {
 
   async create(credit: Partial<CreditPlan>): Promise<CreditPlan> {
     Logger.log('Creating credit plan', 'CreditRepository');
+    if (credit.serviceId && credit.referenceId) {
+      return this.creditModel
+        .findOneAndUpdate(
+          { serviceId: credit.serviceId, referenceId: credit.referenceId },
+          { $setOnInsert: credit },
+          { new: true, upsert: true, setDefaultsOnInsert: true },
+        )
+        .exec();
+    }
     return new this.creditModel(credit).save();
   }
 

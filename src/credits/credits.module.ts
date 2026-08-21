@@ -27,6 +27,8 @@ import { CreditBullMqProvider } from './services/credit-bullmq.provider';
 import { CreditCommandService } from './services/credit-command.service';
 import { CreditEventStore } from './services/credit-event-store.service';
 import { CreditLifecycleConsumer } from './services/credit-lifecycle-consumer.service';
+import { CreditNotificationService } from './services/credit-notification.service';
+import { MailNotificationModule } from 'src/mail-notification/mail-notification.module';
 import {
   CreditCommitEvent,
   CreditCommitEventSchema,
@@ -38,6 +40,7 @@ const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
 @Module({
   imports: [
     UserModule,
+    MailNotificationModule,
     MongooseModule.forFeature([
       { name: AdminPeople.name, schema: AdminPeopleSchema },
       { name: CreditPlan.name, schema: CreditsSchema },
@@ -69,6 +72,7 @@ const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
     CreditCommitEventRepository,
     CreditCommandService,
     CreditEventStore,
+    CreditNotificationService,
     CreditLifecycleConsumer,
     CreditService,
   ],

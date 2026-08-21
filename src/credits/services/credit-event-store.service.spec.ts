@@ -1,12 +1,14 @@
 import { CreditRepository } from '../repositories/credit.repository';
 import { CreditService } from './credits.service';
 import { CreditEventStore } from './credit-event-store.service';
+import { CreditNotificationService } from './credit-notification.service';
 import { CreditCommitEventRepository } from '../repositories/credit-commit-event.repository';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 
 describe('CreditEventStore', () => {
   let repository: jest.Mocked<CreditRepository>;
   let creditService: jest.Mocked<CreditService>;
+  let creditNotificationService: jest.Mocked<CreditNotificationService>;
   let commitEventRepository: jest.Mocked<CreditCommitEventRepository>;
   let store: CreditEventStore;
 
@@ -21,6 +23,13 @@ describe('CreditEventStore', () => {
     creditService = {
       activateCredit: jest.fn(),
     } as unknown as jest.Mocked<CreditService>;
+    creditNotificationService = {
+      notifyUsageThreshold: jest.fn(),
+    } as unknown as jest.Mocked<CreditNotificationService>;
+    store = new CreditEventStore(
+      repository,
+      creditService,
+      creditNotificationService,
     commitEventRepository = {
       create: jest.fn(),
     } as unknown as jest.Mocked<CreditCommitEventRepository>;
@@ -66,6 +75,7 @@ describe('CreditEventStore', () => {
       2,
       'event-1',
     );
+    expect(creditNotificationService.notifyUsageThreshold).toHaveBeenCalled();
     expect(commitEventRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         eventId: 'event-1',

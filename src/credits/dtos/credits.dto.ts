@@ -16,6 +16,7 @@ import {
   CreditStatus,
   scope,
 } from '../schemas/credit.schema';
+import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 
 export class ApiCreditDto {
   @ApiProperty({ example: 15000, description: 'Total API credits granted' })
@@ -96,6 +97,9 @@ export class CreditPlanResponseDto {
   @ApiProperty({ example: 'bf34d591632f37e1facc5ba40f91d27340ce' })
   serviceId: string;
 
+  @ApiProperty({ enum: SERVICE_TYPES, example: SERVICE_TYPES.CAVACH_API })
+  serviceType: SERVICE_TYPES;
+  
   @ApiProperty({ example: 'payment_01J5YQ3H8P7M' })
   referenceId: string;
 

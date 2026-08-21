@@ -9,10 +9,8 @@ import {
   type CreditBullMqWorker,
 } from '@hypersign-protocol/credit-middleware';
 import { CreditBullMqProvider } from './credit-bullmq.provider';
-import {
-  CREDIT_EVENT_QUEUE,
-  CreditEventStore,
-} from './credit-event-store.service';
+import { CreditEventStore } from './credit-event-store.service';
+import { CREDIT_EVENT_QUEUE } from '../credit.constants';
 
 @Injectable()
 export class CreditLifecycleConsumer
@@ -53,6 +51,11 @@ export class CreditLifecycleConsumer
           case CREDIT_EVENT_NAMES.CRITICAL_BALANCE:
             this.logger.log(
               `Critical balance reached: ${JSON.stringify(job.data)}`,
+            );
+            break;
+          case CREDIT_EVENT_NAMES.CREDIT_OBSERVED:
+            this.logger.debug(
+              `Development credit usage observed: ${JSON.stringify(job.data)}`,
             );
             break;
           case CREDIT_EVENT_NAMES.COMMAND_REJECTED:

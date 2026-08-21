@@ -14,6 +14,8 @@ describe('CreditCommandService', () => {
       status: CreditStatus.ACTIVE,
       serviceId: 'app-1',
       apiCredit: { total: 100, used: 25 },
+      criticalBalance: 10,
+      referenceId: 'payment-1',
       validityDays: 30,
       expiresAt: new Date('2026-09-01T00:00:00.000Z'),
       createdAt: new Date('2026-08-01T00:00:00.000Z'),
@@ -23,25 +25,26 @@ describe('CreditCommandService', () => {
 
     expect(bullMq.add).toHaveBeenCalledTimes(1);
     const [queueName, jobName, command, options] = bullMq.add.mock.calls[0];
-    expect(queueName).toBe('credit.commands.KYC');
+    expect(queueName).toBe('credit.commands.KYC_SERVICE');
     expect(jobName).toBe('credit.grant.requested');
     expect(command).toEqual(
       expect.objectContaining({
-        schemaVersion: 2,
-        commandId: 'grant-KYC-credit-1',
-        catalogId: 'hypersign-kyc-api-pricing',
+        schemaVersion: 3,
+        commandId: 'grant-KYC_SERVICE-credit-1',
+        serviceType: SERVICE_TYPES.CAVACH_API,
         payload: expect.objectContaining({
           subject: {
             appId: 'app-1',
             tenantId: 'tenant-1',
-            appType: 'KYC_SERVICE',
+            appType: SERVICE_TYPES.CAVACH_API,
             creditType: 'API_CREDIT',
           },
           planId: 'credit-1',
           amount: 75,
+          criticalBalance: 10,
           grantedAt: new Date('2026-08-01T00:00:00.000Z').getTime(),
           expiresAt: new Date('2026-09-01T00:00:00.000Z').getTime(),
-          referenceId: 'credit-1',
+          referenceId: 'payment-1',
         }),
       }),
     );
@@ -77,6 +80,8 @@ describe('CreditCommandService', () => {
           status: CreditStatus.ACTIVE,
           serviceId: 'app-1',
           apiCredit: { total: 100, used: 100 },
+          criticalBalance: 10,
+          referenceId: 'payment-1',
           validityDays: 30,
           expiresAt: new Date('2026-09-01T00:00:00.000Z'),
           createdAt: new Date('2026-08-01T00:00:00.000Z'),
@@ -84,6 +89,31 @@ describe('CreditCommandService', () => {
         SERVICE_TYPES.CAVACH_API,
       ),
     ).rejects.toThrow('Credit plan must have a positive remaining balance');
+    expect(bullMq.add).not.toHaveBeenCalled();
+  });
+
+  it('rejects a plan with an invalid critical balance', async () => {
+    const bullMq = { add: jest.fn() };
+    const service = new CreditCommandService(
+      bullMq as unknown as CreditBullMqProvider,
+    );
+
+    await expect(
+      service.grantCreditPlan(
+        {
+          _id: 'credit-1',
+          status: CreditStatus.ACTIVE,
+          serviceId: 'app-1',
+          apiCredit: { total: 100, used: 0 },
+          criticalBalance: -1,
+          referenceId: 'payment-1',
+          validityDays: 30,
+          expiresAt: new Date('2026-09-01T00:00:00.000Z'),
+          createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        } as CreditPlan,
+        SERVICE_TYPES.CAVACH_API,
+      ),
+    ).rejects.toThrow('criticalBalance must be a non-negative safe integer');
     expect(bullMq.add).not.toHaveBeenCalled();
   });
 

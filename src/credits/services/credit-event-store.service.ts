@@ -9,8 +9,13 @@ import { CreditRepository } from '../repositories/credit.repository';
 import { CreditStatus } from '../schemas/credit.schema';
 import { CreditService } from './credits.service';
 import { CreditNotificationService } from './credit-notification.service';
+import {
+  CreditCommitEventRepository,
+  CreateCreditCommitEvent,
+} from '../repositories/credit-commit-event.repository';
 
 export const CREDIT_EVENT_QUEUE = 'credit.lifecycle';
+import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 
 type CreditLifecycleEnvelope = Omit<CreditLifecycleEventEnvelope, 'event'> & {
   event: AnyCreditEvent;
@@ -22,6 +27,7 @@ export class CreditEventStore {
     private readonly creditRepository: CreditRepository,
     private readonly creditService: CreditService,
     private readonly creditNotificationService: CreditNotificationService,
+    private readonly creditCommitEventRepository: CreditCommitEventRepository,
   ) {}
 
   async append(job: CreditBullMqJob): Promise<void> {
@@ -48,13 +54,7 @@ export class CreditEventStore {
     switch (jobName) {
       case CREDIT_EVENT_NAMES.COMMITTED:
         this.validateLifecycleEventType(envelope, 'COMMITTED');
-        await this.processCommit(
-          envelope.event.appId,
-          this.planId(envelope),
-          this.eventAmount(envelope),
-          envelope.eventId,
-          this.reservationId(envelope),
-        );
+        await this.processCommit(envelope);
         return;
       case CREDIT_EVENT_NAMES.PLAN_EXPIRED:
         this.validateLifecycleEventType(envelope, 'PLAN_EXPIRED');
@@ -87,18 +87,21 @@ export class CreditEventStore {
           this.planId(envelope),
         );
         break;
+      case CREDIT_EVENT_NAMES.CREDIT_OBSERVED:
+        this.validateLifecycleEventType(envelope, 'CREDIT_OBSERVED');
+        this.validateObservedEvent(envelope);
+        return;
       default:
         throw new Error(`Unsupported credit lifecycle job: ${jobName}`);
     }
   }
 
-  private async processCommit(
-    appId: string,
-    planId: string,
-    amount: number,
-    eventId: string,
-    reservationId?: string,
-  ) {
+  private async processCommit(envelope: CreditLifecycleEnvelope) {
+    const appId = envelope.event.appId;
+    const planId = this.planId(envelope);
+    const amount = this.eventAmount(envelope);
+    const eventId = envelope.eventId;
+    const reservationId = this.reservationId(envelope);
     const updatedCredit = await this.creditRepository.applyPlanCreditCommit(
       appId,
       planId,
@@ -114,6 +117,9 @@ export class CreditEventStore {
       );
     }
     await this.creditNotificationService.notifyUsageThreshold(updatedCredit);
+    await this.creditCommitEventRepository.create(
+      this.toCommitEventMeasurement(envelope),
+    );
     Logger.log(
       `Credit commit applied for appId ${appId} and reservation ${reservationId}`,
       CreditEventStore.name,
@@ -164,10 +170,10 @@ export class CreditEventStore {
 
   private validateLifecycleEnvelope(envelope: CreditLifecycleEnvelope) {
     if (
-      envelope.schemaVersion !== 2 ||
+      envelope.schemaVersion !== 3 ||
       !envelope.eventId ||
       !envelope.catalogVersion ||
-      !envelope.catalogId ||
+      envelope.serviceType !== SERVICE_TYPES.CAVACH_API ||
       !envelope.event?.appId
     ) {
       throw new Error('Invalid credit lifecycle event envelope');
@@ -180,6 +186,28 @@ export class CreditEventStore {
         !envelope.event.planId)
     ) {
       throw new Error('Invalid committed credit lifecycle event');
+    }
+    if (envelope.event.type === 'COMMITTED') {
+      this.validateCommitAnalyticsFields(
+        envelope.event as Extract<AnyCreditEvent, { type: 'COMMITTED' }>,
+      );
+    }
+  }
+
+  private validateObservedEvent(envelope: CreditLifecycleEnvelope): void {
+    const event = envelope.event as Extract<
+      AnyCreditEvent,
+      { type: 'CREDIT_OBSERVED' }
+    >;
+    if (
+      event.environment !== 'DEV' ||
+      event.billingMode !== 'OBSERVE' ||
+      event.deductedAmount !== 0 ||
+      !Number.isSafeInteger(event.requestedAmount) ||
+      event.requestedAmount <= 0 ||
+      !event.requestId
+    ) {
+      throw new Error('Invalid observed credit lifecycle event');
     }
   }
 
@@ -200,6 +228,75 @@ export class CreditEventStore {
   private reservationId(envelope: CreditLifecycleEnvelope): string {
     return (envelope.event as Extract<AnyCreditEvent, { type: 'COMMITTED' }>)
       .reservationId;
+  }
+
+  private toCommitEventMeasurement(
+    envelope: CreditLifecycleEnvelope,
+  ): CreateCreditCommitEvent {
+    const event = envelope.event as Extract<
+      AnyCreditEvent,
+      { type: 'COMMITTED' }
+    >;
+    return {
+      timestamp: new Date(event.timestamp),
+      metadata: {
+        tenantId: event.tenantId,
+        serviceId: event.appId,
+        serviceType: event.appType,
+        creditType: event.creditType,
+      },
+      planId: event.planId,
+      operation: event.operation,
+      eventId: envelope.eventId,
+      schemaVersion: envelope.schemaVersion,
+      catalogVersion: envelope.catalogVersion,
+      catalogId: envelope.catalogId,
+      reservationId: event.reservationId,
+      amount: event.amount,
+      totalAmount: event.totalAmount,
+      allocationIndex: event.allocationIndex,
+      allocationCount: event.allocationCount,
+      planBalanceAfter: event.planBalanceAfter,
+      balanceAfter: event.balanceAfter,
+    };
+  }
+
+  private validateCommitAnalyticsFields(
+    event: Extract<AnyCreditEvent, { type: 'COMMITTED' }>,
+  ): void {
+    const requiredStrings: Array<[string, unknown]> = [
+      ['tenantId', event.tenantId],
+      ['appType', event.appType],
+      ['creditType', event.creditType],
+      ['operation', event.operation],
+    ];
+    const hasInvalidString = requiredStrings.some(
+      ([, value]) => typeof value !== 'string' || !value,
+    );
+    const requiredIntegers: Array<[string, unknown]> = [
+      ['timestamp', event.timestamp],
+      ['totalAmount', event.totalAmount],
+      ['allocationIndex', event.allocationIndex],
+      ['allocationCount', event.allocationCount],
+      ['planBalanceAfter', event.planBalanceAfter],
+      ['balanceAfter', event.balanceAfter],
+    ];
+    const hasInvalidInteger = requiredIntegers.some(
+      ([, value]) => !Number.isSafeInteger(value),
+    );
+    if (
+      hasInvalidString ||
+      hasInvalidInteger ||
+      event.timestamp <= 0 ||
+      event.totalAmount <= 0 ||
+      event.allocationIndex < 0 ||
+      event.allocationCount <= 0 ||
+      event.allocationIndex >= event.allocationCount ||
+      event.planBalanceAfter < 0 ||
+      event.balanceAfter < 0
+    ) {
+      throw new Error('Invalid committed credit analytics data');
+    }
   }
 
   private grantExpiry(envelope: CreditLifecycleEnvelope): Date {
@@ -223,14 +320,14 @@ export class CreditEventStore {
   private validateCommandRejection(value: unknown): void {
     const rejection = value as {
       schemaVersion?: unknown;
-      catalogId?: unknown;
+      serviceType?: unknown;
       commandId?: unknown;
       reason?: unknown;
     };
     if (
       !rejection ||
-      rejection.schemaVersion !== 2 ||
-      typeof rejection.catalogId !== 'string' ||
+      rejection.schemaVersion !== 3 ||
+      rejection.serviceType !== SERVICE_TYPES.CAVACH_API ||
       typeof rejection.commandId !== 'string' ||
       typeof rejection.reason !== 'string'
     ) {

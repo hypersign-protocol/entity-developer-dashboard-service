@@ -29,6 +29,11 @@ import { CreditEventStore } from './services/credit-event-store.service';
 import { CreditLifecycleConsumer } from './services/credit-lifecycle-consumer.service';
 import { CreditNotificationService } from './services/credit-notification.service';
 import { MailNotificationModule } from 'src/mail-notification/mail-notification.module';
+import {
+  CreditCommitEvent,
+  CreditCommitEventSchema,
+} from './schemas/credit-commit-event.schema';
+import { CreditCommitEventRepository } from './repositories/credit-commit-event.repository';
 
 const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
 
@@ -39,6 +44,7 @@ const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
     MongooseModule.forFeature([
       { name: AdminPeople.name, schema: AdminPeopleSchema },
       { name: CreditPlan.name, schema: CreditsSchema },
+      { name: CreditCommitEvent.name, schema: CreditCommitEventSchema },
     ]),
     JwtModule.register({}),
     HidWalletModule,
@@ -63,6 +69,7 @@ const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
     },
     AdminPeopleRepository,
     CreditRepository,
+    CreditCommitEventRepository,
     CreditCommandService,
     CreditEventStore,
     CreditNotificationService,

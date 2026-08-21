@@ -99,12 +99,18 @@ export class CreditPlanResponseDto {
 
   @ApiProperty({ enum: SERVICE_TYPES, example: SERVICE_TYPES.CAVACH_API })
   serviceType: SERVICE_TYPES;
+  
+  @ApiProperty({ example: 'payment_01J5YQ3H8P7M' })
+  referenceId: string;
 
   @ApiProperty({ type: ApiCreditDto })
   apiCredit: ApiCreditDto;
 
   @ApiProperty({ example: 60 })
   validityDays: number;
+
+  @ApiProperty({ example: 100 })
+  criticalBalance: number;
 
   @ApiPropertyOptional({ format: 'date-time' })
   expiresAt?: string;

@@ -11,20 +11,19 @@ export class CreditCommandService {
 
   async grantCreditPlan(
     credit: CreditPlan,
-    serviceType: string,
+    applicationServiceType: string,
     tenantId?: string,
   ): Promise<void> {
     if (credit.status !== CreditStatus.ACTIVE) {
       throw new Error('Only an active credit plan can be granted');
     }
 
-    if (serviceType !== SERVICE_TYPES.CAVACH_API) {
+    if (applicationServiceType !== SERVICE_TYPES.CAVACH_API) {
       throw new Error(
-        `No SDK credit catalog configured for service type: ${serviceType}`,
+        'No SDK credit catalog configured for service type: ' +
+          applicationServiceType,
       );
     }
-    const catalogId = 'hypersign-kyc-api-pricing';
-
     const planId = String((credit as CreditPlan & { _id?: unknown })._id ?? '');
     if (!planId) throw new Error('Credit plan must have an id');
     const appId = credit.serviceId;
@@ -40,6 +39,17 @@ export class CreditCommandService {
       throw new Error('Credit plan must have a positive remaining balance');
     }
     const amount = total - used;
+    if (
+      !Number.isSafeInteger(credit.criticalBalance) ||
+      credit.criticalBalance < 0
+    ) {
+      throw new Error(
+        'Credit plan criticalBalance must be a non-negative safe integer',
+      );
+    }
+    if (!credit.referenceId?.trim()) {
+      throw new Error('Credit plan referenceId is required');
+    }
     const grantedAt = new Date(
       (credit as CreditPlan & { createdAt?: Date }).createdAt ?? Date.now(),
     ).getTime();
@@ -51,26 +61,27 @@ export class CreditCommandService {
       throw new Error('Credit plan must expire after it was created');
     }
 
-    const commandId = `grant-${catalogId}-${planId}`;
-    const queueName = `credit.commands.${catalogId}`;
+    const commandId = `grant-${SERVICE_TYPES.CAVACH_API}-${planId}`;
+    const queueName = `credit.commands.${SERVICE_TYPES.CAVACH_API}`;
     const command: CreditCommandEnvelope = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       commandId,
-      catalogId,
+      serviceType: SERVICE_TYPES.CAVACH_API,
       source: 'entity-developer-dashboard-service',
       requestedAt: new Date().toISOString(),
       payload: {
         subject: {
           appId,
           ...(tenantId ? { tenantId } : {}),
-          appType: 'KYC_SERVICE',
+          appType: SERVICE_TYPES.CAVACH_API,
           creditType: 'API_CREDIT',
         },
         planId,
         amount,
+        criticalBalance: credit.criticalBalance,
         grantedAt,
         expiresAt,
-        referenceId: planId,
+        referenceId: credit.referenceId.trim(),
         reason: 'credit_plan_grant',
       },
     };

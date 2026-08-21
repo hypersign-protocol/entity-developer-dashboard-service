@@ -6,6 +6,7 @@
 - Api to fetch credit list
 - Api to activate specific credit
 - Storing credit detail in respective service queue
+- Added serviceType to the credit schema so that we don't need to query the apps table to determine whether the plan is for ID Service or SSI Service.”
 - Storing event details in a time-series-based table
 ## [Unreleased]
 ## [3.15.0] - 2026-07-16

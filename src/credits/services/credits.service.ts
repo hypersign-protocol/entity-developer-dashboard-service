@@ -279,7 +279,7 @@ export class CreditService {
           `No service configured for appId ${appId}`,
         );
       }
-
+      const serviceType = serviceInfo.id as SERVICE_TYPES;
       const isSsiService = serviceInfo.id === SERVICE_TYPES.SSI_API;
       const { amount, validityPeriod, validityPeriodUnit } = creditDto;
 
@@ -370,6 +370,7 @@ export class CreditService {
 
       const credit = await this.creditRepository.create({
         serviceId: appDetail.appId,
+        serviceType,
         referenceId,
         apiCredit: { total: totalCredit, used: 0 },
         validityDays,

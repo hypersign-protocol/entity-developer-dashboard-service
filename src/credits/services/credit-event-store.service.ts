@@ -14,6 +14,7 @@ import {
 } from '../repositories/credit-commit-event.repository';
 
 export const CREDIT_EVENT_QUEUE = 'credit.lifecycle';
+import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 
 type CreditLifecycleEnvelope = Omit<CreditLifecycleEventEnvelope, 'event'> & {
   event: AnyCreditEvent;
@@ -84,6 +85,10 @@ export class CreditEventStore {
           this.planId(envelope),
         );
         break;
+      case CREDIT_EVENT_NAMES.CREDIT_OBSERVED:
+        this.validateLifecycleEventType(envelope, 'CREDIT_OBSERVED');
+        this.validateObservedEvent(envelope);
+        return;
       default:
         throw new Error(`Unsupported credit lifecycle job: ${jobName}`);
     }
@@ -162,10 +167,10 @@ export class CreditEventStore {
 
   private validateLifecycleEnvelope(envelope: CreditLifecycleEnvelope) {
     if (
-      envelope.schemaVersion !== 2 ||
+      envelope.schemaVersion !== 3 ||
       !envelope.eventId ||
       !envelope.catalogVersion ||
-      !envelope.catalogId ||
+      envelope.serviceType !== SERVICE_TYPES.CAVACH_API ||
       !envelope.event?.appId
     ) {
       throw new Error('Invalid credit lifecycle event envelope');
@@ -183,6 +188,23 @@ export class CreditEventStore {
       this.validateCommitAnalyticsFields(
         envelope.event as Extract<AnyCreditEvent, { type: 'COMMITTED' }>,
       );
+    }
+  }
+
+  private validateObservedEvent(envelope: CreditLifecycleEnvelope): void {
+    const event = envelope.event as Extract<
+      AnyCreditEvent,
+      { type: 'CREDIT_OBSERVED' }
+    >;
+    if (
+      event.environment !== 'DEV' ||
+      event.billingMode !== 'OBSERVE' ||
+      event.deductedAmount !== 0 ||
+      !Number.isSafeInteger(event.requestedAmount) ||
+      event.requestedAmount <= 0 ||
+      !event.requestId
+    ) {
+      throw new Error('Invalid observed credit lifecycle event');
     }
   }
 
@@ -295,14 +317,14 @@ export class CreditEventStore {
   private validateCommandRejection(value: unknown): void {
     const rejection = value as {
       schemaVersion?: unknown;
-      catalogId?: unknown;
+      serviceType?: unknown;
       commandId?: unknown;
       reason?: unknown;
     };
     if (
       !rejection ||
-      rejection.schemaVersion !== 2 ||
-      typeof rejection.catalogId !== 'string' ||
+      rejection.schemaVersion !== 3 ||
+      rejection.serviceType !== SERVICE_TYPES.CAVACH_API ||
       typeof rejection.commandId !== 'string' ||
       typeof rejection.reason !== 'string'
     ) {

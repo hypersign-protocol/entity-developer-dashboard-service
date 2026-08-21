@@ -96,11 +96,17 @@ export class CreditPlanResponseDto {
   @ApiProperty({ example: 'bf34d591632f37e1facc5ba40f91d27340ce' })
   serviceId: string;
 
+  @ApiProperty({ example: 'payment_01J5YQ3H8P7M' })
+  referenceId: string;
+
   @ApiProperty({ type: ApiCreditDto })
   apiCredit: ApiCreditDto;
 
   @ApiProperty({ example: 60 })
   validityDays: number;
+
+  @ApiProperty({ example: 100 })
+  criticalBalance: number;
 
   @ApiPropertyOptional({ format: 'date-time' })
   expiresAt?: string;

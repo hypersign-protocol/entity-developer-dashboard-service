@@ -84,8 +84,12 @@ describe('CreditService', () => {
     );
   });
 
-  it('stores a first CAVACH credit inactive without expiry until middleware confirms it', async () => {
-    const createdCredit = plan({ expiresAt: undefined });
+  it('stores a first CAVACH credit with a stable expiry before publishing it', async () => {
+    const createdCredit = plan({
+      expiresAt: undefined,
+      referenceId: 'payment-1',
+      source: CreditSourceEnum.MANUAL_RECHARGE,
+    });
     repository.create.mockResolvedValue(createdCredit as never);
 
     await service.grantCredit(
@@ -104,10 +108,10 @@ describe('CreditService', () => {
       expect.objectContaining({
         status: CreditStatus.INACTIVE,
         validityDays: 30,
+        criticalBalance: 40,
+        referenceId: expect.any(String),
+        expiresAt: expect.any(Date),
       }),
-    );
-    expect(repository.create).toHaveBeenCalledWith(
-      expect.not.objectContaining({ expiresAt: expect.any(Date) }),
     );
     expect(commandService.grantCreditPlan).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -121,7 +125,12 @@ describe('CreditService', () => {
 
   it('creates an inactive credit without an expiry when the app already has an active usable credit', async () => {
     repository.findActiveCreditForService.mockResolvedValue(plan() as never);
-    repository.create.mockResolvedValue(plan() as never);
+    repository.create.mockResolvedValue(
+      plan({
+        referenceId: 'payment-2',
+        source: CreditSourceEnum.MANUAL_RECHARGE,
+      }) as never,
+    );
     appRepository.findOne.mockResolvedValue({
       appId: 'app-1',
       subdomain: 'tenant-1',
@@ -149,6 +158,8 @@ describe('CreditService', () => {
         apiCredit: { total: 100, used: 0 },
         status: CreditStatus.INACTIVE,
         validityDays: 30,
+        criticalBalance: 40,
+        referenceId: expect.any(String),
       }),
     );
     expect(repository.create).toHaveBeenCalledWith(
@@ -156,6 +167,62 @@ describe('CreditService', () => {
     );
     expect(commandService.grantCreditPlan).not.toHaveBeenCalled();
     expect(grantSSIAllowance).not.toHaveBeenCalled();
+  });
+
+  it('reuses an existing plan for an exact grant reference retry', async () => {
+    const existing = plan({
+      referenceId: 'payment-retry',
+      source: CreditSourceEnum.MANUAL_RECHARGE,
+    });
+    repository.findParticularCreditDetail.mockResolvedValue(existing as never);
+
+    await service.grantCredit(
+      'app-1',
+      {
+        amount: '100',
+        validityPeriod: 30,
+        validityPeriodUnit: TimeUnit.Days,
+        amountDenom: 'uhid',
+      },
+      'admin-1',
+      CreditSourceEnum.MANUAL_RECHARGE,
+      'payment-retry',
+    );
+
+    expect(repository.create).not.toHaveBeenCalled();
+    expect(repository.findActiveCreditForService).not.toHaveBeenCalled();
+    expect(commandService.grantCreditPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceId: 'payment-retry' }),
+      SERVICE_TYPES.CAVACH_API,
+      'tenant-1',
+    );
+  });
+
+  it('rejects reuse of a grant reference with different semantics', async () => {
+    repository.findParticularCreditDetail.mockResolvedValue(
+      plan({
+        referenceId: 'payment-conflict',
+        source: CreditSourceEnum.MANUAL_RECHARGE,
+      }) as never,
+    );
+
+    await expect(
+      service.grantCredit(
+        'app-1',
+        {
+          amount: '101',
+          validityPeriod: 30,
+          validityPeriodUnit: TimeUnit.Days,
+          amountDenom: 'uhid',
+        },
+        'admin-1',
+        CreditSourceEnum.MANUAL_RECHARGE,
+        'payment-conflict',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(repository.create).not.toHaveBeenCalled();
+    expect(commandService.grantCreditPlan).not.toHaveBeenCalled();
   });
 
   it('sets expiry and grants the SSI allowance when activating a queued credit', async () => {
@@ -201,6 +268,8 @@ function plan(overrides: Partial<CreditPlan> = {}) {
     serviceId: 'app-1',
     status: CreditStatus.INACTIVE,
     apiCredit: { total: 100, used: 0 },
+    criticalBalance: 40,
+    referenceId: 'payment-1',
     validityDays: 30,
     createdAt: new Date('2026-08-01T00:00:00.000Z'),
     expiresAt: new Date('2026-09-01T00:00:00.000Z'),

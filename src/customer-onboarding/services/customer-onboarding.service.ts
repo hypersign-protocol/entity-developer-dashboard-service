@@ -295,6 +295,7 @@ export class CustomerOnboardingService {
     creditDetail: CreditDetail,
     serviceInfo: { appId: string; subdomain: string },
     superAdminUserId: string,
+    referenceId: string,
   ) {
     Logger.log(
       `Inside handleCreditService() to fund credit to the service with appId ${serviceInfo.appId}`,
@@ -303,6 +304,7 @@ export class CustomerOnboardingService {
     await this.creditService.grantCredit(
       serviceInfo.appId,
       {
+        referenceId,
         amount: creditDetail.amount.toString(),
         criticalBalance: creditDetail.criticalBalance,
         validityPeriod: creditDetail.validityPeriod,
@@ -639,6 +641,7 @@ export class CustomerOnboardingService {
                     customerOnboardingData.ssiSubdomain,
                 },
                 superAdminUserId,
+                `customer-onboarding:${id}:ssi`,
               );
               Logger.debug(
                 'CREDIT_SSI_SERVICE step ends',
@@ -909,6 +912,7 @@ export class CustomerOnboardingService {
                     customerOnboardingData.kycSubdomain,
                 },
                 superAdminUserId,
+                `customer-onboarding:${id}:kyc`,
               );
               Logger.debug(
                 'CREDIT_KYC_SERVICE step ends',

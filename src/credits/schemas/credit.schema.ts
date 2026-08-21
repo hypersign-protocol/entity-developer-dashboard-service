@@ -45,6 +45,8 @@ export class ApiCredit {
 export class CreditPlan {
   @Prop({ required: true })
   serviceId: string;
+  @Prop({ required: true, type: String })
+  referenceId: string;
   @Prop({ required: true, type: ApiCredit })
   apiCredit: ApiCredit;
   @Prop({ required: true, type: Number })
@@ -81,4 +83,5 @@ export class CreditPlan {
 export const CreditsSchema = SchemaFactory.createForClass(CreditPlan);
 CreditsSchema.index({ serviceId: 1, status: 1 });
 CreditsSchema.index({ serviceId: 1, createdAt: 1 });
+CreditsSchema.index({ serviceId: 1, referenceId: 1 }, { unique: true });
 CreditsSchema.index({ legacyCreditId: 1, migrationSource: 1 });

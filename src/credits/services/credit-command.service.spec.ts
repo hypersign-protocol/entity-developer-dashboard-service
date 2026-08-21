@@ -15,6 +15,7 @@ describe('CreditCommandService', () => {
       serviceId: 'app-1',
       apiCredit: { total: 100, used: 25 },
       criticalBalance: 10,
+      referenceId: 'payment-1',
       validityDays: 30,
       expiresAt: new Date('2026-09-01T00:00:00.000Z'),
       createdAt: new Date('2026-08-01T00:00:00.000Z'),
@@ -24,13 +25,13 @@ describe('CreditCommandService', () => {
 
     expect(bullMq.add).toHaveBeenCalledTimes(1);
     const [queueName, jobName, command, options] = bullMq.add.mock.calls[0];
-    expect(queueName).toBe('credit.commands.hypersign-kyc-api-pricing');
+    expect(queueName).toBe('credit.commands.KYC_SERVICE');
     expect(jobName).toBe('credit.grant.requested');
     expect(command).toEqual(
       expect.objectContaining({
         schemaVersion: 3,
-        commandId: 'grant-hypersign-kyc-api-pricing-credit-1',
-        serviceType: 'hypersign-kyc-api-pricing',
+        commandId: 'grant-KYC_SERVICE-credit-1',
+        serviceType: 'KYC_SERVICE',
         payload: expect.objectContaining({
           subject: {
             appId: 'app-1',
@@ -43,7 +44,7 @@ describe('CreditCommandService', () => {
           criticalBalance: 10,
           grantedAt: new Date('2026-08-01T00:00:00.000Z').getTime(),
           expiresAt: new Date('2026-09-01T00:00:00.000Z').getTime(),
-          referenceId: 'credit-1',
+          referenceId: 'payment-1',
         }),
       }),
     );
@@ -80,6 +81,7 @@ describe('CreditCommandService', () => {
           serviceId: 'app-1',
           apiCredit: { total: 100, used: 100 },
           criticalBalance: 10,
+          referenceId: 'payment-1',
           validityDays: 30,
           expiresAt: new Date('2026-09-01T00:00:00.000Z'),
           createdAt: new Date('2026-08-01T00:00:00.000Z'),
@@ -104,6 +106,7 @@ describe('CreditCommandService', () => {
           serviceId: 'app-1',
           apiCredit: { total: 100, used: 0 },
           criticalBalance: -1,
+          referenceId: 'payment-1',
           validityDays: 30,
           expiresAt: new Date('2026-09-01T00:00:00.000Z'),
           createdAt: new Date('2026-08-01T00:00:00.000Z'),

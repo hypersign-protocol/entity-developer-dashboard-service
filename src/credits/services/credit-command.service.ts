@@ -39,7 +39,6 @@ export class CreditCommandService {
     ) {
       throw new Error('Credit plan must have a positive remaining balance');
     }
-    console.log(total, ' ', used);
     const amount = total - used;
     if (
       !Number.isSafeInteger(credit.criticalBalance) ||
@@ -48,6 +47,9 @@ export class CreditCommandService {
       throw new Error(
         'Credit plan criticalBalance must be a non-negative safe integer',
       );
+    }
+    if (!credit.referenceId?.trim()) {
+      throw new Error('Credit plan referenceId is required');
     }
     const grantedAt = new Date(
       (credit as CreditPlan & { createdAt?: Date }).createdAt ?? Date.now(),
@@ -80,7 +82,7 @@ export class CreditCommandService {
         criticalBalance: credit.criticalBalance,
         grantedAt,
         expiresAt,
-        referenceId: planId,
+        referenceId: credit.referenceId.trim(),
         reason: 'credit_plan_grant',
       },
     };

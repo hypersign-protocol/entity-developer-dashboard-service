@@ -89,13 +89,39 @@ export class CreditService {
         'Fully used credit plan cannot be activated',
       ]);
     }
-    const expiresAt = credit.expiresAt ?? new Date();
-    if (!credit.expiresAt) {
-      expiresAt.setUTCDate(expiresAt.getUTCDate() + credit.validityDays);
-    }
-
     const appDetail = await this.appRepository.findOne({ appId });
     const serviceType = appDetail?.services?.[0]?.id;
+    let expiresAt = credit.expiresAt;
+    if (!expiresAt) {
+      const proposedExpiry = new Date();
+      proposedExpiry.setUTCDate(
+        proposedExpiry.getUTCDate() + credit.validityDays,
+      );
+      if (serviceType === SERVICE_TYPES.CAVACH_API) {
+        const persisted = await this.creditRepository.findOneAndUpdate(
+          {
+            _id: creditId,
+            serviceId: appId,
+            $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }],
+          },
+          { $set: { expiresAt: proposedExpiry } },
+        );
+        const stableCredit =
+          persisted ??
+          (await this.creditRepository.findParticularCreditDetail({
+            _id: creditId,
+            serviceId: appId,
+          }));
+        expiresAt = stableCredit?.expiresAt;
+      } else {
+        expiresAt = proposedExpiry;
+      }
+    }
+    if (!expiresAt) {
+      throw new InternalServerErrorException([
+        'Credit plan expiry could not be persisted',
+      ]);
+    }
     let onChainAllowance;
     let onChainAllowanceScopes;
     if (serviceType === SERVICE_TYPES.SSI_API) {
@@ -252,11 +278,15 @@ export class CreditService {
         );
       }
 
-      const activeCredit =
-        await this.creditRepository.findActiveCreditForService(appId);
       const isSsiService = serviceInfo.id === SERVICE_TYPES.SSI_API;
-      const { amount, criticalBalance, validityPeriod, validityPeriodUnit } =
-        creditDto;
+      const {
+        amount,
+        criticalBalance,
+        referenceId: rawReferenceId,
+        validityPeriod,
+        validityPeriodUnit,
+      } = creditDto;
+      const referenceId = rawReferenceId?.trim();
 
       const totalCredit = Number(amount);
       if (!Number.isSafeInteger(totalCredit) || totalCredit <= 0) {
@@ -269,6 +299,52 @@ export class CreditService {
           'criticalBalance must be a non-negative safe integer',
         ]);
       }
+      if (!referenceId) {
+        throw new BadRequestException(['referenceId is required']);
+      }
+
+      const validity = this.getCreditValidity(
+        validityPeriod,
+        validityPeriodUnit,
+        false,
+      );
+      const existingCredit =
+        await this.creditRepository.findParticularCreditDetail({
+          serviceId: appId,
+          referenceId,
+        });
+      if (existingCredit) {
+        if (
+          existingCredit.apiCredit.total !== totalCredit ||
+          existingCredit.criticalBalance !== criticalBalance ||
+          existingCredit.validityDays !== validity.validityDays ||
+          existingCredit.source !== source
+        ) {
+          throw new BadRequestException([
+            'referenceId was reused with different credit semantics',
+          ]);
+        }
+        if (
+          serviceInfo.id === SERVICE_TYPES.CAVACH_API &&
+          existingCredit.status === CreditStatus.INACTIVE &&
+          existingCredit.expiresAt
+        ) {
+          await this.creditCommandService.grantCreditPlan(
+            this.creditForMiddlewareGrant(
+              existingCredit,
+              existingCredit.expiresAt,
+            ),
+            serviceInfo.id,
+            appDetail.subdomain,
+          );
+        }
+        return {
+          message: `Credit is successfully granted for service ${appId}`,
+        };
+      }
+
+      const activeCredit =
+        await this.creditRepository.findActiveCreditForService(appId);
 
       const { validityDays, expiresAt } = this.getCreditValidity(
         validityPeriod,
@@ -305,19 +381,36 @@ export class CreditService {
 
       const credit = await this.creditRepository.create({
         serviceId: appDetail.appId,
+        referenceId,
         apiCredit: { total: totalCredit, used: 0 },
         validityDays,
         criticalBalance,
         status,
-        ...(status === CreditStatus.ACTIVE && expiresAt && { expiresAt }),
+        ...(shouldActivate && expiresAt && { expiresAt }),
         ...(onChainAllowance && { onChainAllowance }),
         ...(onChainAllowanceScopes && { onChainAllowanceScopes }),
         creditedBy: superAdminUserId,
         source,
       });
+      if (
+        credit.apiCredit.total !== totalCredit ||
+        credit.criticalBalance !== criticalBalance ||
+        credit.validityDays !== validityDays ||
+        credit.source !== source
+      ) {
+        throw new BadRequestException([
+          'referenceId was reused with different credit semantics',
+        ]);
+      }
       if (shouldActivate && !isSsiService) {
+        const persistedExpiry = credit.expiresAt ?? expiresAt;
+        if (!persistedExpiry) {
+          throw new InternalServerErrorException([
+            'Credit plan expiry could not be persisted',
+          ]);
+        }
         await this.creditCommandService.grantCreditPlan(
-          this.creditForMiddlewareGrant(credit, expiresAt),
+          this.creditForMiddlewareGrant(credit, persistedExpiry),
           serviceInfo.id,
           appDetail.subdomain,
         );

@@ -1527,7 +1527,7 @@
 
 "@hypersign-protocol/credit-middleware@../nestjs-interceptor/hypersign-protocol-credit-middleware-5.0.0.tgz":
   version "5.0.0"
-  resolved "../nestjs-interceptor/hypersign-protocol-credit-middleware-5.0.0.tgz#af55325529a37efa092e4f9eb0d74218ef7e4168"
+  resolved "../nestjs-interceptor/hypersign-protocol-credit-middleware-5.0.0.tgz#f51b5846751d886940e9c85cfeb0a430206dd79f"
   dependencies:
     bullmq "5.81.3"
     ioredis "^5.7.0"

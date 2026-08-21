@@ -105,6 +105,40 @@ $ yarn run start:prod
 - http://localhost:3001/api
 - http://localhost:3001/api-json
 
+## KYC credit integration
+
+The dashboard is the system of record for credit plans. KYC plans are delivered
+to `@hypersign-protocol/credit-middleware` version 5 through BullMQ schema-v3
+commands.
+
+Required Redis configuration:
+
+- `CREDIT_REDIS_URL`, or `REDIS_HOST` plus `REDIS_PORT`;
+- the same Redis instance used by the KYC service; and
+- the default BullMQ prefix `bull` unless both applications override it.
+
+Transport contract:
+
+- service type: `KYC_SERVICE`;
+- grant queue: `credit.commands.KYC_SERVICE`;
+- lifecycle queue: `credit.lifecycle`;
+- grant job: `credit.grant.requested`;
+- envelope schema: `3`.
+
+`POST /api/v1/app/:appId/credits` requires a stable `referenceId`, `amount`,
+plan-specific `criticalBalance`, and validity. Retrying the same business
+purchase must reuse `referenceId`; changing its financial semantics is rejected.
+The dashboard atomically finds-or-creates a plan under the unique
+`serviceId + referenceId` key and stores its expiry before publishing the grant,
+so concurrent retries use identical `planId`, amount, threshold, grant time,
+and expiry.
+
+The lifecycle worker applies `credit.committed` idempotently to the exact Mongo
+plan, activates plans after `credit.granted`, handles plan expiry and critical
+balance events, and validates DEV `credit.observed` events. DEV observations
+always have `deductedAmount: 0`; they are operational logs and do not update
+financial usage.
+
 ## Support
 
 Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).

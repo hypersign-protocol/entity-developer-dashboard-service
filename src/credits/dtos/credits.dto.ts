@@ -105,6 +105,9 @@ export class CreditPlanResponseDto {
   @ApiProperty({ example: 'bf34d591632f37e1facc5ba40f91d27340ce' })
   serviceId: string;
 
+  @ApiProperty({ example: 'payment_01J5YQ3H8P7M' })
+  referenceId: string;
+
   @ApiProperty({ type: ApiCreditDto })
   apiCredit: ApiCreditDto;
 
@@ -192,6 +195,15 @@ export class GrantAllowanceResponseDto {
 }
 
 export class CreditRequestDto {
+  @ApiProperty({
+    name: 'referenceId',
+    description: 'Stable business idempotency key for this credit purchase',
+    example: 'payment_01J5YQ3H8P7M',
+  })
+  @IsString()
+  @IsNotEmpty()
+  referenceId: string;
+
   @ApiProperty({
     name: 'amount',
     description: 'Amount of allowance provided',

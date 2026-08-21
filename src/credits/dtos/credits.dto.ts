@@ -196,29 +196,11 @@ export class GrantAllowanceResponseDto {
 
 export class CreditRequestDto {
   @ApiProperty({
-    name: 'referenceId',
-    description: 'Stable business idempotency key for this credit purchase',
-    example: 'payment_01J5YQ3H8P7M',
-  })
-  @IsString()
-  @IsNotEmpty()
-  referenceId: string;
-
-  @ApiProperty({
     name: 'amount',
     description: 'Amount of allowance provided',
     example: '15000',
   })
   amount: string;
-  @ApiProperty({
-    name: 'criticalBalance',
-    description: 'Plan-specific remaining-credit alert threshold',
-    example: 100,
-  })
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  criticalBalance: number;
   @ApiProperty({
     name: 'validityPeriod',
     description: 'Time till credit will be valie',

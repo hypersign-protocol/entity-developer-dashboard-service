@@ -125,13 +125,12 @@ Transport contract:
 - grant job: `credit.grant.requested`;
 - envelope schema: `3`.
 
-`POST /api/v1/app/:appId/credits` requires a stable `referenceId`, `amount`,
-plan-specific `criticalBalance`, and validity. Retrying the same business
-purchase must reuse `referenceId`; changing its financial semantics is rejected.
-The dashboard atomically finds-or-creates a plan under the unique
-`serviceId + referenceId` key and stores its expiry before publishing the grant,
-so concurrent retries use identical `planId`, amount, threshold, grant time,
-and expiry.
+`POST /api/v1/app/:appId/credits` keeps the existing UI contract: it requires
+only the credit amount and validity fields. The backend generates `referenceId`
+and calculates the plan's critical threshold as `floor(amount * 0.40)`. Internal
+onboarding retries use a stable backend reference. The dashboard atomically
+finds-or-creates a plan under the unique `serviceId + referenceId` key and
+stores its expiry before publishing the grant.
 
 The lifecycle worker applies `credit.committed` idempotently to the exact Mongo
 plan, activates plans after `credit.granted`, handles plan expiry and critical

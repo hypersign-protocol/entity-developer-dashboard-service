@@ -304,15 +304,14 @@ export class CustomerOnboardingService {
     await this.creditService.grantCredit(
       serviceInfo.appId,
       {
-        referenceId,
         amount: creditDetail.amount.toString(),
-        criticalBalance: creditDetail.criticalBalance,
         validityPeriod: creditDetail.validityPeriod,
         validityPeriodUnit: creditDetail.validityPeriodUnit,
         amountDenom: creditDetail.amountDenom,
       },
       superAdminUserId,
       CreditSourceEnum.CUSTOMER_ONBOARDING,
+      referenceId,
     );
     // const creditPayload = {
     //   serviceId: serviceInfo.appId,

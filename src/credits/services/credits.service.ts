@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { Types } from 'mongoose';
+import { randomUUID } from 'node:crypto';
 import { CreditPlan, CreditSourceEnum, scope } from '../schemas/credit.schema';
 import { ConfigService } from '@nestjs/config';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
@@ -265,6 +266,7 @@ export class CreditService {
     creditDto: CreditRequestDto,
     superAdminUserId: string,
     source: CreditSourceEnum,
+    grantReferenceId?: string,
   ) {
     try {
       const appDetail = await this.appRepository.findOne({ appId });
@@ -279,14 +281,7 @@ export class CreditService {
       }
 
       const isSsiService = serviceInfo.id === SERVICE_TYPES.SSI_API;
-      const {
-        amount,
-        criticalBalance,
-        referenceId: rawReferenceId,
-        validityPeriod,
-        validityPeriodUnit,
-      } = creditDto;
-      const referenceId = rawReferenceId?.trim();
+      const { amount, validityPeriod, validityPeriodUnit } = creditDto;
 
       const totalCredit = Number(amount);
       if (!Number.isSafeInteger(totalCredit) || totalCredit <= 0) {
@@ -294,14 +289,8 @@ export class CreditService {
           'amount must be a positive safe integer',
         ]);
       }
-      if (!Number.isSafeInteger(criticalBalance) || criticalBalance < 0) {
-        throw new BadRequestException([
-          'criticalBalance must be a non-negative safe integer',
-        ]);
-      }
-      if (!referenceId) {
-        throw new BadRequestException(['referenceId is required']);
-      }
+      const criticalBalance = Math.floor(totalCredit * 0.4);
+      const referenceId = grantReferenceId?.trim() || randomUUID();
 
       const validity = this.getCreditValidity(
         validityPeriod,

@@ -95,9 +95,7 @@ describe('CreditService', () => {
     await service.grantCredit(
       'app-1',
       {
-        referenceId: 'payment-1',
         amount: '100',
-        criticalBalance: 20,
         validityPeriod: 30,
         validityPeriodUnit: TimeUnit.Days,
         amountDenom: 'uhid',
@@ -110,8 +108,8 @@ describe('CreditService', () => {
       expect.objectContaining({
         status: CreditStatus.INACTIVE,
         validityDays: 30,
-        criticalBalance: 20,
-        referenceId: 'payment-1',
+        criticalBalance: 40,
+        referenceId: expect.any(String),
         expiresAt: expect.any(Date),
       }),
     );
@@ -145,9 +143,7 @@ describe('CreditService', () => {
     await service.grantCredit(
       'app-1',
       {
-        referenceId: 'payment-2',
         amount: '100',
-        criticalBalance: 20,
         validityPeriod: 30,
         validityPeriodUnit: TimeUnit.Days,
         amountDenom: 'uhid',
@@ -162,8 +158,8 @@ describe('CreditService', () => {
         apiCredit: { total: 100, used: 0 },
         status: CreditStatus.INACTIVE,
         validityDays: 30,
-        criticalBalance: 20,
-        referenceId: 'payment-2',
+        criticalBalance: 40,
+        referenceId: expect.any(String),
       }),
     );
     expect(repository.create).toHaveBeenCalledWith(
@@ -183,15 +179,14 @@ describe('CreditService', () => {
     await service.grantCredit(
       'app-1',
       {
-        referenceId: 'payment-retry',
         amount: '100',
-        criticalBalance: 20,
         validityPeriod: 30,
         validityPeriodUnit: TimeUnit.Days,
         amountDenom: 'uhid',
       },
       'admin-1',
       CreditSourceEnum.MANUAL_RECHARGE,
+      'payment-retry',
     );
 
     expect(repository.create).not.toHaveBeenCalled();
@@ -215,15 +210,14 @@ describe('CreditService', () => {
       service.grantCredit(
         'app-1',
         {
-          referenceId: 'payment-conflict',
           amount: '101',
-          criticalBalance: 20,
           validityPeriod: 30,
           validityPeriodUnit: TimeUnit.Days,
           amountDenom: 'uhid',
         },
         'admin-1',
         CreditSourceEnum.MANUAL_RECHARGE,
+        'payment-conflict',
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
 
@@ -274,7 +268,7 @@ function plan(overrides: Partial<CreditPlan> = {}) {
     serviceId: 'app-1',
     status: CreditStatus.INACTIVE,
     apiCredit: { total: 100, used: 0 },
-    criticalBalance: 20,
+    criticalBalance: 40,
     referenceId: 'payment-1',
     validityDays: 30,
     createdAt: new Date('2026-08-01T00:00:00.000Z'),

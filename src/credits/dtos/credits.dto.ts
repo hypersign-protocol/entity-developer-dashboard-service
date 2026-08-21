@@ -55,15 +55,6 @@ export class CreateCreditDto {
   @IsInt()
   @Min(1)
   validityDays: number;
-
-  @ApiProperty({
-    example: 100,
-    description: 'Plan-specific remaining-credit alert threshold',
-  })
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  criticalBalance: number;
 }
 
 export class ListCreditsDto {

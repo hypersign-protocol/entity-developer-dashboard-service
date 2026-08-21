@@ -30,7 +30,7 @@ describe('CreditEventStore', () => {
         eventId: 'event-1',
         schemaVersion: 3,
         catalogVersion: '2026-08-14',
-        serviceType:SERVICE_TYPES.CAVACH_API,
+        serviceType: SERVICE_TYPES.CAVACH_API,
         event: {
           type: 'COMMITTED',
           appId: 'app-1',
@@ -59,7 +59,7 @@ describe('CreditEventStore', () => {
           eventId: 'event-1',
           schemaVersion: 3,
           catalogVersion: '2026-08-14',
-          serviceType:SERVICE_TYPES.CAVACH_API,
+          serviceType: SERVICE_TYPES.CAVACH_API,
           event: {
             type: 'COMMITTED',
             appId: 'app-1',
@@ -79,7 +79,7 @@ describe('CreditEventStore', () => {
           eventId: 'event-1',
           schemaVersion: 3,
           catalogVersion: '2026-08-14',
-          serviceType:SERVICE_TYPES.CAVACH_API,
+          serviceType: SERVICE_TYPES.CAVACH_API,
           event: {
             type: 'COMMITTED',
             appId: 'app-1',
@@ -109,7 +109,7 @@ describe('CreditEventStore', () => {
         eventId: 'event-1',
         schemaVersion: 3,
         catalogVersion: '2026-08-14',
-        serviceType:SERVICE_TYPES.CAVACH_API,
+        serviceType: SERVICE_TYPES.CAVACH_API,
         event: {
           type: 'CREDIT_GRANTED',
           appId: 'app-1',
@@ -151,7 +151,7 @@ describe('CreditEventStore', () => {
         eventId: 'event-dev-1',
         schemaVersion: 3,
         catalogVersion: '2026-08-14',
-        serviceType:SERVICE_TYPES.CAVACH_API,
+        serviceType: SERVICE_TYPES.CAVACH_API,
         event: {
           type: 'CREDIT_OBSERVED',
           appId: 'app-1',
@@ -175,7 +175,7 @@ describe('CreditEventStore', () => {
           eventId: 'event-dev-1',
           schemaVersion: 3,
           catalogVersion: '2026-08-14',
-          serviceType:SERVICE_TYPES.CAVACH_API,
+          serviceType: SERVICE_TYPES.CAVACH_API,
           event: {
             type: 'CREDIT_OBSERVED',
             appId: 'app-1',
@@ -225,7 +225,7 @@ function lifecycleJob(name: string, type: 'PLAN_EXPIRED' | 'CRITICAL_BALANCE') {
     eventId: 'event-1',
     schemaVersion: 3,
     catalogVersion: '2026-08-14',
-    serviceType:SERVICE_TYPES.CAVACH_API,
+    serviceType: SERVICE_TYPES.CAVACH_API,
     event: {
       type,
       appId: 'app-1',

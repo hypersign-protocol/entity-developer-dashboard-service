@@ -247,7 +247,7 @@ export class CreditEventStore {
     if (
       !rejection ||
       rejection.schemaVersion !== 3 ||
-      rejection.serviceType !==  SERVICE_TYPES.CAVACH_API ||
+      rejection.serviceType !== SERVICE_TYPES.CAVACH_API ||
       typeof rejection.commandId !== 'string' ||
       typeof rejection.reason !== 'string'
     ) {

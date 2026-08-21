@@ -61,12 +61,12 @@ export class CreditCommandService {
       throw new Error('Credit plan must expire after it was created');
     }
 
-    const commandId = `grant-${ SERVICE_TYPES.CAVACH_API}-${planId}`;
-    const queueName = `credit.commands.${ SERVICE_TYPES.CAVACH_API}`;
+    const commandId = `grant-${SERVICE_TYPES.CAVACH_API}-${planId}`;
+    const queueName = `credit.commands.${SERVICE_TYPES.CAVACH_API}`;
     const command: CreditCommandEnvelope = {
       schemaVersion: 3,
       commandId,
-      serviceType:  SERVICE_TYPES.CAVACH_API,
+      serviceType: SERVICE_TYPES.CAVACH_API,
       source: 'entity-developer-dashboard-service',
       requestedAt: new Date().toISOString(),
       payload: {

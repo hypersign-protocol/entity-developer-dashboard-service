@@ -99,6 +99,7 @@ describe('CreditEventStore', () => {
           serviceType: SERVICE_TYPES.CAVACH_API,
           event: {
             type: 'COMMITTED',
+            environment: 'PROD',
             appId: 'app-1',
             planId: 'plan-1',
             amount: 2,
@@ -129,6 +130,7 @@ describe('CreditEventStore', () => {
           serviceType: SERVICE_TYPES.CAVACH_API,
           event: {
             type: 'COMMITTED',
+            environment: 'PROD',
             appId: 'app-1',
             planId: 'plan-1',
             amount: 0,
@@ -282,6 +284,34 @@ describe('CreditEventStore', () => {
     );
 
     expect(creditService.activateCredit).not.toHaveBeenCalled();
+  });
+
+  it('ignores observed events without storing analytics', async () => {
+    await store.append(
+      job('credit.observed', {
+        eventId: 'event-dev-1',
+        schemaVersion: 3,
+        catalogVersion: '2026-08-14',
+        serviceType: SERVICE_TYPES.CAVACH_API,
+        event: {
+          type: 'CREDIT_OBSERVED',
+          appId: 'app-1',
+          tenantId: 'tenant-1',
+          appType: 'KYC_SERVICE',
+          creditType: 'API_CREDIT',
+          timestamp: 1787287938626,
+          operation: 'POST /api/v1/e-kyc/verification/session',
+          requestId: 'request-dev-1:api',
+          environment: 'DEV',
+          billingMode: 'OBSERVE',
+          requestedAmount: 2,
+          deductedAmount: 0,
+        },
+      }),
+    );
+
+    expect(repository.applyPlanCreditCommit).not.toHaveBeenCalled();
+    expect(commitEventRepository.create).not.toHaveBeenCalled();
   });
 });
 

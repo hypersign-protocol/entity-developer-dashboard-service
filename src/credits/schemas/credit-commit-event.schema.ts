@@ -84,18 +84,18 @@ CreditCommitEventSchema.index({
 });
 CreditCommitEventSchema.index({
   'metadata.tenantId': 1,
-  'metadata.appId': 1,
+  'metadata.serviceId': 1,
   timestamp: -1,
 });
 CreditCommitEventSchema.index({
   'metadata.tenantId': 1,
-  'metadata.appId': 1,
+  'metadata.serviceId': 1,
   planId: 1,
   timestamp: -1,
 });
 CreditCommitEventSchema.index({
   'metadata.tenantId': 1,
-  'metadata.appId': 1,
+  'metadata.serviceId': 1,
   operation: 1,
   timestamp: -1,
 });

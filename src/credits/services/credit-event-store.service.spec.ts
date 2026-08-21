@@ -1,11 +1,13 @@
 import { CreditRepository } from '../repositories/credit.repository';
 import { CreditService } from './credits.service';
 import { CreditEventStore } from './credit-event-store.service';
+import { CreditCommitEventRepository } from '../repositories/credit-commit-event.repository';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 
 describe('CreditEventStore', () => {
   let repository: jest.Mocked<CreditRepository>;
   let creditService: jest.Mocked<CreditService>;
+  let commitEventRepository: jest.Mocked<CreditCommitEventRepository>;
   let store: CreditEventStore;
 
   beforeEach(() => {
@@ -19,7 +21,14 @@ describe('CreditEventStore', () => {
     creditService = {
       activateCredit: jest.fn(),
     } as unknown as jest.Mocked<CreditService>;
-    store = new CreditEventStore(repository, creditService);
+    commitEventRepository = {
+      create: jest.fn(),
+    } as unknown as jest.Mocked<CreditCommitEventRepository>;
+    store = new CreditEventStore(
+      repository,
+      creditService,
+      commitEventRepository,
+    );
   });
 
   it('applies a middleware committed event to the active app credit', async () => {
@@ -37,6 +46,16 @@ describe('CreditEventStore', () => {
           planId: 'plan-1',
           amount: 2,
           reservationId: 'reservation-1',
+          timestamp: 1787287938626,
+          tenantId: 'tenant-1',
+          appType: 'KYC_SERVICE',
+          creditType: 'API_CREDIT',
+          operation: 'POST /api/v1/e-kyc/verification/session',
+          totalAmount: 2,
+          allocationIndex: 0,
+          allocationCount: 1,
+          planBalanceAfter: 8,
+          balanceAfter: 8,
         },
       }),
     );
@@ -46,6 +65,17 @@ describe('CreditEventStore', () => {
       'plan-1',
       2,
       'event-1',
+    );
+    expect(commitEventRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: 'event-1',
+        timestamp: new Date(1787287938626),
+        metadata: expect.objectContaining({
+          tenantId: 'tenant-1',
+          appId: 'app-1',
+        }),
+        operation: 'POST /api/v1/e-kyc/verification/session',
+      }),
     );
   });
 
@@ -66,6 +96,16 @@ describe('CreditEventStore', () => {
             planId: 'plan-1',
             amount: 2,
             reservationId: 'reservation-1',
+            timestamp: 1787287938626,
+            tenantId: 'tenant-1',
+            appType: 'KYC_SERVICE',
+            creditType: 'API_CREDIT',
+            operation: 'POST /api/v1/e-kyc/verification/session',
+            totalAmount: 2,
+            allocationIndex: 0,
+            allocationCount: 1,
+            planBalanceAfter: 8,
+            balanceAfter: 8,
           },
         }),
       ),
@@ -90,6 +130,28 @@ describe('CreditEventStore', () => {
         }),
       ),
     ).rejects.toThrow('Invalid committed credit lifecycle event');
+  });
+
+  it('rejects commits that cannot be represented in analytics before applying them', async () => {
+    await expect(
+      store.append(
+        job('credit.committed', {
+          eventId: 'event-1',
+          schemaVersion: 2,
+          catalogVersion: '2026-08-14',
+          catalogId: 'hypersign-kyc-api-pricing',
+          event: {
+            type: 'COMMITTED',
+            appId: 'app-1',
+            planId: 'plan-1',
+            amount: 2,
+            reservationId: 'reservation-1',
+          },
+        }),
+      ),
+    ).rejects.toThrow('Invalid committed credit analytics data');
+
+    expect(repository.applyPlanCreditCommit).not.toHaveBeenCalled();
   });
 
   it('marks the database plan inactive when the plan expired', async () => {

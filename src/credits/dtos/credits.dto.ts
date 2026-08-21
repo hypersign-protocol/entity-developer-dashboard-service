@@ -99,7 +99,7 @@ export class CreditPlanResponseDto {
 
   @ApiProperty({ enum: SERVICE_TYPES, example: SERVICE_TYPES.CAVACH_API })
   serviceType: SERVICE_TYPES;
-  
+
   @ApiProperty({ example: 'payment_01J5YQ3H8P7M' })
   referenceId: string;
 

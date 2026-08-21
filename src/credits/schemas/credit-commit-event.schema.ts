@@ -54,9 +54,6 @@ export class CreditCommitEvent {
   catalogVersion: string;
 
   @Prop({ required: true, type: String })
-  catalogId: string;
-
-  @Prop({ required: true, type: String })
   reservationId: string;
 
   @Prop({ required: true, type: Number })

@@ -48,7 +48,7 @@ export class CreditPlan {
   serviceId: string;
   @Prop({ required: true, type: String, enum: SERVICE_TYPES })
   serviceType: SERVICE_TYPES;
-  
+
   @Prop({ required: true, type: String })
   referenceId: string;
   @Prop({ required: true, type: ApiCredit })

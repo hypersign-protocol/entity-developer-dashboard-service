@@ -10,8 +10,8 @@ import { CreditStatus } from '../schemas/credit.schema';
 import { CreditService } from './credits.service';
 import { CreditNotificationService } from './credit-notification.service';
 import {
-  CreditCommitEventRepository,
   CreateCreditCommitEvent,
+  CreditCommitEventRepository,
 } from '../repositories/credit-commit-event.repository';
 
 export const CREDIT_EVENT_QUEUE = 'credit.lifecycle';
@@ -250,7 +250,6 @@ export class CreditEventStore {
       eventId: envelope.eventId,
       schemaVersion: envelope.schemaVersion,
       catalogVersion: envelope.catalogVersion,
-      catalogId: envelope.catalogId,
       reservationId: event.reservationId,
       amount: event.amount,
       totalAmount: event.totalAmount,

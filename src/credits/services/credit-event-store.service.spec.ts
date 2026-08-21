@@ -26,16 +26,13 @@ describe('CreditEventStore', () => {
     creditNotificationService = {
       notifyUsageThreshold: jest.fn(),
     } as unknown as jest.Mocked<CreditNotificationService>;
-    store = new CreditEventStore(
-      repository,
-      creditService,
-      creditNotificationService,
     commitEventRepository = {
       create: jest.fn(),
     } as unknown as jest.Mocked<CreditCommitEventRepository>;
     store = new CreditEventStore(
       repository,
       creditService,
+      creditNotificationService,
       commitEventRepository,
     );
   });
@@ -82,7 +79,7 @@ describe('CreditEventStore', () => {
         timestamp: new Date(1787287938626),
         metadata: expect.objectContaining({
           tenantId: 'tenant-1',
-          appId: 'app-1',
+          serviceId: 'app-1',
         }),
         operation: 'POST /api/v1/e-kyc/verification/session',
       }),
@@ -147,9 +144,9 @@ describe('CreditEventStore', () => {
       store.append(
         job('credit.committed', {
           eventId: 'event-1',
-          schemaVersion: 2,
+          schemaVersion: 3,
           catalogVersion: '2026-08-14',
-          catalogId: 'hypersign-kyc-api-pricing',
+          serviceType: SERVICE_TYPES.CAVACH_API,
           event: {
             type: 'COMMITTED',
             appId: 'app-1',

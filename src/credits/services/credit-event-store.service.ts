@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   CREDIT_EVENT_NAMES,
+  CreditEnvironment,
+  CreditEventType,
   type AnyCreditEvent,
   type CreditBullMqJob,
   type CreditLifecycleEventEnvelope,
@@ -53,27 +55,30 @@ export class CreditEventStore {
 
     switch (jobName) {
       case CREDIT_EVENT_NAMES.COMMITTED:
-        this.validateLifecycleEventType(envelope, 'COMMITTED');
+        this.validateLifecycleEventType(envelope, CreditEventType.COMMITTED);
         await this.processCommit(envelope);
         return;
       case CREDIT_EVENT_NAMES.PLAN_EXPIRED:
-        this.validateLifecycleEventType(envelope, 'PLAN_EXPIRED');
+        this.validateLifecycleEventType(envelope, CreditEventType.PLAN_EXPIRED);
         await this.processPlanExpired(
           envelope.event.appId,
           this.planId(envelope),
         );
         return;
       case CREDIT_EVENT_NAMES.RESERVED:
-        this.validateLifecycleEventType(envelope, 'RESERVED');
+        this.validateLifecycleEventType(envelope, CreditEventType.RESERVED);
         break;
       case CREDIT_EVENT_NAMES.ROLLED_BACK:
-        this.validateLifecycleEventType(envelope, 'ROLLED_BACK');
+        this.validateLifecycleEventType(envelope, CreditEventType.ROLLED_BACK);
         break;
       case CREDIT_EVENT_NAMES.EXPIRED:
-        this.validateLifecycleEventType(envelope, 'EXPIRED');
+        this.validateLifecycleEventType(envelope, CreditEventType.EXPIRED);
         break;
       case CREDIT_EVENT_NAMES.CREDIT_GRANTED:
-        this.validateLifecycleEventType(envelope, 'CREDIT_GRANTED');
+        this.validateLifecycleEventType(
+          envelope,
+          CreditEventType.CREDIT_GRANTED,
+        );
         await this.processCreditGranted(
           envelope.event.appId,
           this.planId(envelope),
@@ -81,14 +86,20 @@ export class CreditEventStore {
         );
         return;
       case CREDIT_EVENT_NAMES.CRITICAL_BALANCE:
-        this.validateLifecycleEventType(envelope, 'CRITICAL_BALANCE');
+        this.validateLifecycleEventType(
+          envelope,
+          CreditEventType.CRITICAL_BALANCE,
+        );
         await this.processCriticalBalance(
           envelope.event.appId,
           this.planId(envelope),
         );
         break;
       case CREDIT_EVENT_NAMES.CREDIT_OBSERVED:
-        this.validateLifecycleEventType(envelope, 'CREDIT_OBSERVED');
+        this.validateLifecycleEventType(
+          envelope,
+          CreditEventType.CREDIT_OBSERVED,
+        );
         this.validateObservedEvent(envelope);
         return;
       default:
@@ -200,7 +211,7 @@ export class CreditEventStore {
       { type: 'CREDIT_OBSERVED' }
     >;
     if (
-      event.environment !== 'DEV' ||
+      event.environment !== CreditEnvironment.DEV ||
       event.billingMode !== 'OBSERVE' ||
       event.deductedAmount !== 0 ||
       !Number.isSafeInteger(event.requestedAmount) ||

@@ -5,7 +5,11 @@ import {
   CreditPlan,
   CreditPlanDocument,
   CreditStatus,
+  OnChainCreditAllowance,
+  scope,
 } from '../schemas/credit.schema';
+import { CreditType } from '@hypersign-protocol/credit-middleware';
+import { SERVICE_TYPES } from '../../supported-service/services/iServiceList';
 
 @Injectable()
 export class CreditRepository {
@@ -83,28 +87,41 @@ export class CreditRepository {
     planId: string,
     amount: number,
     eventId: string,
+    creditType: string,
+    serviceType: string,
   ): Promise<CreditPlan> {
+    const isApiCredit = creditType === CreditType.API_CREDIT;
+    const isBlockchainCredit = creditType === CreditType.BLOCKCHAIN_TXN_CREDIT;
+    if (!isApiCredit && !isBlockchainCredit) {
+      throw new Error(`Unsupported committed credit type: ${creditType}`);
+    }
+    const usedField = isApiCredit
+      ? 'apiCredit.used'
+      : 'onChainAllowance.usedAmount';
+    const totalField = isApiCredit
+      ? 'apiCredit.total'
+      : 'onChainAllowance.amount';
+    const usedValue = { $ifNull: [`$${usedField}`, 0] };
+    const updatedUsed = { $add: [usedValue, amount] };
     return this.creditModel
       .findOneAndUpdate(
         {
           _id: planId,
           serviceId: appId,
+          serviceType,
           processedCommitEventIds: { $ne: eventId },
           $expr: {
-            $lte: [{ $add: ['$apiCredit.used', amount] }, '$apiCredit.total'],
+            $lte: [updatedUsed, `$${totalField}`],
           },
         },
         [
           {
             $set: {
-              'apiCredit.used': { $add: ['$apiCredit.used', amount] },
+              [usedField]: updatedUsed,
               status: {
                 $cond: [
                   {
-                    $eq: [
-                      { $add: ['$apiCredit.used', amount] },
-                      '$apiCredit.total',
-                    ],
+                    $eq: [updatedUsed, `$${totalField}`],
                   },
                   CreditStatus.INACTIVE,
                   '$status',
@@ -114,6 +131,100 @@ export class CreditRepository {
                 $setUnion: [
                   { $ifNull: ['$processedCommitEventIds', []] },
                   [eventId],
+                ],
+              },
+            },
+          },
+        ],
+        { new: true },
+      )
+      .lean()
+      .exec();
+  }
+
+  /**
+   * Activates an SSI plan without replacing lifecycle-owned usage fields.
+   *
+   * The aggregation update evaluates against the latest Mongo document. This
+   * is important because a blockchain commit can arrive while the external
+   * AuthZ/FeeGrant transaction is still being confirmed.
+   */
+  async activateSsiCreditPlan(
+    appId: string,
+    planId: string,
+    expiresAt: Date,
+    criticalBalance: number,
+    newAllowance?: OnChainCreditAllowance,
+    newScopes?: scope[],
+  ): Promise<CreditPlan> {
+    const allowance = newAllowance
+      ? {
+          amount: newAllowance.amount,
+          denom: newAllowance.denom,
+          usedAmount: 0,
+        }
+      : null;
+    return this.creditModel
+      .findOneAndUpdate(
+        { _id: planId, serviceId: appId },
+        [
+          {
+            $set: {
+              serviceType: SERVICE_TYPES.SSI_API,
+              expiresAt,
+              criticalBalance,
+              ...(allowance
+                ? {
+                    onChainAllowance: {
+                      $ifNull: ['$onChainAllowance', allowance],
+                    },
+                  }
+                : {}),
+              ...(newScopes
+                ? {
+                    onChainAllowanceScopes: {
+                      $cond: [
+                        {
+                          $gt: [
+                            {
+                              $size: {
+                                $ifNull: ['$onChainAllowanceScopes', []],
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                        '$onChainAllowanceScopes',
+                        newScopes,
+                      ],
+                    },
+                  }
+                : {}),
+            },
+          },
+          {
+            $set: {
+              status: {
+                $cond: [
+                  {
+                    $and: [
+                      { $gt: ['$expiresAt', '$$NOW'] },
+                      {
+                        $lt: [
+                          { $ifNull: ['$apiCredit.used', 0] },
+                          { $ifNull: ['$apiCredit.total', 0] },
+                        ],
+                      },
+                      {
+                        $lt: [
+                          { $ifNull: ['$onChainAllowance.usedAmount', 0] },
+                          { $ifNull: ['$onChainAllowance.amount', 0] },
+                        ],
+                      },
+                    ],
+                  },
+                  CreditStatus.ACTIVE,
+                  CreditStatus.INACTIVE,
                 ],
               },
             },

@@ -3,6 +3,7 @@ import {
   CREDIT_EVENT_NAMES,
   CreditEnvironment,
   CreditEventType,
+  CreditType,
   type AnyCreditEvent,
   type CreditBullMqJob,
   type CreditLifecycleEventEnvelope,
@@ -18,6 +19,7 @@ import {
 
 export const CREDIT_EVENT_QUEUE = 'credit.lifecycle';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
+import { dashboardPlanId, SSI_CREDIT_TYPES } from '../credit-wallet';
 
 type CreditLifecycleEnvelope = Omit<CreditLifecycleEventEnvelope, 'event'> & {
   event: AnyCreditEvent;
@@ -62,7 +64,7 @@ export class CreditEventStore {
         this.validateLifecycleEventType(envelope, CreditEventType.PLAN_EXPIRED);
         await this.processPlanExpired(
           envelope.event.appId,
-          this.planId(envelope),
+          this.dashboardPlanId(envelope),
         );
         return;
       case CREDIT_EVENT_NAMES.RESERVED:
@@ -81,7 +83,7 @@ export class CreditEventStore {
         );
         await this.processCreditGranted(
           envelope.event.appId,
-          this.planId(envelope),
+          this.dashboardPlanId(envelope),
           this.grantExpiry(envelope),
         );
         return;
@@ -92,7 +94,7 @@ export class CreditEventStore {
         );
         await this.processCriticalBalance(
           envelope.event.appId,
-          this.planId(envelope),
+          this.dashboardPlanId(envelope),
         );
         break;
       case CREDIT_EVENT_NAMES.CREDIT_OBSERVED:
@@ -109,15 +111,18 @@ export class CreditEventStore {
 
   private async processCommit(envelope: CreditLifecycleEnvelope) {
     const appId = envelope.event.appId;
-    const planId = this.planId(envelope);
+    const planId = this.dashboardPlanId(envelope);
     const amount = this.eventAmount(envelope);
     const eventId = envelope.eventId;
     const reservationId = this.reservationId(envelope);
+    const creditType = this.creditType(envelope);
     const updatedCredit = await this.creditRepository.applyPlanCreditCommit(
       appId,
       planId,
       amount,
       eventId,
+      creditType,
+      envelope.serviceType,
     );
     if (!updatedCredit) {
       if (await this.creditRepository.hasProcessedCommit(appId, eventId)) {
@@ -127,7 +132,13 @@ export class CreditEventStore {
         `Credit commit could not be applied for appId ${appId}, planId ${planId}`,
       );
     }
-    await this.creditNotificationService.notifyUsageThreshold(updatedCredit);
+    if (creditType === CreditType.API_CREDIT) {
+      await this.creditNotificationService.notifyUsageThreshold(updatedCredit);
+    }
+    if (creditType === CreditType.BLOCKCHAIN_TXN_CREDIT) {
+      // SSI
+      await this.creditNotificationService.notifyUsageThreshold(updatedCredit);
+    }
     await this.creditCommitEventRepository.create(
       this.toCommitEventMeasurement(envelope),
     );
@@ -184,7 +195,7 @@ export class CreditEventStore {
       envelope.schemaVersion !== 3 ||
       !envelope.eventId ||
       !envelope.catalogVersion ||
-      envelope.serviceType !== SERVICE_TYPES.CAVACH_API ||
+      !this.isSupportedServiceType(envelope.serviceType) ||
       !envelope.event?.appId
     ) {
       throw new Error('Invalid credit lifecycle event envelope');
@@ -202,6 +213,7 @@ export class CreditEventStore {
       this.validateCommitAnalyticsFields(
         envelope.event as Extract<AnyCreditEvent, { type: 'COMMITTED' }>,
       );
+      this.validateCreditType(envelope);
     }
   }
 
@@ -327,6 +339,46 @@ export class CreditEventStore {
     return planId;
   }
 
+  private dashboardPlanId(envelope: CreditLifecycleEnvelope): string {
+    return dashboardPlanId(
+      this.planId(envelope),
+      envelope.serviceType as SERVICE_TYPES,
+      envelope.event.creditType,
+    );
+  }
+
+  private creditType(envelope: CreditLifecycleEnvelope): string {
+    const creditType = envelope.event.creditType;
+    if (typeof creditType !== 'string' || !creditType) {
+      throw new Error('Credit lifecycle event is missing creditType');
+    }
+    return creditType;
+  }
+
+  private validateCreditType(envelope: CreditLifecycleEnvelope): void {
+    const creditType = this.creditType(envelope);
+    if (envelope.event.appType !== envelope.serviceType) {
+      throw new Error('Credit lifecycle appType does not match serviceType');
+    }
+    const valid =
+      envelope.serviceType === SERVICE_TYPES.CAVACH_API
+        ? creditType === CreditType.API_CREDIT
+        : SSI_CREDIT_TYPES.includes(
+            creditType as (typeof SSI_CREDIT_TYPES)[number],
+          );
+    if (!valid) {
+      throw new Error(
+        `Unsupported ${envelope.serviceType} credit type: ${creditType}`,
+      );
+    }
+  }
+
+  private isSupportedServiceType(value: unknown): boolean {
+    return (
+      value === SERVICE_TYPES.CAVACH_API || value === SERVICE_TYPES.SSI_API
+    );
+  }
+
   private validateCommandRejection(value: unknown): void {
     const rejection = value as {
       schemaVersion?: unknown;
@@ -337,7 +389,7 @@ export class CreditEventStore {
     if (
       !rejection ||
       rejection.schemaVersion !== 3 ||
-      rejection.serviceType !== SERVICE_TYPES.CAVACH_API ||
+      !this.isSupportedServiceType(rejection.serviceType) ||
       typeof rejection.commandId !== 'string' ||
       typeof rejection.reason !== 'string'
     ) {

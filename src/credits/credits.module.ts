@@ -34,6 +34,7 @@ import {
   CreditCommitEventSchema,
 } from './schemas/credit-commit-event.schema';
 import { CreditCommitEventRepository } from './repositories/credit-commit-event.repository';
+import { SsiTransactionResultConsumer } from './services/ssi-transaction-result.consumer';
 
 const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
 
@@ -49,7 +50,6 @@ const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
     JwtModule.register({}),
     HidWalletModule,
     forwardRef(() => AppAuthModule),
-    HidWalletModule,
   ],
   controllers: [CreditsController],
   providers: [
@@ -57,6 +57,7 @@ const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
       provide: CREDIT_REDIS_URL,
       useFactory: (): string =>
         process.env.CREDIT_REDIS_URL ||
+        process.env.REDIS_URL ||
         `redis://${
           process.env.REDIS_HOST ||
           'redis-stack-service.hypermine-development.svc.cluster.local'
@@ -74,6 +75,7 @@ const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
     CreditEventStore,
     CreditNotificationService,
     CreditLifecycleConsumer,
+    SsiTransactionResultConsumer,
     CreditService,
   ],
   exports: [CreditService],

@@ -4,6 +4,10 @@ import { CreditEventStore } from './credit-event-store.service';
 import { CreditNotificationService } from './credit-notification.service';
 import { CreditCommitEventRepository } from '../repositories/credit-commit-event.repository';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
+import {
+  CreditEnvironment,
+  CreditType,
+} from '@hypersign-protocol/credit-middleware';
 
 describe('CreditEventStore', () => {
   let repository: jest.Mocked<CreditRepository>;
@@ -54,7 +58,7 @@ describe('CreditEventStore', () => {
           reservationId: 'reservation-1',
           timestamp: 1787287938626,
           tenantId: 'tenant-1',
-          appType: 'KYC_SERVICE',
+          appType: SERVICE_TYPES.CAVACH_API,
           creditType: 'API_CREDIT',
           operation: 'POST /api/v1/e-kyc/verification/session',
           totalAmount: 2,
@@ -71,6 +75,8 @@ describe('CreditEventStore', () => {
       'plan-1',
       2,
       'event-1',
+      CreditType.API_CREDIT,
+      SERVICE_TYPES.CAVACH_API,
     );
     expect(creditNotificationService.notifyUsageThreshold).toHaveBeenCalled();
     expect(commitEventRepository.create).toHaveBeenCalledWith(
@@ -83,6 +89,124 @@ describe('CreditEventStore', () => {
         }),
         operation: 'POST /api/v1/e-kyc/verification/session',
       }),
+    );
+  });
+
+  it('maps an SSI blockchain wallet commit to its SSI dashboard plan', async () => {
+    repository.applyPlanCreditCommit.mockResolvedValue({} as never);
+
+    await store.append(
+      job('credit.committed', {
+        eventId: 'ssi-event-1',
+        schemaVersion: 3,
+        catalogVersion: '3.7.2',
+        serviceType: SERVICE_TYPES.SSI_API,
+        event: {
+          type: 'COMMITTED',
+          appId: 'ssi-app-1',
+          planId: 'ssi-plan-1.BLOCKCHAIN_TXN_CREDIT',
+          amount: 50,
+          reservationId: 'ssi-reservation-1',
+          timestamp: 1787287938626,
+          tenantId: 'tenant-ssi',
+          appType: SERVICE_TYPES.SSI_API,
+          creditType: CreditType.BLOCKCHAIN_TXN_CREDIT,
+          operation: 'POST /api/v1/did/register',
+          totalAmount: 50,
+          allocationIndex: 0,
+          allocationCount: 1,
+          planBalanceAfter: 450,
+          balanceAfter: 450,
+        },
+      }),
+    );
+
+    expect(repository.applyPlanCreditCommit).toHaveBeenCalledWith(
+      'ssi-app-1',
+      'ssi-plan-1',
+      50,
+      'ssi-event-1',
+      CreditType.BLOCKCHAIN_TXN_CREDIT,
+      SERVICE_TYPES.SSI_API,
+    );
+    expect(
+      creditNotificationService.notifyUsageThreshold,
+    ).not.toHaveBeenCalled();
+    expect(commitEventRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        planId: 'ssi-plan-1.BLOCKCHAIN_TXN_CREDIT',
+        metadata: expect.objectContaining({
+          serviceType: SERVICE_TYPES.SSI_API,
+          creditType: CreditType.BLOCKCHAIN_TXN_CREDIT,
+        }),
+      }),
+    );
+  });
+
+  it('applies every allocation from one SSI reservation to its own dashboard plan', async () => {
+    repository.applyPlanCreditCommit.mockResolvedValue({} as never);
+    const baseEvent = {
+      type: 'COMMITTED',
+      appId: 'ssi-app-1',
+      timestamp: 1787726078879,
+      tenantId: 'tenant-ssi',
+      appType: SERVICE_TYPES.SSI_API,
+      creditType: CreditType.BLOCKCHAIN_TXN_CREDIT,
+      operation: 'POST /api/v1/did/register',
+      reservationId: 'reservation-spanning-plans',
+      totalAmount: 4000,
+      allocationCount: 2,
+      balanceAfter: 0,
+    };
+
+    await store.append(
+      job('credit.committed', {
+        eventId: '1787726078880-0',
+        schemaVersion: 3,
+        catalogVersion: '3.7.2',
+        serviceType: SERVICE_TYPES.SSI_API,
+        event: {
+          ...baseEvent,
+          planId: 'plan-1.BLOCKCHAIN_TXN_CREDIT',
+          amount: 1000,
+          allocationIndex: 0,
+          planBalanceAfter: 0,
+        },
+      }),
+    );
+    await store.append(
+      job('credit.committed', {
+        eventId: '1787726078880-2',
+        schemaVersion: 3,
+        catalogVersion: '3.7.2',
+        serviceType: SERVICE_TYPES.SSI_API,
+        event: {
+          ...baseEvent,
+          planId: 'plan-2.BLOCKCHAIN_TXN_CREDIT',
+          amount: 3000,
+          allocationIndex: 1,
+          planBalanceAfter: 0,
+        },
+      }),
+    );
+
+    expect(repository.applyPlanCreditCommit).toHaveBeenNthCalledWith(
+      1,
+      'ssi-app-1',
+      'plan-1',
+      1000,
+      '1787726078880-0',
+      CreditType.BLOCKCHAIN_TXN_CREDIT,
+      SERVICE_TYPES.SSI_API,
+    );
+    expect(repository.applyPlanCreditCommit).toHaveBeenNthCalledWith(
+      2,
+      'ssi-app-1',
+      'plan-2',
+      3000,
+      '1787726078880-2',
+      CreditType.BLOCKCHAIN_TXN_CREDIT,
+      SERVICE_TYPES.SSI_API,
     );
   });
 
@@ -106,7 +230,7 @@ describe('CreditEventStore', () => {
             reservationId: 'reservation-1',
             timestamp: 1787287938626,
             tenantId: 'tenant-1',
-            appType: 'KYC_SERVICE',
+            appType: SERVICE_TYPES.CAVACH_API,
             creditType: 'API_CREDIT',
             operation: 'POST /api/v1/e-kyc/verification/session',
             totalAmount: 2,
@@ -229,7 +353,7 @@ describe('CreditEventStore', () => {
           requestId: 'request-dev-1:api',
           requestedAmount: 2,
           deductedAmount: 0,
-          environment: 'DEV',
+          environment: CreditEnvironment.DEV,
           billingMode: 'OBSERVE',
         },
       }),
@@ -253,7 +377,7 @@ describe('CreditEventStore', () => {
             requestId: 'request-dev-1:api',
             requestedAmount: 2,
             deductedAmount: 1,
-            environment: 'DEV',
+            environment: CreditEnvironment.DEV,
             billingMode: 'OBSERVE',
           },
         }),
@@ -302,7 +426,7 @@ describe('CreditEventStore', () => {
           timestamp: 1787287938626,
           operation: 'POST /api/v1/e-kyc/verification/session',
           requestId: 'request-dev-1:api',
-          environment: 'DEV',
+          environment: CreditEnvironment.DEV,
           billingMode: 'OBSERVE',
           requestedAmount: 2,
           deductedAmount: 0,

@@ -31,8 +31,11 @@ export class CreditNotificationState {
 }
 
 export class OnChainCreditAllowance {
+  @Prop({ required: true, type: Number, min: 1 })
   amount: number;
+  @Prop({ required: true, type: String })
   denom: string;
+  @Prop({ required: true, type: Number, min: 0, default: 0 })
   usedAmount?: number;
 }
 export class ApiCredit {

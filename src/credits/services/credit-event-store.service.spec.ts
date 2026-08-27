@@ -2,7 +2,7 @@ import { CreditRepository } from '../repositories/credit.repository';
 import { CreditService } from './credits.service';
 import { CreditEventStore } from './credit-event-store.service';
 import { CreditNotificationService } from './credit-notification.service';
-import { CreditCommitEventRepository } from '../repositories/credit-commit-event.repository';
+import { CreditLedgerRepository } from '../repositories/credit-ledger.repository';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import {
   CreditEnvironment,
@@ -13,7 +13,7 @@ describe('CreditEventStore', () => {
   let repository: jest.Mocked<CreditRepository>;
   let creditService: jest.Mocked<CreditService>;
   let creditNotificationService: jest.Mocked<CreditNotificationService>;
-  let commitEventRepository: jest.Mocked<CreditCommitEventRepository>;
+  let commitEventRepository: jest.Mocked<CreditLedgerRepository>;
   let store: CreditEventStore;
 
   beforeEach(() => {
@@ -32,7 +32,8 @@ describe('CreditEventStore', () => {
     } as unknown as jest.Mocked<CreditNotificationService>;
     commitEventRepository = {
       create: jest.fn(),
-    } as unknown as jest.Mocked<CreditCommitEventRepository>;
+      exists: jest.fn().mockResolvedValue(false),
+    } as unknown as jest.Mocked<CreditLedgerRepository>;
     store = new CreditEventStore(
       repository,
       creditService,
@@ -77,9 +78,6 @@ describe('CreditEventStore', () => {
       'event-1',
       CreditType.API_CREDIT,
       SERVICE_TYPES.CAVACH_API,
-    );
-    expect(creditNotificationService.notifyUsageThreshold).toHaveBeenCalled();
-    expect(commitEventRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         eventId: 'event-1',
         timestamp: new Date(1787287938626),
@@ -90,6 +88,11 @@ describe('CreditEventStore', () => {
         operation: 'POST /api/v1/e-kyc/verification/session',
       }),
     );
+    expect(creditNotificationService.notifyUsageThreshold).toHaveBeenCalled();
+    expect(commitEventRepository.create).not.toHaveBeenCalled();
+    expect(
+      repository.applyPlanCreditCommit.mock.calls[0][6],
+    ).not.toHaveProperty('payload');
   });
 
   it('maps an SSI blockchain wallet commit to its SSI dashboard plan', async () => {
@@ -128,19 +131,18 @@ describe('CreditEventStore', () => {
       'ssi-event-1',
       CreditType.BLOCKCHAIN_TXN_CREDIT,
       SERVICE_TYPES.SSI_API,
-    );
-    expect(
-      creditNotificationService.notifyUsageThreshold,
-    ).not.toHaveBeenCalled();
-    expect(commitEventRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        planId: 'ssi-plan-1.BLOCKCHAIN_TXN_CREDIT',
+        planId: 'ssi-plan-1',
         metadata: expect.objectContaining({
           serviceType: SERVICE_TYPES.SSI_API,
           creditType: CreditType.BLOCKCHAIN_TXN_CREDIT,
         }),
       }),
     );
+    expect(
+      creditNotificationService.notifyUsageThreshold,
+    ).not.toHaveBeenCalled();
+    expect(commitEventRepository.create).not.toHaveBeenCalled();
   });
 
   it('applies every allocation from one SSI reservation to its own dashboard plan', async () => {
@@ -198,6 +200,7 @@ describe('CreditEventStore', () => {
       '1787726078880-0',
       CreditType.BLOCKCHAIN_TXN_CREDIT,
       SERVICE_TYPES.SSI_API,
+      expect.objectContaining({ eventId: '1787726078880-0' }),
     );
     expect(repository.applyPlanCreditCommit).toHaveBeenNthCalledWith(
       2,
@@ -207,6 +210,7 @@ describe('CreditEventStore', () => {
       '1787726078880-2',
       CreditType.BLOCKCHAIN_TXN_CREDIT,
       SERVICE_TYPES.SSI_API,
+      expect.objectContaining({ eventId: '1787726078880-2' }),
     );
   });
 
@@ -294,6 +298,9 @@ describe('CreditEventStore', () => {
       { _id: 'plan-1', serviceId: 'app-1', status: 'Active' },
       { $set: { status: 'Inactive' } },
     );
+    expect(commitEventRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'PLAN_EXPIRED', planId: 'plan-1' }),
+    );
   });
 
   it('activates the database plan with the middleware grant expiry', async () => {
@@ -318,6 +325,12 @@ describe('CreditEventStore', () => {
       { _id: 'plan-1', serviceId: 'app-1', status: 'Inactive' },
       { $set: { status: 'Active', expiresAt: new Date(expiresAt) } },
     );
+    expect(commitEventRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'CREDIT_GRANTED',
+        planId: 'plan-1',
+      }),
+    );
   });
 
   it('activates one valid inactive replacement after a critical balance event', async () => {
@@ -337,6 +350,12 @@ describe('CreditEventStore', () => {
     expect(creditService.activateCredit).toHaveBeenCalledWith(
       'plan-2',
       'app-1',
+    );
+    expect(commitEventRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'CRITICAL_BALANCE',
+        planId: 'plan-1',
+      }),
     );
   });
 
@@ -361,6 +380,70 @@ describe('CreditEventStore', () => {
 
     expect(repository.applyPlanCreditCommit).not.toHaveBeenCalled();
     expect(repository.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['credit.reserved', 'RESERVED'],
+    ['credit.rolled-back', 'ROLLED_BACK'],
+    ['credit.expired', 'EXPIRED'],
+  ])('stores %s lifecycle events', async (name, type) => {
+    await store.append(
+      job(name, {
+        eventId: `event-${type}`,
+        schemaVersion: 3,
+        catalogVersion: '2026-08-14',
+        serviceType: SERVICE_TYPES.CAVACH_API,
+        event: {
+          type,
+          timestamp: 1787287938626,
+          appId: 'app-1',
+          tenantId: 'tenant-1',
+          appType: SERVICE_TYPES.CAVACH_API,
+          creditType: CreditType.API_CREDIT,
+          planId: 'plan-1',
+          reservationId: 'reservation-1',
+          amount: 2,
+        },
+      }),
+    );
+
+    expect(commitEventRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: `event-${type}`,
+        eventType: type,
+        reservationId: 'reservation-1',
+      }),
+    );
+  });
+
+  it('skips an event already present in time-series history', async () => {
+    commitEventRepository.exists.mockResolvedValue(true);
+
+    await store.append(lifecycleJob('credit.plan-expired', 'PLAN_EXPIRED'));
+
+    expect(repository.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(commitEventRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('stores rejected commands with a service-scoped event id', async () => {
+    await store.append(
+      job('credit.command-rejected', {
+        schemaVersion: 3,
+        serviceType: SERVICE_TYPES.SSI_API,
+        commandId: 'command-1',
+        commandName: 'credit.grant-requested',
+        reason: 'invalid grant',
+        timestamp: 1787287938626,
+      }),
+    );
+
+    expect(commitEventRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: 'SSI_API:command-1:rejected',
+        eventType: 'credit.command-rejected',
+        timestamp: new Date(1787287938626),
+      }),
+    );
   });
 
   it('rejects an observation that claims a deduction', async () => {
@@ -410,7 +493,7 @@ describe('CreditEventStore', () => {
     expect(creditService.activateCredit).not.toHaveBeenCalled();
   });
 
-  it('ignores observed events without storing analytics', async () => {
+  it('stores observed events without applying a financial commit', async () => {
     await store.append(
       job('credit.observed', {
         eventId: 'event-dev-1',
@@ -435,7 +518,12 @@ describe('CreditEventStore', () => {
     );
 
     expect(repository.applyPlanCreditCommit).not.toHaveBeenCalled();
-    expect(commitEventRepository.create).not.toHaveBeenCalled();
+    expect(commitEventRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: 'event-dev-1',
+        eventType: 'CREDIT_OBSERVED',
+      }),
+    );
   });
 });
 

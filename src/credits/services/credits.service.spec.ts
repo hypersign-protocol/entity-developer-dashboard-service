@@ -133,7 +133,9 @@ describe('CreditService', () => {
     const createdCredit = plan({
       serviceType: SERVICE_TYPES.SSI_API,
       status: CreditStatus.ACTIVE,
-      onChainAllowance: { amount: 100, denom: 'uhid', usedAmount: 0 },
+      apiCredit: { total: 150000, used: 0 },
+      criticalBalance: 60000,
+      onChainAllowance: { amount: 600000000, denom: 'uhid', usedAmount: 0 },
       source: CreditSourceEnum.MANUAL_RECHARGE,
     });
     repository.create.mockResolvedValue(createdCredit as never);
@@ -142,20 +144,22 @@ describe('CreditService', () => {
       subdomain: 'tenant-ssi',
       services: [{ id: SERVICE_TYPES.SSI_API }],
     });
-    jest.spyOn(service, 'grantSSIAllowance').mockResolvedValue({
-      credit: { amount: '100', denom: 'uhid' },
-      feegrant: {
-        amount: '100',
-        previousRemainingAmount: '0',
-        denom: 'uhid',
-      },
-      creditScope: [],
-    });
+    const grantSSIAllowance = jest
+      .spyOn(service, 'grantSSIAllowance')
+      .mockResolvedValue({
+        credit: { amount: '600000000', denom: 'uhid' },
+        feegrant: {
+          amount: '600000000',
+          previousRemainingAmount: '0',
+          denom: 'uhid',
+        },
+        creditScope: [],
+      });
 
     await service.grantCredit(
       'app-1',
       {
-        amount: '100',
+        amount: '150000',
         validityPeriod: 30,
         validityPeriodUnit: TimeUnit.Days,
         amountDenom: 'uhid',
@@ -168,8 +172,19 @@ describe('CreditService', () => {
       expect.objectContaining({
         serviceType: SERVICE_TYPES.SSI_API,
         status: CreditStatus.ACTIVE,
-        onChainAllowance: { amount: 100, denom: 'uhid', usedAmount: 0 },
+        apiCredit: { total: 150000, used: 0 },
+        criticalBalance: 60000,
+        onChainAllowance: {
+          amount: 600000000,
+          denom: 'uhid',
+          usedAmount: 0,
+        },
       }),
+    );
+    expect(grantSSIAllowance).toHaveBeenCalledWith(
+      'app-1',
+      '600000000',
+      30 / 365,
     );
     expect(commandService.grantCreditPlan).toHaveBeenCalledWith(
       createdCredit,
@@ -294,7 +309,7 @@ describe('CreditService', () => {
     const activatedCredit = plan({
       status: CreditStatus.ACTIVE,
       criticalBalance: 40,
-      onChainAllowance: { amount: 100, denom: 'uhid', usedAmount: 0 },
+      onChainAllowance: { amount: 400000, denom: 'uhid', usedAmount: 0 },
     });
     repository.findOneAndUpdate.mockResolvedValueOnce(
       normalizedCredit as never,
@@ -310,9 +325,9 @@ describe('CreditService', () => {
     const grantSSIAllowance = jest
       .spyOn(service, 'grantSSIAllowance')
       .mockResolvedValue({
-        credit: { amount: '100', denom: 'uhid' },
+        credit: { amount: '400000', denom: 'uhid' },
         feegrant: {
-          amount: '100',
+          amount: '400000',
           previousRemainingAmount: '0',
           denom: 'uhid',
         },
@@ -321,7 +336,7 @@ describe('CreditService', () => {
 
     await service.activateCredit(credit._id as string, 'app-1');
 
-    expect(grantSSIAllowance).toHaveBeenCalledWith('app-1', '100', 30 / 365);
+    expect(grantSSIAllowance).toHaveBeenCalledWith('app-1', '400000', 30 / 365);
     expect(repository.findOneAndUpdate).toHaveBeenCalledWith(
       {
         _id: credit._id,
@@ -339,13 +354,13 @@ describe('CreditService', () => {
       credit._id,
       expect.any(Date),
       40,
-      { amount: 100, denom: 'uhid', usedAmount: 0 },
+      { amount: 400000, denom: 'uhid', usedAmount: 0 },
       [],
     );
     expect(commandService.grantCreditPlan).toHaveBeenCalledWith(
       expect.objectContaining({
         status: CreditStatus.ACTIVE,
-        onChainAllowance: { amount: 100, denom: 'uhid', usedAmount: 0 },
+        onChainAllowance: { amount: 400000, denom: 'uhid', usedAmount: 0 },
       }),
       SERVICE_TYPES.SSI_API,
       'tenant-1',

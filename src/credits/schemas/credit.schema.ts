@@ -80,8 +80,6 @@ export class CreditPlan {
   migrationSource?: 'ID_SERVICE' | 'SSI_SERVICE';
   @Prop({ required: false })
   legacyCreditId?: string;
-  @Prop({ required: false, type: [String], default: [], select: false })
-  processedCommitEventIds?: string[];
   @Prop({ required: false, type: CreditNotificationState })
   notification?: CreditNotificationState;
 }

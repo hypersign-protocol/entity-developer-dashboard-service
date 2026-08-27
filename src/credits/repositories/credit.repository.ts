@@ -10,12 +10,16 @@ import {
 } from '../schemas/credit.schema';
 import { CreditType } from '@hypersign-protocol/credit-middleware';
 import { SERVICE_TYPES } from '../../supported-service/services/iServiceList';
+import { CreditLedger } from '../schemas/credit-ledger.schema';
+import { CreateCreditLedgerEvent } from './credit-ledger.repository';
 
 @Injectable()
 export class CreditRepository {
   constructor(
     @InjectModel(CreditPlan.name)
     private readonly creditModel: Model<CreditPlanDocument>,
+    @InjectModel(CreditLedger.name)
+    private readonly creditLedgerModel: Model<CreditLedger>,
   ) {}
 
   async create(credit: Partial<CreditPlan>): Promise<CreditPlan> {
@@ -89,6 +93,7 @@ export class CreditRepository {
     eventId: string,
     creditType: string,
     serviceType: string,
+    ledgerEvent: CreateCreditLedgerEvent,
   ): Promise<CreditPlan> {
     const isApiCredit = creditType === CreditType.API_CREDIT;
     const isBlockchainCredit = creditType === CreditType.BLOCKCHAIN_TXN_CREDIT;
@@ -103,43 +108,55 @@ export class CreditRepository {
       : 'onChainAllowance.amount';
     const usedValue = { $ifNull: [`$${usedField}`, 0] };
     const updatedUsed = { $add: [usedValue, amount] };
-    return this.creditModel
-      .findOneAndUpdate(
-        {
-          _id: planId,
-          serviceId: appId,
-          serviceType,
-          processedCommitEventIds: { $ne: eventId },
-          $expr: {
-            $lte: [updatedUsed, `$${totalField}`],
-          },
-        },
-        [
-          {
-            $set: {
-              [usedField]: updatedUsed,
-              status: {
-                $cond: [
-                  {
-                    $eq: [updatedUsed, `$${totalField}`],
-                  },
-                  CreditStatus.INACTIVE,
-                  '$status',
-                ],
-              },
-              processedCommitEventIds: {
-                $setUnion: [
-                  { $ifNull: ['$processedCommitEventIds', []] },
-                  [eventId],
-                ],
+    const session = await this.creditModel.db.startSession();
+    let updatedCredit: CreditPlan = null;
+    try {
+      await session.withTransaction(async () => {
+        await new this.creditLedgerModel(ledgerEvent).save({ session });
+
+        updatedCredit = await this.creditModel
+          .findOneAndUpdate(
+            {
+              _id: planId,
+              serviceId: appId,
+              serviceType,
+              $expr: {
+                $lte: [updatedUsed, `$${totalField}`],
               },
             },
-          },
-        ],
-        { new: true },
-      )
-      .lean()
-      .exec();
+            [
+              {
+                $set: {
+                  [usedField]: updatedUsed,
+                  status: {
+                    $cond: [
+                      {
+                        $eq: [updatedUsed, `$${totalField}`],
+                      },
+                      CreditStatus.INACTIVE,
+                      '$status',
+                    ],
+                  },
+                },
+              },
+            ],
+            { new: true, session },
+          )
+          .lean()
+          .exec();
+        if (!updatedCredit) {
+          throw new Error(
+            `Credit commit exceeds the plan balance or the plan does not exist`,
+          );
+        }
+      });
+      return updatedCredit;
+    } catch (error) {
+      if (this.isDuplicateKeyError(error)) return null;
+      throw error;
+    } finally {
+      await session.endSession();
+    }
   }
 
   /**
@@ -238,9 +255,18 @@ export class CreditRepository {
 
   async hasProcessedCommit(appId: string, eventId: string): Promise<boolean> {
     return Boolean(
-      await this.creditModel
-        .exists({ serviceId: appId, processedCommitEventIds: eventId })
+      await this.creditLedgerModel
+        .exists({ eventId, 'metadata.serviceId': appId })
         .exec(),
+    );
+  }
+
+  private isDuplicateKeyError(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: number }).code === 11000
     );
   }
 

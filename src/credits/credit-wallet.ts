@@ -34,13 +34,19 @@ export function dashboardPlanId(
   creditType?: string,
 ): string {
   if (serviceType !== SERVICE_TYPES.SSI_API) return middlewarePlanId;
-  if (!creditType || !SSI_CREDIT_TYPES.includes(creditType as SsiCreditType)) {
+  const resolvedCreditType = creditType
+    ? creditType
+    : SSI_CREDIT_TYPES.find((type) => middlewarePlanId.endsWith(`.${type}`));
+  if (
+    !resolvedCreditType ||
+    !SSI_CREDIT_TYPES.includes(resolvedCreditType as SsiCreditType)
+  ) {
     throw new Error(`Unsupported SSI credit type: ${String(creditType)}`);
   }
-  const suffix = `.${creditType}`;
+  const suffix = `.${resolvedCreditType}`;
   if (!middlewarePlanId.endsWith(suffix)) {
     throw new Error(
-      `SSI middleware plan ${middlewarePlanId} does not match ${creditType}`,
+      `SSI middleware plan ${middlewarePlanId} does not match ${resolvedCreditType}`,
     );
   }
   return middlewarePlanId.slice(0, -suffix.length);

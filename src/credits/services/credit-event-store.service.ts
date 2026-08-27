@@ -13,9 +13,9 @@ import { CreditStatus } from '../schemas/credit.schema';
 import { CreditService } from './credits.service';
 import { CreditNotificationService } from './credit-notification.service';
 import {
-  CreateCreditCommitEvent,
-  CreditCommitEventRepository,
-} from '../repositories/credit-commit-event.repository';
+  CreateCreditLedgerEvent,
+  CreditLedgerRepository,
+} from '../repositories/credit-ledger.repository';
 
 export const CREDIT_EVENT_QUEUE = 'credit.lifecycle';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
@@ -31,12 +31,19 @@ export class CreditEventStore {
     private readonly creditRepository: CreditRepository,
     private readonly creditService: CreditService,
     private readonly creditNotificationService: CreditNotificationService,
-    private readonly creditCommitEventRepository: CreditCommitEventRepository,
+    private readonly creditLedgerRepository: CreditLedgerRepository,
   ) {}
 
   async append(job: CreditBullMqJob): Promise<void> {
     if (job.name === CREDIT_EVENT_NAMES.COMMAND_REJECTED) {
       this.validateCommandRejection(job.data);
+      const rejection = job.data as CreditCommandRejection;
+      const eventId = this.commandRejectionEventId(rejection);
+      if (!(await this.creditLedgerRepository.exists(eventId))) {
+        await this.creditLedgerRepository.create(
+          this.toCommandRejectionMeasurement(rejection, eventId),
+        );
+      }
       Logger.error(
         `Credit command rejected: ${JSON.stringify(job.data)}`,
         CreditEventStore.name,
@@ -54,19 +61,20 @@ export class CreditEventStore {
     envelope: CreditLifecycleEnvelope,
   ) {
     this.validateLifecycleEnvelope(envelope);
+    if (await this.creditLedgerRepository.exists(envelope.eventId)) return;
 
     switch (jobName) {
       case CREDIT_EVENT_NAMES.COMMITTED:
         this.validateLifecycleEventType(envelope, CreditEventType.COMMITTED);
-        await this.processCommit(envelope);
-        return;
+        await this.processCommit(envelope, this.toEventMeasurement(envelope));
+        break;
       case CREDIT_EVENT_NAMES.PLAN_EXPIRED:
         this.validateLifecycleEventType(envelope, CreditEventType.PLAN_EXPIRED);
         await this.processPlanExpired(
           envelope.event.appId,
           this.dashboardPlanId(envelope),
         );
-        return;
+        break;
       case CREDIT_EVENT_NAMES.RESERVED:
         this.validateLifecycleEventType(envelope, CreditEventType.RESERVED);
         break;
@@ -86,7 +94,7 @@ export class CreditEventStore {
           this.dashboardPlanId(envelope),
           this.grantExpiry(envelope),
         );
-        return;
+        break;
       case CREDIT_EVENT_NAMES.CRITICAL_BALANCE:
         this.validateLifecycleEventType(
           envelope,
@@ -103,13 +111,18 @@ export class CreditEventStore {
           CreditEventType.CREDIT_OBSERVED,
         );
         this.validateObservedEvent(envelope);
-        return;
+        break;
       default:
         throw new Error(`Unsupported credit lifecycle job: ${jobName}`);
     }
+    if (jobName === CREDIT_EVENT_NAMES.COMMITTED) return;
+    await this.creditLedgerRepository.create(this.toEventMeasurement(envelope));
   }
 
-  private async processCommit(envelope: CreditLifecycleEnvelope) {
+  private async processCommit(
+    envelope: CreditLifecycleEnvelope,
+    ledgerEvent: CreateCreditLedgerEvent,
+  ) {
     const appId = envelope.event.appId;
     const planId = this.dashboardPlanId(envelope);
     const amount = this.eventAmount(envelope);
@@ -123,6 +136,7 @@ export class CreditEventStore {
       eventId,
       creditType,
       envelope.serviceType,
+      ledgerEvent,
     );
     if (!updatedCredit) {
       if (await this.creditRepository.hasProcessedCommit(appId, eventId)) {
@@ -135,13 +149,6 @@ export class CreditEventStore {
     if (creditType === CreditType.API_CREDIT) {
       await this.creditNotificationService.notifyUsageThreshold(updatedCredit);
     }
-    if (creditType === CreditType.BLOCKCHAIN_TXN_CREDIT) {
-      // SSI
-      await this.creditNotificationService.notifyUsageThreshold(updatedCredit);
-    }
-    await this.creditCommitEventRepository.create(
-      this.toCommitEventMeasurement(envelope),
-    );
     Logger.log(
       `Credit commit applied for appId ${appId} and reservation ${reservationId}`,
       CreditEventStore.name,
@@ -253,34 +260,79 @@ export class CreditEventStore {
       .reservationId;
   }
 
-  private toCommitEventMeasurement(
+  private toEventMeasurement(
     envelope: CreditLifecycleEnvelope,
-  ): CreateCreditCommitEvent {
-    const event = envelope.event as Extract<
-      AnyCreditEvent,
-      { type: 'COMMITTED' }
-    >;
+  ): CreateCreditLedgerEvent {
+    const event = envelope.event;
+    const measurement = event as unknown as Record<string, unknown>;
+    const timestamp = measurement.timestamp;
     return {
-      timestamp: new Date(event.timestamp),
+      timestamp:
+        Number.isSafeInteger(timestamp) && Number(timestamp) > 0
+          ? new Date(Number(timestamp))
+          : new Date(),
       metadata: {
         tenantId: event.tenantId,
         serviceId: event.appId,
-        serviceType: event.appType,
+        serviceType: envelope.serviceType,
         creditType: event.creditType,
       },
-      planId: event.planId,
-      operation: event.operation,
+      eventType: event.type,
+      ...(typeof event.planId === 'string' && {
+        planId: this.dashboardPlanId(envelope),
+      }),
+      ...(typeof measurement.operation === 'string' && {
+        operation: measurement.operation,
+      }),
       eventId: envelope.eventId,
       schemaVersion: envelope.schemaVersion,
       catalogVersion: envelope.catalogVersion,
-      reservationId: event.reservationId,
-      amount: event.amount,
-      totalAmount: event.totalAmount,
-      allocationIndex: event.allocationIndex,
-      allocationCount: event.allocationCount,
-      planBalanceAfter: event.planBalanceAfter,
-      balanceAfter: event.balanceAfter,
+      ...this.optionalString(measurement, 'reservationId'),
+      ...this.optionalNumber(measurement, 'amount'),
+      ...this.optionalNumber(measurement, 'totalAmount'),
+      ...this.optionalNumber(measurement, 'allocationIndex'),
+      ...this.optionalNumber(measurement, 'allocationCount'),
+      ...this.optionalNumber(measurement, 'planBalanceAfter'),
+      ...this.optionalNumber(measurement, 'balanceAfter'),
     };
+  }
+
+  private toCommandRejectionMeasurement(
+    rejection: CreditCommandRejection,
+    eventId: string,
+  ): CreateCreditLedgerEvent {
+    return {
+      timestamp: new Date(rejection.timestamp),
+      metadata: { serviceType: rejection.serviceType },
+      eventType: CREDIT_EVENT_NAMES.COMMAND_REJECTED,
+      ...(rejection.planId && {
+        planId: dashboardPlanId(rejection.planId, rejection.serviceType),
+      }),
+      eventId,
+      schemaVersion: rejection.schemaVersion,
+    };
+  }
+
+  private commandRejectionEventId(rejection: CreditCommandRejection): string {
+    return `${rejection.serviceType}:${rejection.commandId}:rejected`;
+  }
+
+  private optionalString(
+    value: Record<string, unknown>,
+    field: string,
+  ): Record<string, string> {
+    return typeof value[field] === 'string'
+      ? { [field]: value[field] as string }
+      : {};
+  }
+
+  private optionalNumber(
+    value: Record<string, unknown>,
+    field: string,
+  ): Record<string, number> {
+    return typeof value[field] === 'number'
+      ? { [field]: value[field] as number }
+      : {};
   }
 
   private validateCommitAnalyticsFields(
@@ -380,18 +432,15 @@ export class CreditEventStore {
   }
 
   private validateCommandRejection(value: unknown): void {
-    const rejection = value as {
-      schemaVersion?: unknown;
-      serviceType?: unknown;
-      commandId?: unknown;
-      reason?: unknown;
-    };
+    const rejection = value as Partial<CreditCommandRejection>;
     if (
       !rejection ||
       rejection.schemaVersion !== 3 ||
       !this.isSupportedServiceType(rejection.serviceType) ||
       typeof rejection.commandId !== 'string' ||
-      typeof rejection.reason !== 'string'
+      typeof rejection.reason !== 'string' ||
+      !Number.isSafeInteger(rejection.timestamp) ||
+      rejection.timestamp <= 0
     ) {
       throw new Error('Invalid credit command rejection');
     }
@@ -399,3 +448,12 @@ export class CreditEventStore {
 }
 
 type CreditPlanWithId = { _id: unknown };
+type CreditCommandRejection = {
+  schemaVersion: 3;
+  serviceType: SERVICE_TYPES;
+  commandId: string;
+  reason: string;
+  timestamp: number;
+  planId?: string;
+  commandName?: string;
+};

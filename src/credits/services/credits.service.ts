@@ -40,6 +40,8 @@ import { CreditRepository } from '../repositories/credit.repository';
 import { CreditStatus } from '../schemas/credit.schema';
 import { CreditCommandService } from './credit-command.service';
 
+const SSI_ON_CHAIN_ALLOWANCE_MULTIPLIER = BigInt(2000);
+
 @Injectable()
 export class CreditService {
   private authzWalletInstance;
@@ -164,7 +166,7 @@ export class CreditService {
       } else {
         const authzCreditDetail = await this.grantSSIAllowance(
           appId,
-          String(
+          this.ssiOnChainAllowance(
             activationCredit.apiCredit.total - activationCredit.apiCredit.used,
           ),
           activationCredit.validityDays / 365,
@@ -489,6 +491,21 @@ export class CreditService {
     return BigInt(amount);
   }
 
+  private ssiOnChainAllowance(apiCredits: number): string {
+    if (!Number.isSafeInteger(apiCredits) || apiCredits <= 0) {
+      throw new BadRequestException([
+        'SSI API credit amount must be a positive safe integer',
+      ]);
+    }
+    const allowance = BigInt(apiCredits) * SSI_ON_CHAIN_ALLOWANCE_MULTIPLIER;
+    if (allowance > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new BadRequestException([
+        'SSI blockchain allowance exceeds the maximum safe persisted value',
+      ]);
+    }
+    return allowance.toString();
+  }
+
   private isMissingGrantError(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
     return /not found|does not exist|no allowance/i.test(message);
@@ -620,7 +637,7 @@ export class CreditService {
         );
         const authzCreditDetail = await this.grantSSIAllowance(
           appId,
-          amount,
+          this.ssiOnChainAllowance(totalCredit),
           periodInYears,
         );
         onChainAllowance = {

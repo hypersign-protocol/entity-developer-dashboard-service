@@ -25,6 +25,7 @@ export class CreditLifecycleConsumer
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
+    await this.store.initialize();
     this.worker = await this.bullMq.createWorker(
       CREDIT_EVENT_QUEUE,
       async (job) => {
@@ -66,6 +67,23 @@ export class CreditLifecycleConsumer
         }
       },
     );
+    try {
+      const retried = await this.bullMq.retryFailedJobs(
+        CREDIT_EVENT_QUEUE,
+        CREDIT_EVENT_NAMES.COMMITTED,
+        'Cannot insert into a time-series collection in a multi-document transaction',
+      );
+      if (retried > 0) {
+        this.logger.warn(
+          `Retried ${retried} credit commit job(s) that failed before time-series writes were moved outside transactions`,
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Could not retry failed credit commit jobs: ${message}`,
+      );
+    }
   }
 
   async onApplicationShutdown(): Promise<void> {

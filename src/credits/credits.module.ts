@@ -35,6 +35,10 @@ import {
 } from './schemas/credit-ledger.schema';
 import { CreditLedgerRepository } from './repositories/credit-ledger.repository';
 import { SsiTransactionResultConsumer } from './services/ssi-transaction-result.consumer';
+import {
+  CreditCommitOutbox,
+  CreditCommitOutboxSchema,
+} from './schemas/credit-commit-outbox.schema';
 
 const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
 
@@ -46,6 +50,7 @@ const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
       { name: AdminPeople.name, schema: AdminPeopleSchema },
       { name: CreditPlan.name, schema: CreditsSchema },
       { name: CreditLedger.name, schema: CreditLedgerSchema },
+      { name: CreditCommitOutbox.name, schema: CreditCommitOutboxSchema },
     ]),
     JwtModule.register({}),
     HidWalletModule,

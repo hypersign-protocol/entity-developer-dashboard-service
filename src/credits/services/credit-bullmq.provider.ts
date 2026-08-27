@@ -25,11 +25,7 @@ export class CreditBullMqProvider
     data: unknown,
     options: { jobId: string },
   ): Promise<unknown> {
-    let queue = this.queues.get(queueName);
-    if (!queue) {
-      queue = new Queue(queueName, { connection: this.connection });
-      this.queues.set(queueName, queue);
-    }
+    const queue = this.queue(queueName);
     return queue.add(jobName, data, {
       jobId: options.jobId,
       attempts: 10,
@@ -37,6 +33,36 @@ export class CreditBullMqProvider
       removeOnComplete: 1_000,
       removeOnFail: 5_000,
     });
+  }
+
+  async retryFailedJobs(
+    queueName: string,
+    jobName: string,
+    failedReasonIncludes: string,
+  ): Promise<number> {
+    const jobs = await this.queue(queueName).getJobs(
+      ['failed'],
+      0,
+      4_999,
+      true,
+    );
+    let retried = 0;
+    for (const job of jobs) {
+      if (
+        job.name !== jobName ||
+        !job.failedReason?.includes(failedReasonIncludes)
+      ) {
+        continue;
+      }
+      try {
+        await job.retry('failed');
+        retried += 1;
+      } catch (error) {
+        // Another dashboard replica may have retried the same job first.
+        if ((await job.getState()) === 'failed') throw error;
+      }
+    }
+    return retried;
   }
 
   async createWorker(
@@ -61,5 +87,14 @@ export class CreditBullMqProvider
     await Promise.all([...this.workers].map((worker) => worker.close()));
     await Promise.all([...this.queues.values()].map((queue) => queue.close()));
     await this.connection.quit();
+  }
+
+  private queue(queueName: string): Queue {
+    let queue = this.queues.get(queueName);
+    if (!queue) {
+      queue = new Queue(queueName, { connection: this.connection });
+      this.queues.set(queueName, queue);
+    }
+    return queue;
   }
 }

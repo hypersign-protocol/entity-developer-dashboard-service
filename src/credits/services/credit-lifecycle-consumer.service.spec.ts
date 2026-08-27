@@ -11,16 +11,24 @@ describe('CreditLifecycleConsumer', () => {
         processor = handler;
         return { close };
       }),
+      retryFailedJobs: jest.fn().mockResolvedValue(0),
     } as unknown as CreditBullMqProvider;
     const store = {
+      initialize: jest.fn().mockResolvedValue(undefined),
       append: jest.fn().mockResolvedValue(undefined),
     } as unknown as CreditEventStore;
     const consumer = new CreditLifecycleConsumer(bullMq, store);
 
     await consumer.onApplicationBootstrap();
+    expect(store.initialize).toHaveBeenCalledTimes(1);
     expect(bullMq.createWorker).toHaveBeenCalledWith(
       'credit.lifecycle',
       expect.any(Function),
+    );
+    expect(bullMq.retryFailedJobs).toHaveBeenCalledWith(
+      'credit.lifecycle',
+      'credit.committed',
+      expect.stringContaining('time-series collection'),
     );
 
     const job = { id: 'job-1', name: 'credit.reserved', data: {} };

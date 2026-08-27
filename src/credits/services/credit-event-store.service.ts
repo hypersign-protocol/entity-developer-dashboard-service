@@ -34,6 +34,10 @@ export class CreditEventStore {
     private readonly creditLedgerRepository: CreditLedgerRepository,
   ) {}
 
+  async initialize(): Promise<void> {
+    await this.creditRepository.initializeCommitPersistence();
+  }
+
   async append(job: CreditBullMqJob): Promise<void> {
     if (job.name === CREDIT_EVENT_NAMES.COMMAND_REJECTED) {
       this.validateCommandRejection(job.data);
@@ -61,7 +65,12 @@ export class CreditEventStore {
     envelope: CreditLifecycleEnvelope,
   ) {
     this.validateLifecycleEnvelope(envelope);
-    if (await this.creditLedgerRepository.exists(envelope.eventId)) return;
+    if (await this.creditLedgerRepository.exists(envelope.eventId)) {
+      if (jobName === CREDIT_EVENT_NAMES.COMMITTED) {
+        await this.creditRepository.markCommitLedgerWritten(envelope.eventId);
+      }
+      return;
+    }
 
     switch (jobName) {
       case CREDIT_EVENT_NAMES.COMMITTED:
@@ -139,25 +148,72 @@ export class CreditEventStore {
       ledgerEvent,
     );
     if (!updatedCredit) {
-      if (await this.creditRepository.hasProcessedCommit(appId, eventId)) {
-        return;
+      if (!(await this.creditRepository.hasProcessedCommit(appId, eventId))) {
+        throw new Error(
+          `Credit commit could not be applied for appId ${appId}, planId ${planId}`,
+        );
       }
-      throw new Error(
-        `Credit commit could not be applied for appId ${appId}, planId ${planId}`,
-      );
     }
-    if (creditType === CreditType.API_CREDIT) {
+    if (updatedCredit && creditType === CreditType.API_CREDIT) {
       await this.creditNotificationService.notifyUsageThreshold(updatedCredit);
     }
-    if (creditType === CreditType.BLOCKCHAIN_TXN_CREDIT) {
+    if (updatedCredit && creditType === CreditType.BLOCKCHAIN_TXN_CREDIT) {
       await this.creditNotificationService.notifyAllowanceUsageThreshold(
         updatedCredit,
       );
     }
+    await this.persistCommitLedger(ledgerEvent);
     Logger.log(
       `Credit commit applied for appId ${appId} and reservation ${reservationId}`,
       CreditEventStore.name,
     );
+  }
+
+  private async persistCommitLedger(
+    ledgerEvent: CreateCreditLedgerEvent,
+  ): Promise<void> {
+    const leaseToken = await this.creditRepository.claimCommitLedgerWrite(
+      ledgerEvent.eventId,
+    );
+    if (!leaseToken) {
+      if (await this.creditLedgerRepository.exists(ledgerEvent.eventId)) {
+        await this.creditRepository.markCommitLedgerWritten(
+          ledgerEvent.eventId,
+        );
+        return;
+      }
+      throw new Error(
+        `Credit ledger write is already in progress for eventId ${ledgerEvent.eventId}`,
+      );
+    }
+
+    try {
+      if (!(await this.creditLedgerRepository.exists(ledgerEvent.eventId))) {
+        await this.creditLedgerRepository.create(ledgerEvent);
+      }
+      await this.creditRepository.markCommitLedgerWritten(
+        ledgerEvent.eventId,
+        leaseToken,
+      );
+    } catch (error) {
+      try {
+        await this.creditRepository.releaseCommitLedgerWrite(
+          ledgerEvent.eventId,
+          leaseToken,
+          error,
+        );
+      } catch (releaseError) {
+        const message =
+          releaseError instanceof Error
+            ? releaseError.message
+            : String(releaseError);
+        Logger.error(
+          `Could not release credit ledger lease for eventId ${ledgerEvent.eventId}: ${message}`,
+          CreditEventStore.name,
+        );
+      }
+      throw error;
+    }
   }
 
   private async processPlanExpired(appId: string, planId: string) {

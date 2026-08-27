@@ -10,17 +10,25 @@ import {
 } from '../schemas/credit.schema';
 import { CreditType } from '@hypersign-protocol/credit-middleware';
 import { SERVICE_TYPES } from '../../supported-service/services/iServiceList';
-import { CreditLedger } from '../schemas/credit-ledger.schema';
 import { CreateCreditLedgerEvent } from './credit-ledger.repository';
+import {
+  CreditCommitLedgerStatus,
+  CreditCommitOutbox,
+} from '../schemas/credit-commit-outbox.schema';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class CreditRepository {
   constructor(
     @InjectModel(CreditPlan.name)
     private readonly creditModel: Model<CreditPlanDocument>,
-    @InjectModel(CreditLedger.name)
-    private readonly creditLedgerModel: Model<CreditLedger>,
+    @InjectModel(CreditCommitOutbox.name)
+    private readonly creditCommitOutboxModel: Model<CreditCommitOutbox>,
   ) {}
+
+  async initializeCommitPersistence(): Promise<void> {
+    await this.creditCommitOutboxModel.init();
+  }
 
   async create(credit: Partial<CreditPlan>): Promise<CreditPlan> {
     Logger.log('Creating credit plan', 'CreditRepository');
@@ -135,7 +143,10 @@ export class CreditRepository {
     let updatedCredit: CreditPlan = null;
     try {
       await session.withTransaction(async () => {
-        await new this.creditLedgerModel(ledgerEvent).save({ session });
+        await new this.creditCommitOutboxModel({
+          ...ledgerEvent,
+          ledgerStatus: CreditCommitLedgerStatus.PENDING,
+        }).save({ session });
 
         updatedCredit = await this.creditModel
           .findOneAndUpdate(
@@ -272,10 +283,94 @@ export class CreditRepository {
 
   async hasProcessedCommit(appId: string, eventId: string): Promise<boolean> {
     return Boolean(
-      await this.creditLedgerModel
+      await this.creditCommitOutboxModel
         .exists({ eventId, 'metadata.serviceId': appId })
         .exec(),
     );
+  }
+
+  async claimCommitLedgerWrite(
+    eventId: string,
+    leaseMs = 30_000,
+  ): Promise<string | null> {
+    const now = new Date();
+    const leaseToken = randomUUID();
+    const claimed = await this.creditCommitOutboxModel
+      .findOneAndUpdate(
+        {
+          eventId,
+          ledgerStatus: { $ne: CreditCommitLedgerStatus.WRITTEN },
+          $or: [
+            { ledgerStatus: CreditCommitLedgerStatus.PENDING },
+            {
+              ledgerStatus: CreditCommitLedgerStatus.WRITING,
+              ledgerLeaseUntil: { $lte: now },
+            },
+            {
+              ledgerStatus: CreditCommitLedgerStatus.WRITING,
+              ledgerLeaseUntil: { $exists: false },
+            },
+          ],
+        },
+        {
+          $set: {
+            ledgerStatus: CreditCommitLedgerStatus.WRITING,
+            ledgerLeaseToken: leaseToken,
+            ledgerLeaseUntil: new Date(now.getTime() + leaseMs),
+          },
+          $inc: { ledgerAttempts: 1 },
+          $unset: { ledgerLastError: '' },
+        },
+        { new: true },
+      )
+      .lean()
+      .exec();
+    return claimed ? leaseToken : null;
+  }
+
+  async markCommitLedgerWritten(
+    eventId: string,
+    leaseToken?: string,
+  ): Promise<void> {
+    await this.creditCommitOutboxModel
+      .updateOne(
+        {
+          eventId,
+          ...(leaseToken && { ledgerLeaseToken: leaseToken }),
+        },
+        {
+          $set: {
+            ledgerStatus: CreditCommitLedgerStatus.WRITTEN,
+            ledgerWrittenAt: new Date(),
+          },
+          $unset: {
+            ledgerLeaseToken: '',
+            ledgerLeaseUntil: '',
+            ledgerLastError: '',
+          },
+        },
+      )
+      .exec();
+  }
+
+  async releaseCommitLedgerWrite(
+    eventId: string,
+    leaseToken: string,
+    error: unknown,
+  ): Promise<void> {
+    const message = error instanceof Error ? error.message : String(error);
+    await this.creditCommitOutboxModel
+      .updateOne(
+        { eventId, ledgerLeaseToken: leaseToken },
+        {
+          $set: {
+            ledgerStatus: CreditCommitLedgerStatus.PENDING,
+            ledgerLastError: message.slice(0, 2_000),
+          },
+          $unset: { ledgerLeaseToken: '', ledgerLeaseUntil: '' },
+        },
+      )
+      .exec();
   }
 
   private isDuplicateKeyError(error: unknown): boolean {

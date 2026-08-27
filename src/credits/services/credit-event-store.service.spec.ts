@@ -18,8 +18,12 @@ describe('CreditEventStore', () => {
 
   beforeEach(() => {
     repository = {
+      initializeCommitPersistence: jest.fn(),
       applyPlanCreditCommit: jest.fn(),
       hasProcessedCommit: jest.fn(),
+      claimCommitLedgerWrite: jest.fn().mockResolvedValue('ledger-lease-1'),
+      markCommitLedgerWritten: jest.fn(),
+      releaseCommitLedgerWrite: jest.fn(),
       findOneAndUpdate: jest.fn(),
       findParticularCreditDetail: jest.fn(),
       findActiveCreditForService: jest.fn(),
@@ -90,7 +94,13 @@ describe('CreditEventStore', () => {
       }),
     );
     expect(creditNotificationService.notifyUsageThreshold).toHaveBeenCalled();
-    expect(commitEventRepository.create).not.toHaveBeenCalled();
+    expect(commitEventRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: 'event-1' }),
+    );
+    expect(repository.markCommitLedgerWritten).toHaveBeenCalledWith(
+      'event-1',
+      'ledger-lease-1',
+    );
     expect(
       repository.applyPlanCreditCommit.mock.calls[0][6],
     ).not.toHaveProperty('payload');
@@ -146,7 +156,9 @@ describe('CreditEventStore', () => {
     expect(
       creditNotificationService.notifyAllowanceUsageThreshold,
     ).toHaveBeenCalled();
-    expect(commitEventRepository.create).not.toHaveBeenCalled();
+    expect(commitEventRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: 'ssi-event-1' }),
+    );
   });
 
   it('applies every allocation from one SSI reservation to its own dashboard plan', async () => {
@@ -222,34 +234,40 @@ describe('CreditEventStore', () => {
     repository.applyPlanCreditCommit.mockResolvedValue(null);
     repository.hasProcessedCommit.mockResolvedValue(true);
 
-    await expect(
-      store.append(
-        job('credit.committed', {
-          eventId: 'event-1',
-          schemaVersion: 3,
-          catalogVersion: '2026-08-14',
-          serviceType: SERVICE_TYPES.CAVACH_API,
-          event: {
-            type: 'COMMITTED',
-            environment: 'PROD',
-            appId: 'app-1',
-            planId: 'plan-1',
-            amount: 2,
-            reservationId: 'reservation-1',
-            timestamp: 1787287938626,
-            tenantId: 'tenant-1',
-            appType: SERVICE_TYPES.CAVACH_API,
-            creditType: 'API_CREDIT',
-            operation: 'POST /api/v1/e-kyc/verification/session',
-            totalAmount: 2,
-            allocationIndex: 0,
-            allocationCount: 1,
-            planBalanceAfter: 8,
-            balanceAfter: 8,
-          },
-        }),
-      ),
-    ).resolves.toBeUndefined();
+    await expect(store.append(committedJob())).resolves.toBeUndefined();
+
+    expect(commitEventRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: 'event-1' }),
+    );
+    expect(
+      creditNotificationService.notifyUsageThreshold,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('releases the ledger lease when a time-series append fails', async () => {
+    const ledgerError = new Error('temporary ledger failure');
+    repository.applyPlanCreditCommit.mockResolvedValue({} as never);
+    commitEventRepository.create.mockRejectedValue(ledgerError);
+
+    await expect(store.append(committedJob())).rejects.toThrow(
+      'temporary ledger failure',
+    );
+
+    expect(repository.releaseCommitLedgerWrite).toHaveBeenCalledWith(
+      'event-1',
+      'ledger-lease-1',
+      ledgerError,
+    );
+  });
+
+  it('finishes the outbox when the ledger write succeeded before a retry', async () => {
+    commitEventRepository.exists.mockResolvedValue(true);
+
+    await expect(store.append(committedJob())).resolves.toBeUndefined();
+
+    expect(repository.applyPlanCreditCommit).not.toHaveBeenCalled();
+    expect(commitEventRepository.create).not.toHaveBeenCalled();
+    expect(repository.markCommitLedgerWritten).toHaveBeenCalledWith('event-1');
   });
 
   it('rejects malformed committed lifecycle events', async () => {
@@ -545,6 +563,33 @@ function lifecycleJob(name: string, type: 'PLAN_EXPIRED' | 'CRITICAL_BALANCE') {
       type,
       appId: 'app-1',
       planId: 'plan-1',
+    },
+  });
+}
+
+function committedJob() {
+  return job('credit.committed', {
+    eventId: 'event-1',
+    schemaVersion: 3,
+    catalogVersion: '2026-08-14',
+    serviceType: SERVICE_TYPES.CAVACH_API,
+    event: {
+      type: 'COMMITTED',
+      environment: 'PROD',
+      appId: 'app-1',
+      planId: 'plan-1',
+      amount: 2,
+      reservationId: 'reservation-1',
+      timestamp: 1787287938626,
+      tenantId: 'tenant-1',
+      appType: SERVICE_TYPES.CAVACH_API,
+      creditType: 'API_CREDIT',
+      operation: 'POST /api/v1/e-kyc/verification/session',
+      totalAmount: 2,
+      allocationIndex: 0,
+      allocationCount: 1,
+      planBalanceAfter: 8,
+      balanceAfter: 8,
     },
   });
 }

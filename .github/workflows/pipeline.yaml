@@ -124,6 +124,8 @@ jobs:
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__REDIS_HOST__#${{ secrets.REDIS_HOST }}#" {} \;
     - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__RABBIT_MQ_URI__#${{ secrets.RABBIT_MQ_URI }}#" {} \;
+    - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYC_VERIFIER_APP_BASE_URL__#${{ secrets.KYC_VERIFIER_APP_BASE_URL }}#" {} \;
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__MAIL_QUEUE__#${{ secrets.MAIL_QUEUE }}#" {} \;
@@ -161,9 +163,9 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYC_WIDGET_URL__#${{ secrets.KYC_WIDGET_URL }}#" {} \;
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYB_WIDGET_URL__#${{ secrets.KYB_WIDGET_URL }}#" {} \;
-     - name: "Replace secrets"
+    - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__CREDIT_USAGE_THRESHOLDS__#${{ secrets.CREDIT_USAGE_THRESHOLDS }}#" {} \;
-     - name: "Replace secrets"
+    - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__CREDIT_EXPIRY_THRESHOLDS__#${{ secrets.CREDIT_EXPIRY_THRESHOLDS }}#" {} \;
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

@@ -1532,6 +1532,13 @@
     bullmq "5.81.3"
     ioredis "^5.7.0"
 
+"@hypersign-protocol/credit-middleware@https://github.com/hypersign-protocol/hypersign-credits-middleware/releases/download/v5.0.0/hypersign-protocol-credit-middleware-5.0.0-ssi.tgz":
+  version "5.0.0"
+  resolved "https://github.com/hypersign-protocol/hypersign-credits-middleware/releases/download/v5.0.0/hypersign-protocol-credit-middleware-5.0.0-ssi.tgz#2b726f8587d3d0b68faf9d2630b4af145dbf2f6c"
+  dependencies:
+    bullmq "5.81.3"
+    ioredis "^5.7.0"
+
 "@iden3/js-crypto@1.0.3":
   version "1.0.3"
   resolved "https://registry.yarnpkg.com/@iden3/js-crypto/-/js-crypto-1.0.3.tgz#3de49d451d66a01f7258ae1be1fdb7a83e0c819c"

@@ -99,6 +99,8 @@ spec:
           value: "__GEOLOCATION_DB_PATH__"
         - name: REDIS_HOST
           value: "__REDIS_HOST__"
+        - name: RABBIT_MQ_URI
+          value: "__RABBIT_MQ_URI__"
         - name: KYC_VERIFIER_APP_BASE_URL
           value: "__KYC_VERIFIER_APP_BASE_URL__"
         - name: OTP_COOLDOWN_MINUTES
@@ -153,5 +155,4 @@ spec:
     targetPort: __PORT__
     protocol: TCP
 ---
-
 

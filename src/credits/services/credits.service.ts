@@ -279,7 +279,7 @@ export class CreditService {
         walletAddress,
       );
       const replacementAllowanceValue =
-        // this.parseUhidAmount(previousFeegrant.remainingAmount) +
+        this.parseUhidAmount(previousFeegrant.remainingAmount) +
         this.parseUhidAmount(allowance);
       if (replacementAllowanceValue > BigInt(Number.MAX_SAFE_INTEGER)) {
         throw new Error(

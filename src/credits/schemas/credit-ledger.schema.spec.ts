@@ -15,11 +15,19 @@ describe('CreditLedgerSchema indexes', () => {
     expect(indexes).toContainEqual(expectedIndex);
   });
 
-  it('keeps event id unique for ledger idempotency', () => {
+  it('indexes event id for idempotency lookups', () => {
     expect(schemaIndexes).toContainEqual([
       { eventId: 1 },
-      expect.objectContaining({ unique: true }),
+      expect.not.objectContaining({ unique: true }),
     ]);
+  });
+
+  it('uses timestamp and metadata as the time-series fields', () => {
+    expect(CreditLedgerSchema.get('timeseries')).toEqual({
+      timeField: 'timestamp',
+      metaField: 'metadata',
+      granularity: 'seconds',
+    });
   });
 
   it('stores explicit event fields without a generic payload object', () => {

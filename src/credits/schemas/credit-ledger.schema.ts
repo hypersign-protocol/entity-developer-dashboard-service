@@ -16,7 +16,22 @@ export class CreditLedgerMetadata {
 }
 
 /** Append-only, time-ordered credit lifecycle ledger used for audit and idempotency. */
-@Schema({ collection: 'creditLedger', versionKey: false })
+@Schema({
+  collection: 'creditLedger',
+  versionKey: false,
+  // Keep ledger events in a MongoDB time-series collection. `timestamp` is
+  // the measurement time and `metadata` groups measurements for efficient
+  // time-range queries.
+  timeseries: {
+    timeField: 'timestamp',
+    metaField: 'metadata',
+    granularity: 'seconds',
+  },
+  // This model must build its indexes even when the application disables
+  // index creation globally (as is common in production).
+  autoCreate: true,
+  autoIndex: true,
+})
 export class CreditLedger {
   @Prop({ required: true, type: Date })
   timestamp: Date;
@@ -66,7 +81,10 @@ export class CreditLedger {
 
 export const CreditLedgerSchema = SchemaFactory.createForClass(CreditLedger);
 
-CreditLedgerSchema.index({ eventId: 1 }, { unique: true });
+// MongoDB does not allow unique indexes on time-series collections. Keep an
+// index for the idempotency lookup; uniqueness is handled by the event-store
+// check before insertion.
+CreditLedgerSchema.index({ eventId: 1 });
 CreditLedgerSchema.index({
   'metadata.tenantId': 1,
   timestamp: -1,

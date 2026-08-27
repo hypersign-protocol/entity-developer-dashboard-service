@@ -1,4 +1,5 @@
 import { SERVICE_TYPES } from '../../supported-service/services/iServiceList';
+import { CreditType } from '@hypersign-protocol/credit-middleware';
 import { CreditStatus } from '../schemas/credit.schema';
 import { CreditRepository } from './credit.repository';
 
@@ -186,6 +187,66 @@ describe('CreditRepository commit idempotency', () => {
 
     expect(findOneAndUpdate).not.toHaveBeenCalled();
     expect(endSession).toHaveBeenCalled();
+  });
+
+  it('keeps an SSI plan active until both wallets are exhausted', async () => {
+    const { repository, findOneAndUpdate } = setup();
+
+    await repository.applyPlanCreditCommit(
+      'app-1',
+      'plan-1',
+      2,
+      'event-1',
+      CreditType.API_CREDIT,
+      SERVICE_TYPES.SSI_API,
+      {
+        ...ledgerEvent,
+        metadata: {
+          ...ledgerEvent.metadata,
+          serviceType: SERVICE_TYPES.SSI_API,
+        },
+      },
+    );
+
+    const pipeline = findOneAndUpdate.mock.calls[0][1];
+    expect(pipeline[0].$set.status.$cond[0]).toEqual({
+      $and: [
+        {
+          $eq: [
+            { $add: [{ $ifNull: ['$apiCredit.used', 0] }, 2] },
+            '$apiCredit.total',
+          ],
+        },
+        {
+          $eq: [
+            { $ifNull: ['$onChainAllowance.usedAmount', 0] },
+            '$onChainAllowance.amount',
+          ],
+        },
+      ],
+    });
+  });
+
+  it('retains the existing single-wallet exhaustion rule for CAVACH', async () => {
+    const { repository, findOneAndUpdate } = setup();
+
+    await repository.applyPlanCreditCommit(
+      'app-1',
+      'plan-1',
+      2,
+      'event-1',
+      CreditType.API_CREDIT,
+      SERVICE_TYPES.CAVACH_API,
+      ledgerEvent,
+    );
+
+    const pipeline = findOneAndUpdate.mock.calls[0][1];
+    expect(pipeline[0].$set.status.$cond[0]).toEqual({
+      $eq: [
+        { $add: [{ $ifNull: ['$apiCredit.used', 0] }, 2] },
+        '$apiCredit.total',
+      ],
+    });
   });
 
   it('aborts the ledger transaction when the plan cannot accept the commit', async () => {

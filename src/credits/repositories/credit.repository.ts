@@ -108,6 +108,29 @@ export class CreditRepository {
       : 'onChainAllowance.amount';
     const usedValue = { $ifNull: [`$${usedField}`, 0] };
     const updatedUsed = { $add: [usedValue, amount] };
+    const statusCondition =
+      serviceType === SERVICE_TYPES.SSI_API
+        ? {
+            $and: [
+              {
+                $eq: [
+                  isApiCredit
+                    ? updatedUsed
+                    : { $ifNull: ['$apiCredit.used', 0] },
+                  '$apiCredit.total',
+                ],
+              },
+              {
+                $eq: [
+                  isBlockchainCredit
+                    ? updatedUsed
+                    : { $ifNull: ['$onChainAllowance.usedAmount', 0] },
+                  '$onChainAllowance.amount',
+                ],
+              },
+            ],
+          }
+        : { $eq: [updatedUsed, `$${totalField}`] };
     const session = await this.creditModel.db.startSession();
     let updatedCredit: CreditPlan = null;
     try {
@@ -129,13 +152,7 @@ export class CreditRepository {
                 $set: {
                   [usedField]: updatedUsed,
                   status: {
-                    $cond: [
-                      {
-                        $eq: [updatedUsed, `$${totalField}`],
-                      },
-                      CreditStatus.INACTIVE,
-                      '$status',
-                    ],
+                    $cond: [statusCondition, CreditStatus.INACTIVE, '$status'],
                   },
                 },
               },

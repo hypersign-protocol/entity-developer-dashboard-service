@@ -29,6 +29,7 @@ describe('CreditEventStore', () => {
     } as unknown as jest.Mocked<CreditService>;
     creditNotificationService = {
       notifyUsageThreshold: jest.fn(),
+      notifyAllowanceUsageThreshold: jest.fn(),
     } as unknown as jest.Mocked<CreditNotificationService>;
     commitEventRepository = {
       create: jest.fn(),
@@ -142,6 +143,9 @@ describe('CreditEventStore', () => {
     expect(
       creditNotificationService.notifyUsageThreshold,
     ).not.toHaveBeenCalled();
+    expect(
+      creditNotificationService.notifyAllowanceUsageThreshold,
+    ).toHaveBeenCalled();
     expect(commitEventRepository.create).not.toHaveBeenCalled();
   });
 

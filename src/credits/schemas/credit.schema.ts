@@ -27,6 +27,7 @@ export enum CreditSourceEnum {
 
 export class CreditNotificationState {
   lastNotifiedUsageThreshold?: number;
+  lastNotifiedAllowanceUsageThreshold?: number;
   expiryThresholdsSent?: number;
 }
 

@@ -149,6 +149,11 @@ export class CreditEventStore {
     if (creditType === CreditType.API_CREDIT) {
       await this.creditNotificationService.notifyUsageThreshold(updatedCredit);
     }
+    if (creditType === CreditType.BLOCKCHAIN_TXN_CREDIT) {
+      await this.creditNotificationService.notifyAllowanceUsageThreshold(
+        updatedCredit,
+      );
+    }
     Logger.log(
       `Credit commit applied for appId ${appId} and reservation ${reservationId}`,
       CreditEventStore.name,

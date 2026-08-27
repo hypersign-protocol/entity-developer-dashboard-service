@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
 import getCreditExpiryAlertMail from 'src/mail-notification/constants/templates/credit-expiry-alert.template';
 import getCreditUsageAlertMail from 'src/mail-notification/constants/templates/credit-usage-alert.template';
+import getAllowanceUsageAlertMail from 'src/mail-notification/constants/templates/allowance-usage-alert.template';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { JobNames } from 'src/utils/time-constant';
@@ -98,6 +99,65 @@ export class CreditNotificationService
           plan.apiCredit.used,
           plan.expiresAt?.toISOString(),
           recipient.isSuperAdminNotification,
+        ),
+      },
+      JobNames.SEND_CREDIT_USAGE_NOTIFICATION,
+    );
+  }
+
+  async notifyAllowanceUsageThreshold(plan: CreditPlan): Promise<void> {
+    if (plan.serviceType !== SERVICE_TYPES.SSI_API) return;
+
+    const allowance = plan.onChainAllowance;
+    if (!allowance || allowance.amount <= 0) return;
+
+    const usedAmount = allowance.usedAmount ?? 0;
+    const usedPercentage = Math.floor((usedAmount / allowance.amount) * 100);
+    const threshold = [...this.creditUsageThresholds]
+      .reverse()
+      .find((value) => usedPercentage >= value);
+    if (threshold === undefined) return;
+
+    const planId = this.planId(plan);
+    const claimedPlan = await this.creditRepository.findOneAndUpdate(
+      {
+        _id: planId,
+        $or: [
+          {
+            'notification.lastNotifiedAllowanceUsageThreshold': {
+              $exists: false,
+            },
+          },
+          {
+            'notification.lastNotifiedAllowanceUsageThreshold': {
+              $lt: threshold,
+            },
+          },
+        ],
+      },
+      {
+        $set: {
+          'notification.lastNotifiedAllowanceUsageThreshold': threshold,
+        },
+      },
+    );
+    if (!claimedPlan) return;
+
+    const recipient = await this.resolveRecipient(plan.serviceId);
+    if (!recipient?.isSuperAdminNotification) return;
+
+    await this.mailNotificationService.addAJob(
+      {
+        to: recipient.to,
+        ...(recipient.cc.length && { cc: recipient.cc }),
+        subject: `⚠️ Allowance Usage Alert for Service ${plan.serviceId}`,
+        message: getAllowanceUsageAlertMail(
+          plan.serviceId,
+          usedPercentage,
+          allowance.amount,
+          usedAmount,
+          allowance.denom,
+          plan.expiresAt?.toISOString(),
         ),
       },
       JobNames.SEND_CREDIT_USAGE_NOTIFICATION,

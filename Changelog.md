@@ -1,7 +1,9 @@
 # Changelog
 
 ## [Unreleased]
-## [3.16.0] - 2026-08-13
+
+
+## [3.16.0] - 2026-08-27
 ### Added
 - Api to fetch credit list
 - Api to activate specific credit

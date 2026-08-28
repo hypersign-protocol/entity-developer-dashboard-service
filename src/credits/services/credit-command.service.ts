@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import {
   CREDIT_EVENT_NAMES,
   CreditType,
@@ -94,6 +95,7 @@ export class CreditCommandService {
         wallet.creditType,
       );
       const commandId = `grant-${serviceType}-${middlewarePlanId}`;
+      const deliveryJobId = `${commandId}-${randomUUID()}`;
       const command: CreditCommandEnvelope = {
         schemaVersion: 3,
         commandId,
@@ -120,11 +122,11 @@ export class CreditCommandService {
         queueName,
         CREDIT_EVENT_NAMES.GRANT_REQUESTED,
         command,
-        { jobId: commandId },
+        { jobId: deliveryJobId },
       );
 
       Logger.log(
-        `Queued SDK credit grant ${commandId} on ${queueName}`,
+        `Queued SDK credit grant ${commandId} as delivery ${deliveryJobId} on ${queueName}`,
         CreditCommandService.name,
       );
     }
@@ -153,6 +155,7 @@ export class CreditCommandService {
     const commandId = `settle-SSI_API-${reservationId}-${
       isCommit ? 'commit' : 'rollback'
     }`;
+    const deliveryJobId = `${commandId}-${randomUUID()}`;
     const command: CreditCommandEnvelope = {
       schemaVersion: 3,
       commandId,
@@ -175,10 +178,10 @@ export class CreditCommandService {
       `credit.commands.${SERVICE_TYPES.SSI_API}`,
       jobName,
       command,
-      { jobId: commandId },
+      { jobId: deliveryJobId },
     );
     Logger.log(
-      `Queued ${jobName} for SSI reservation ${reservationId}`,
+      `Queued ${jobName} for SSI reservation ${reservationId} as delivery ${deliveryJobId}`,
       CreditCommandService.name,
     );
   }

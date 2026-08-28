@@ -117,6 +117,11 @@ Required Redis configuration:
 - the same Redis instance used by the KYC service; and
 - the default BullMQ prefix `bull` unless both applications override it.
 
+`CREDIT_LIFECYCLE_CONCURRENCY` controls how many lifecycle events each
+dashboard pod applies to MongoDB concurrently. It defaults to `10` and must be
+a positive integer. Increase it only after checking MongoDB write latency and
+the age of the oldest waiting job on `credit.lifecycle`.
+
 Transport contract:
 
 - service type: `KYC_SERVICE`;

@@ -15,7 +15,7 @@ export class CreditBullMqProvider
   private readonly workers = new Set<Worker>();
   private readonly connection: Redis;
 
-  constructor(redisUrl: string) {
+  constructor(redisUrl: string, private readonly workerConcurrency = 10) {
     this.connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
   }
 
@@ -72,7 +72,10 @@ export class CreditBullMqProvider
     const worker = new Worker(
       queueName,
       (job) => processor({ id: job.id, name: job.name, data: job.data }),
-      { connection: this.connection },
+      {
+        connection: this.connection,
+        concurrency: this.workerConcurrency,
+      },
     );
     this.workers.add(worker);
     return {

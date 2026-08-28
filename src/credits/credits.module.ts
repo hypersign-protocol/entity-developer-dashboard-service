@@ -71,7 +71,20 @@ const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
     {
       provide: CreditBullMqProvider,
       inject: [CREDIT_REDIS_URL],
-      useFactory: (redisUrl: string) => new CreditBullMqProvider(redisUrl),
+      useFactory: (redisUrl: string) => {
+        const configuredConcurrency = Number(
+          process.env.CREDIT_LIFECYCLE_CONCURRENCY || '10',
+        );
+        if (
+          !Number.isSafeInteger(configuredConcurrency) ||
+          configuredConcurrency <= 0
+        ) {
+          throw new Error(
+            'CREDIT_LIFECYCLE_CONCURRENCY must be a positive safe integer',
+          );
+        }
+        return new CreditBullMqProvider(redisUrl, configuredConcurrency);
+      },
     },
     AdminPeopleRepository,
     CreditRepository,

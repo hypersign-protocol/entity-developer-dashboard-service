@@ -50,7 +50,9 @@ describe('CreditCommandService', () => {
         }),
       }),
     );
-    expect(options).toEqual({ jobId: command.commandId });
+    expect(options).toEqual({
+      jobId: expect.stringMatching(/^grant-CAVACH_API-credit-1-[0-9a-f-]{36}$/),
+    });
   });
 
   it('publishes separate SSI API and blockchain wallet grants', async () => {
@@ -136,7 +138,11 @@ describe('CreditCommandService', () => {
           transactionJobId: 'txn-1',
         },
       }),
-      { jobId: 'settle-SSI_API-reservation-1-commit' },
+      {
+        jobId: expect.stringMatching(
+          /^settle-SSI_API-reservation-1-commit-[0-9a-f-]{36}$/,
+        ),
+      },
     );
   });
 
@@ -164,8 +170,41 @@ describe('CreditCommandService', () => {
           reason: 'chain rejected the transaction',
         },
       }),
-      { jobId: 'settle-SSI_API-reservation-2-rollback' },
+      {
+        jobId: expect.stringMatching(
+          /^settle-SSI_API-reservation-2-rollback-[0-9a-f-]{36}$/,
+        ),
+      },
     );
+  });
+
+  it('uses a new BullMQ delivery id when an idempotent grant is redelivered', async () => {
+    const bullMq = { add: jest.fn().mockResolvedValue(undefined) };
+    const service = new CreditCommandService(
+      bullMq as unknown as CreditBullMqProvider,
+    );
+    const credit = {
+      _id: 'credit-1',
+      status: CreditStatus.ACTIVE,
+      serviceId: 'app-1',
+      serviceType: SERVICE_TYPES.CAVACH_API,
+      apiCredit: { total: 100, used: 25 },
+      criticalBalance: 10,
+      referenceId: 'payment-1',
+      validityDays: 30,
+      expiresAt: new Date('2026-09-01T00:00:00.000Z'),
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+    } as CreditPlan;
+
+    await service.grantCreditPlan(credit, SERVICE_TYPES.CAVACH_API, 'tenant-1');
+    await service.grantCreditPlan(credit, SERVICE_TYPES.CAVACH_API, 'tenant-1');
+
+    const firstCommand = bullMq.add.mock.calls[0][2];
+    const secondCommand = bullMq.add.mock.calls[1][2];
+    const firstJobId = bullMq.add.mock.calls[0][3].jobId;
+    const secondJobId = bullMq.add.mock.calls[1][3].jobId;
+    expect(firstCommand.commandId).toBe(secondCommand.commandId);
+    expect(firstJobId).not.toBe(secondJobId);
   });
 
   it('rejects a non-active credit plan', async () => {

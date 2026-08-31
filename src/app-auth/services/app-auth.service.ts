@@ -898,6 +898,8 @@ export class AppAuthService {
     appDetail,
     accessList = [],
     sessionId,
+    accessListHash?: string,
+    preserveTtl = false,
   ) {
     const payload = {
       appId: appDetail.appId,
@@ -911,6 +913,9 @@ export class AppAuthService {
       env: appDetail.env ? appDetail.env : APP_ENVIRONMENT.dev,
       appName: appDetail.appName,
     };
+    if (accessListHash) {
+      payload['accessListHash'] = accessListHash;
+    }
     if (appDetail.issuerDid) {
       payload['issuerDid'] = appDetail.issuerDid;
     }
@@ -927,7 +932,11 @@ export class AppAuthService {
       payload['dependentServices'] = appDetail.dependentServices;
     }
     Logger.log('storeDataInRedis() method: ends....', 'AppAuthService');
-    redisClient.set(
+    if (preserveTtl) {
+      await redisClient.set(sessionId, JSON.stringify(payload), 'KEEPTTL');
+      return;
+    }
+    await redisClient.set(
       sessionId,
       JSON.stringify(payload),
       'EX',
@@ -952,9 +961,11 @@ export class AppAuthService {
         ? session.tenantUserPermissions
         : user.accessList;
     let rawRedisKey = `${appId}_${context}_${session.userId}_${grantType}`;
+    const permissionsHash = generateHash(
+      JSON.stringify(effectiveAccessList || []),
+    );
     if (isTenantSession) {
-      const permissionHash = generateHash(JSON.stringify(effectiveAccessList));
-      rawRedisKey = `${rawRedisKey}_tenant_${permissionHash}`;
+      rawRedisKey = `${rawRedisKey}_tenant_${permissionsHash}`;
     }
     const sessionId = generateHash(rawRedisKey);
     const savedSession = await redisClient.get(sessionId);
@@ -977,21 +988,6 @@ export class AppAuthService {
       }
     }
 
-    if (savedSession) {
-      const app = JSON.parse(savedSession);
-      const dataToStore = {
-        appId,
-        appName: app.appName,
-        grantType,
-        subdomain: app.subdomain,
-        sessionId,
-      };
-      return this.getAccessToken(
-        dataToStore,
-        EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtTime,
-        EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtUnit,
-      );
-    }
     const query: any = {
       appId,
       ...(user?.role !== UserRole.SUPER_ADMIN && { userId: user.userId }),
@@ -1074,10 +1070,38 @@ export class AppAuthService {
         throw new BadRequestException(['Invalid service ID: ' + appId]);
       }
     }
+    const accessListHash = generateHash(JSON.stringify(accessList));
     if (accessList.length <= 0) {
+      if (savedSession) {
+        await this.storeDataInRedis(
+          grantType,
+          app,
+          accessList,
+          sessionId,
+          accessListHash,
+          true,
+        );
+      }
       throw new UnauthorizedException([
         `You are not authorized to access service of type ${serviceType}`,
       ]);
+    }
+    if (savedSession) {
+      const cachedApp = JSON.parse(savedSession);
+      if (cachedApp.accessListHash === accessListHash) {
+        const cachedTokenPayload = {
+          appId,
+          appName: cachedApp.appName,
+          grantType,
+          subdomain: cachedApp.subdomain,
+          sessionId,
+        };
+        return this.getAccessToken(
+          cachedTokenPayload,
+          EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtTime,
+          EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtUnit,
+        );
+      }
     }
     const tokenPayload = {
       appId,
@@ -1086,7 +1110,14 @@ export class AppAuthService {
       subdomain: app.subdomain,
       sessionId,
     };
-    await this.storeDataInRedis(grantType, app, accessList, sessionId);
+    await this.storeDataInRedis(
+      grantType,
+      app,
+      accessList,
+      sessionId,
+      accessListHash,
+      !!savedSession,
+    );
     return this.getAccessToken(
       tokenPayload,
       EXPIRY_CONFIG.DASHBOARD_ACCESS.jwtTime,

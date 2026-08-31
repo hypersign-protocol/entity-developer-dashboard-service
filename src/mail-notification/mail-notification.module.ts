@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { MailNotificationService } from './services/mail-notification.service';
 import * as dotenv from 'dotenv';
-import { CreditNotificationProcessor } from './services/mail-queue-processor';
 import { AppAuthModule } from 'src/app-auth/app-auth.module';
 import { UserModule } from 'src/user/user.module';
 dotenv.config();
@@ -13,11 +12,6 @@ dotenv.config();
     BullModule.registerQueue({
       name: process.env.MAIL_QUEUE || 'Entity-Dashboard-Mail-Queue',
     }),
-    BullModule.registerQueue({
-      name:
-        process.env.DASHBOARD_CREDIT_USAGE_NOTIFICATION_QUEUE ||
-        'Credit-Usage-Notification-Queue',
-    }),
     BullModule.forRoot({
       connection: {
         host:
@@ -27,7 +21,7 @@ dotenv.config();
       },
     }),
   ],
-  providers: [MailNotificationService, CreditNotificationProcessor],
+  providers: [MailNotificationService],
   exports: [MailNotificationService],
 })
 export class MailNotificationModule {}

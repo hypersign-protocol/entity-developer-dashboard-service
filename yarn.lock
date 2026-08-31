@@ -1527,7 +1527,7 @@
 
 "@hypersign-protocol/credit-middleware@https://github.com/hypersign-protocol/hypersign-credits-middleware/releases/download/v5.0.0/hypersign-protocol-credit-middleware-5.0.0-kyc.tgz":
   version "5.0.0"
-  resolved "https://github.com/hypersign-protocol/hypersign-credits-middleware/releases/download/v5.0.0/hypersign-protocol-credit-middleware-5.0.0-kyc.tgz#3b0bc225f1955b5f9960b18c6f9fcf149d134a02"
+  resolved "https://github.com/hypersign-protocol/hypersign-credits-middleware/releases/download/v5.0.0/hypersign-protocol-credit-middleware-5.0.0-kyc.tgz#535ea4ebd5ef31cfad474e867c73fa6efe1db51d"
   dependencies:
     bullmq "5.81.3"
     ioredis "^5.7.0"

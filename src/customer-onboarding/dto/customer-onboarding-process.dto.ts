@@ -27,7 +27,7 @@ export class CreditDetail {
   @ApiProperty({
     name: 'validityPeriodUnit',
     description: 'Unit of validity period',
-    example: 'DAYS',
+    example: TimeUnit.Days,
     enum: TimeUnit,
   })
   @IsEnum(TimeUnit)

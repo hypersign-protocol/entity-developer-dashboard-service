@@ -1,6 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+
+
+## [3.16.0] - 2026-08-27
+### Added
+- Api to fetch credit list
+- Api to activate specific credit
+- Storing credit detail in respective service queue
+- Added serviceType to the credit schema so that we don't need to query the apps table to determine whether the plan is for ID Service or SSI Service.”
+- Storing event details in a time-series-based table
+## [Unreleased]
 ## [3.15.0] - 2026-07-16
 - Added credit expiry email processing.
 - Implemented credit expiry and credit exhaustion email notifications for SUPER_ADMIN users of the API service.

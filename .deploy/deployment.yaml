@@ -99,6 +99,10 @@ spec:
           value: "__GEOLOCATION_DB_PATH__"
         - name: REDIS_HOST
           value: "__REDIS_HOST__"
+        - name: CREDIT_LIFECYCLE_CONCURRENCY
+          value: "10"
+        - name: RABBIT_MQ_URI
+          value: "__RABBIT_MQ_URI__"
         - name: KYC_VERIFIER_APP_BASE_URL
           value: "__KYC_VERIFIER_APP_BASE_URL__"
         - name: OTP_COOLDOWN_MINUTES
@@ -124,7 +128,11 @@ spec:
         - name: DASHBOARD_CREDIT_USAGE_NOTIFICATION_QUEUE
           value:  __DASHBOARD_CREDIT_USAGE_NOTIFICATION_QUEUE__
         - name: SUPER_ADMIN_EMAILS_IDS
-          value: '["vikrambanand@gmail.com","raj.v.patil108@gmail.com","meet.hypersign@gmail.com","vishwasbhushan001@gmail.com"]'       
+          value: '["vikrambanand@gmail.com","raj.v.patil108@gmail.com","meet.hypersign@gmail.com","vishwasbhushan001@gmail.com"]'
+        - name: CREDIT_USAGE_THRESHOLDS
+          value: '__CREDIT_USAGE_THRESHOLDS__' 
+        - name: CREDIT_EXPIRY_THRESHOLDS
+          value: '__CREDIT_EXPIRY_THRESHOLDS__'        
         volumeMounts:
         - name: mongo
           mountPath: "/data"
@@ -149,5 +157,3 @@ spec:
     targetPort: __PORT__
     protocol: TCP
 ---
-
-

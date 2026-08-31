@@ -23,7 +23,6 @@ import { SupportedServiceService } from 'src/supported-service/services/supporte
 import { SupportedServiceList } from 'src/supported-service/services/service-list';
 import { JWTAuthorizeMiddleware } from 'src/utils/middleware/jwt-authorization.middleware';
 import { UserModule } from 'src/user/user.module';
-import { CreditModule } from 'src/credits/credits.module';
 import { JWTAccessAccountMiddleware } from 'src/utils/middleware/jwt-accessAccount.middlerwere';
 import { AdminPeopleRepository } from 'src/people/repository/people.repository';
 import {
@@ -50,7 +49,6 @@ import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
     EdvModule,
     UserModule,
     JwtModule.register({}),
-    CreditModule,
     forwardRef(() => WebpageConfigModule),
   ],
 

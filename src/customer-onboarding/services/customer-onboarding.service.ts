@@ -63,6 +63,7 @@ import { CreditService } from 'src/credits/services/credits.service';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { VerificationMethodTypes } from 'src/utils/generated/client/enums';
 import { Types } from 'mongoose';
+import { CreditSourceEnum } from 'src/credits/schemas/credit.schema';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -308,6 +309,7 @@ export class CustomerOnboardingService {
         amountDenom: creditDetail.amountDenom,
       },
       superAdminUserId,
+      CreditSourceEnum.CUSTOMER_ONBOARDING,
     );
     // const creditPayload = {
     //   serviceId: serviceInfo.appId,

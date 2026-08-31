@@ -3,15 +3,12 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
-import { scope } from '../../credits/schemas/authz.schema';
+import { Types } from 'mongoose';
+import { CreditSourceEnum, scope } from '../schemas/credit.schema';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import {
-  APP_ENVIRONMENT,
-  SERVICE_TYPES,
-  SERVICES,
-} from 'src/supported-service/services/iServiceList';
+import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
 import { SigningStargateClient } from '@cosmjs/stargate';
 import { HidWalletService } from 'src/hid-wallet/services/hid-wallet.service';
@@ -24,11 +21,15 @@ import {
   MSG_UPDATE_CREDENTIAL_STATUS,
   MSG_UPDATE_DID_TYPEURL,
 } from 'src/utils/authz';
-import { sanitizeUrl } from 'src/utils/utils';
-import { GRANT_TYPES } from 'src/app-auth/services/app-auth.service';
-import { EXPIRY_CONFIG } from 'src/utils/time-constant';
-import { CreditRequestDto } from '../dtos/credits.dto';
+import {
+  CreateCreditDto,
+  CreditRequestDto,
+  ListCreditsDto,
+} from '../dtos/credits.dto';
 import { TimeUnit } from 'src/customer-onboarding/constants/enum';
+import { CreditRepository } from '../repositories/credit.repository';
+import { CreditStatus } from '../schemas/credit.schema';
+import { CreditAllocationQueueService } from './credit-allocation-queue.service';
 
 @Injectable()
 export class CreditService {
@@ -36,10 +37,85 @@ export class CreditService {
   private granterClient: SigningStargateClient;
   constructor(
     private readonly config: ConfigService,
-    private readonly jwt: JwtService,
     private readonly appRepository: AppRepository,
     private readonly hidWalletService: HidWalletService,
+    private readonly creditRepository: CreditRepository,
+    private readonly creditAllocationQueueService: CreditAllocationQueueService,
   ) {}
+
+  async fetchCreditDetails(appId: string, status?: CreditStatus) {
+    Logger.log('Fetching credit plan list', 'CreditService');
+
+    const pipeline = [
+      {
+        $match: {
+          serviceId: appId,
+          ...(status && { status }),
+        },
+      },
+      {
+        $sort: {
+          createdAt: 1,
+        },
+      },
+    ];
+
+    return this.creditRepository.findBasedOnAggregationPipeline(pipeline);
+  }
+
+  async activateCredit(creditId: string, appId: string) {
+    Logger.log(
+      `Activating credit plan for app with Id: ${appId} and creditId ${creditId}`,
+      'CreditService',
+    );
+
+    if (!Types.ObjectId.isValid(creditId)) {
+      throw new BadRequestException(['Invalid credit id']);
+    }
+    const credit = await this.creditRepository.findParticularCreditDetail({
+      serviceId: appId,
+      _id: creditId,
+    });
+    if (!credit) {
+      throw new NotFoundException([
+        `No credit detail found for creditId: ${creditId}`,
+      ]);
+    }
+    if (credit.expiresAt && credit.expiresAt <= new Date()) {
+      throw new BadRequestException(['Expired credit cannot be activated']);
+    }
+    await this.creditRepository.updateMany(
+      {
+        serviceId: appId,
+        _id: { $ne: creditId },
+        status: CreditStatus.ACTIVE,
+      },
+      { $set: { status: CreditStatus.INACTIVE } },
+    );
+
+    const expiresAt = credit.expiresAt ?? new Date();
+    if (!credit.expiresAt) {
+      expiresAt.setUTCDate(expiresAt.getUTCDate() + credit.validityDays);
+    }
+
+    const activatedCredit = await this.creditRepository.findByIdAndUpdate(
+      creditId,
+      {
+        $set: { status: CreditStatus.ACTIVE, expiresAt },
+      },
+    );
+
+    const appDetail = await this.appRepository.findOne({ appId });
+    const serviceType = appDetail?.services?.[0]?.id;
+    if (activatedCredit && serviceType) {
+      await this.creditAllocationQueueService.addActiveCredit(
+        activatedCredit,
+        serviceType,
+      );
+    }
+
+    return activatedCredit;
+  }
 
   async grantSSIAllowance(appId: string, allowance: string, periodInYears = 1) {
     Logger.log(
@@ -147,10 +223,10 @@ export class CreditService {
     appId: string,
     creditDto: CreditRequestDto,
     superAdminUserId: string,
+    source: CreditSourceEnum,
   ) {
-    let appDetail;
     try {
-      appDetail = await this.appRepository.findOne({ appId });
+      const appDetail = await this.appRepository.findOne({ appId });
       if (!appDetail || appDetail === null) {
         throw new BadRequestException([`No app found for appId ${appId}`]);
       }
@@ -161,43 +237,27 @@ export class CreditService {
         );
       }
       const isSsiService = serviceInfo.id === SERVICE_TYPES.SSI_API;
-      const {
-        amount,
+      const { amount, validityPeriod, validityPeriodUnit } = creditDto;
+
+      const totalCredit = Number(amount);
+      if (!Number.isFinite(totalCredit) || totalCredit <= 0) {
+        throw new BadRequestException(['amount must be a positive number']);
+      }
+
+      const { validityDays, expiresAt } = this.getCreditValidity(
         validityPeriod,
         validityPeriodUnit,
-        amountDenom = 'uHID',
-      } = creditDto;
-      const creditPayload = {
-        serviceId: appDetail.appId,
-        purpose: 'CreditRecharge',
-        amount,
-        validityPeriod,
-        validityPeriodUnit,
-        amountDenom,
-        subdomain: appDetail.subdomain,
-        grantType: isSsiService
-          ? GRANT_TYPES.access_service_ssi
-          : GRANT_TYPES.access_service_kyc,
-        whitelistedCors: appDetail.whitelistedCors,
-        // If service has access WRITE_CREDIT then only allow to call credit API.
-        accessList: isSsiService
-          ? SERVICES.SSI_API.ACCESS_TYPES.WRITE_CREDIT
-          : SERVICES.CAVACH_API.ACCESS_TYPES.WRITE_CREDIT,
-        creditedBy: superAdminUserId,
-      };
-      const { jwtTime, jwtUnit } = EXPIRY_CONFIG.CREDIT_TOKEN;
-      const expiresIn = `${jwtTime}${jwtUnit}`;
-      const creditToken = this.jwt.sign(creditPayload, {
-        expiresIn,
-        secret: this.config.get('JWT_SECRET'),
-      });
-      const requestOptions: RequestInit = {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-credit-token': creditToken,
-        },
-      };
+      );
+
+      const activeCredit =
+        await this.creditRepository.findParticularCreditDetail({
+          serviceId: appDetail.appId,
+          status: CreditStatus.ACTIVE,
+        });
+      const status = activeCredit ? CreditStatus.INACTIVE : CreditStatus.ACTIVE;
+
+      let onChainAllowance;
+      let onChainAllowanceScopes;
       if (isSsiService) {
         const periodInYears = this.getPeriodInYears(
           validityPeriod,
@@ -208,21 +268,69 @@ export class CreditService {
           amount,
           periodInYears,
         );
-        requestOptions.body = JSON.stringify({
-          ...authzCreditDetail,
-        });
+        onChainAllowance = {
+          amount: Number(authzCreditDetail.credit.amount),
+          denom: authzCreditDetail.credit.denom,
+        };
+        onChainAllowanceScopes = authzCreditDetail.creditScope;
       }
-      const tenantUrl = sanitizeUrl(serviceInfo.domain, true);
-      await this.makeExternalRequest(
-        `${tenantUrl}api/v1/credit`,
-        requestOptions,
-      );
+
+      const credit = await this.creditRepository.create({
+        serviceId: appDetail.appId,
+        apiCredit: { total: totalCredit, used: 0 },
+        validityDays,
+        status,
+        ...(status === CreditStatus.ACTIVE && { expiresAt }),
+        ...(onChainAllowance && { onChainAllowance }),
+        ...(onChainAllowanceScopes && { onChainAllowanceScopes }),
+        creditedBy: superAdminUserId,
+        source,
+      });
+
+      if (status === CreditStatus.ACTIVE) {
+        await this.creditAllocationQueueService.addActiveCredit(
+          credit,
+          serviceInfo.id,
+        );
+      }
+
       return { message: `Credit is successfully granted for service ${appId}` };
     } catch (e) {
+      if (e instanceof BadRequestException) {
+        throw e;
+      }
       if (e instanceof Error) {
         throw new InternalServerErrorException([e.message]);
       }
       throw new InternalServerErrorException([e]);
+    }
+  }
+
+  private getCreditValidity(
+    validityPeriod: number,
+    validityPeriodUnit: TimeUnit,
+  ): { validityDays: number; expiresAt: Date } {
+    if (!Number.isFinite(validityPeriod) || validityPeriod <= 0) {
+      throw new BadRequestException([
+        'validityPeriod must be a positive number',
+      ]);
+    }
+
+    const expiresAt = new Date();
+    switch (validityPeriodUnit) {
+      case TimeUnit.Days:
+        expiresAt.setUTCDate(expiresAt.getUTCDate() + validityPeriod);
+        return { validityDays: validityPeriod, expiresAt };
+      case TimeUnit.Month:
+        expiresAt.setUTCMonth(expiresAt.getUTCMonth() + validityPeriod);
+        return { validityDays: Math.ceil(validityPeriod * 30.4375), expiresAt };
+      case TimeUnit.Year:
+        expiresAt.setUTCFullYear(expiresAt.getUTCFullYear() + validityPeriod);
+        return { validityDays: Math.ceil(validityPeriod * 365.25), expiresAt };
+      default:
+        throw new BadRequestException([
+          `Invalid validityPeriodUnit: ${validityPeriodUnit}`,
+        ]);
     }
   }
 
@@ -245,34 +353,6 @@ export class CreditService {
         throw new BadRequestException([
           `Invalid validityPeriodUnit: ${validityPeriodUnit}`,
         ]);
-    }
-  }
-
-  private async makeExternalRequest(url: string, options: RequestInit) {
-    Logger.log('Inside makeExternalRequest()', 'CreditService');
-    try {
-      Logger.log(`Making request to ${url}`, 'CreditService');
-      const response = await fetch(url, options);
-      Logger.log(
-        `Received response with status ${response.status}`,
-        'CreditService',
-      );
-      const text = await response.text();
-      const detail = text ? JSON.parse(text) : null;
-      if (!response.ok) {
-        const serverError =
-          detail?.error?.details ||
-          (Array.isArray(detail?.message)
-            ? detail.message.join(', ')
-            : detail?.message) ||
-          JSON.stringify(detail) ||
-          'Unknown error from external service';
-        throw new Error(serverError);
-      }
-      return detail;
-    } catch (error) {
-      Logger.error(error, error?.stack, 'CreditService');
-      throw error;
     }
   }
 }

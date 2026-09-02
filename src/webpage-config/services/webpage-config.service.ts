@@ -59,6 +59,7 @@ export class WebpageConfigService {
       pageTitle,
       pageType = 'kyc',
       contactEmail,
+      linkedWidgetConfigIds
     } = createWebpageConfigDto;
     const serviceDetail = await this.appRepository.findOne({
       appId: serviceId,
@@ -105,6 +106,9 @@ export class WebpageConfigService {
       // tenantUrl,
       generatedUrl,
       contactEmail,
+      linkedWidgetConfigIds: linkedWidgetConfigIds?.map(
+        (id) => new Types.ObjectId(id),
+      ),
     };
     Logger.log('Before inserting webpage detail', 'WebpageConfigService');
     const webpageConfigData = await this.webPageConfigRepo.createwebPageConfig(
@@ -113,6 +117,9 @@ export class WebpageConfigService {
     const webpageConfigObject = webpageConfigData;
     return {
       ...webpageConfigObject,
+      linkedWidgetConfigIds: webpageConfigObject.linkedWidgetConfigIds?.map(
+        (id) => id.toString(),
+      ),
       serviceName: appName,
       developmentStage: env,
       tenantUrl,
@@ -150,6 +157,9 @@ export class WebpageConfigService {
     }
     return {
       ...webPAgeConfigData,
+      linkedWidgetConfigIds: webPAgeConfigData.linkedWidgetConfigIds?.map(
+        (id) => id.toString(),
+      ),
       serviceName: appName,
       developmentStage: env,
       logoUrl,
@@ -191,6 +201,9 @@ export class WebpageConfigService {
     });
     return {
       ...webpageConfiguration,
+      linkedWidgetConfigIds: webpageConfiguration.linkedWidgetConfigIds?.map(
+        (id) => id.toString(),
+      ),
       developmentStage: serviceDetail?.env as APP_ENVIRONMENT,
       serviceName: serviceDetail.appName,
       logoUrl: serviceDetail.logoUrl,
@@ -227,7 +240,13 @@ export class WebpageConfigService {
         'KYC service must have a dependent SSI service linked to it.',
       ]);
     }
-    const dataToUpdate = { ...updateWebpageConfigDto };
+    const dataToUpdate = {
+      ...updateWebpageConfigDto,
+      linkedWidgetConfigIds:
+        updateWebpageConfigDto.linkedWidgetConfigIds?.map(
+          (id) => new Types.ObjectId(id),
+        ),
+    };
     delete dataToUpdate['_id'];
     if (updateWebpageConfigDto.expiryType) {
       const { expiryDate } = await this.generateExpiryDate(
@@ -253,6 +272,9 @@ export class WebpageConfigService {
     const env: APP_ENVIRONMENT = serviceDetail?.env as APP_ENVIRONMENT;
     return {
       ...webpageConfiguration,
+      linkedWidgetConfigIds: webpageConfiguration.linkedWidgetConfigIds?.map(
+        (id) => id.toString(),
+      ),
       serviceName: appName,
       developmentStage: env,
       logoUrl,

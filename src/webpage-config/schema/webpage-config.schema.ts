@@ -27,6 +27,8 @@ export class WebPageConfig {
   // tenantUrl: string;
   @Prop({ type: String, required: false })
   contactEmail?: string;
+  @Prop({ type: Array<String>, required: false })
+  linkedWidgetConfigIds?: Types.ObjectId[];
 }
 export const WebPageConfigSchema = SchemaFactory.createForClass(WebPageConfig);
 WebPageConfigSchema.index({ serviceId: 1, pageType: 1 }, { unique: true });

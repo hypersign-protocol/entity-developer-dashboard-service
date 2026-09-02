@@ -59,7 +59,7 @@ export class WebpageConfigService {
       pageTitle,
       pageType = 'kyc',
       contactEmail,
-      linkedWidgetConfigIds
+      linkedWidgetConfigIds,
     } = createWebpageConfigDto;
     const serviceDetail = await this.appRepository.findOne({
       appId: serviceId,
@@ -242,10 +242,9 @@ export class WebpageConfigService {
     }
     const dataToUpdate = {
       ...updateWebpageConfigDto,
-      linkedWidgetConfigIds:
-        updateWebpageConfigDto.linkedWidgetConfigIds?.map(
-          (id) => new Types.ObjectId(id),
-        ),
+      linkedWidgetConfigIds: updateWebpageConfigDto.linkedWidgetConfigIds?.map(
+        (id) => new Types.ObjectId(id),
+      ),
     };
     delete dataToUpdate['_id'];
     if (updateWebpageConfigDto.expiryType) {

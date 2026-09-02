@@ -971,8 +971,9 @@ export class CustomerOnboardingService {
                 customerOnboardingData.interestedService,
               );
               const requestBody = {
-                name: "Default Widget Configuration",
-                description: "Standard KYC configuration with face recognition and  OCR enabled.'",
+                name: 'Default Widget Configuration',
+                description:
+                  "Standard KYC configuration with face recognition and  OCR enabled.'",
                 faceRecog: true,
                 idOcr: {
                   enabled: true,
@@ -1043,7 +1044,7 @@ export class CustomerOnboardingService {
                 pageType: PageType.KYC,
                 contactEmail: customerEmail,
                 themeColor: 'vibrant',
-                linkedWidgetConfigIds: [widgetConfigDetail._id.toString()]
+                linkedWidgetConfigIds: [widgetConfigDetail._id.toString()],
               });
               Logger.debug(
                 'CONFIGURE_KYC_VERIFIER_PAGE step ends',

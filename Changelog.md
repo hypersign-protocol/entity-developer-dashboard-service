@@ -1,7 +1,7 @@
 # Changelog
 
 ## [Unreleased]
-## [3.16.1] - 2026-09-02
+## [3.16.1] - 2026-09-04
 ### Added
 - Added `DELETE_WIDGET_CONFIG` access permission for deleting widget configurations.
 - Added optional `linkedWidgetConfigIds` parameter to store linked widget configuration IDs.

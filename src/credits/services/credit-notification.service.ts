@@ -5,7 +5,13 @@ import {
   OnApplicationShutdown,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
+import {
+  CustomerOnboarding,
+  CustomerOnboardingDocument,
+} from 'src/customer-onboarding/schemas/customer-onboarding.schema';
 import getCreditExpiryAlertMail from 'src/mail-notification/constants/templates/credit-expiry-alert.template';
 import getCreditUsageAlertMail from 'src/mail-notification/constants/templates/credit-usage-alert.template';
 import getAllowanceUsageAlertMail from 'src/mail-notification/constants/templates/allowance-usage-alert.template';
@@ -33,6 +39,8 @@ export class CreditNotificationService
     private readonly userRepository: UserRepository,
     private readonly mailNotificationService: MailNotificationService,
     private readonly configService: ConfigService,
+    @InjectModel(CustomerOnboarding.name)
+    private readonly customerOnboardingModel: Model<CustomerOnboardingDocument>,
   ) {
     this.creditExpiryThresholds =
       this.configService
@@ -85,6 +93,9 @@ export class CreditNotificationService
 
     const recipient = await this.resolveRecipient(plan.serviceId);
     if (!recipient) return;
+    const customerDetails = recipient.isSuperAdminNotification
+      ? await this.getSsiCustomerDetails(plan.serviceId)
+      : undefined;
 
     await this.mailNotificationService.addAJob(
       {
@@ -99,6 +110,7 @@ export class CreditNotificationService
           plan.apiCredit.used,
           plan.expiresAt?.toISOString(),
           recipient.isSuperAdminNotification,
+          customerDetails,
         ),
       },
       JobNames.SEND_CREDIT_USAGE_NOTIFICATION,
@@ -145,6 +157,7 @@ export class CreditNotificationService
 
     const recipient = await this.resolveRecipient(plan.serviceId);
     if (!recipient?.isSuperAdminNotification) return;
+    const customerDetails = await this.getSsiCustomerDetails(plan.serviceId);
 
     await this.mailNotificationService.addAJob(
       {
@@ -158,6 +171,7 @@ export class CreditNotificationService
           usedAmount,
           allowance.denom,
           plan.expiresAt?.toISOString(),
+          customerDetails,
         ),
       },
       JobNames.SEND_CREDIT_USAGE_NOTIFICATION,
@@ -201,6 +215,9 @@ export class CreditNotificationService
 
       const recipient = await this.resolveRecipient(plan.serviceId);
       if (!recipient) continue;
+      const customerDetails = recipient.isSuperAdminNotification
+        ? await this.getSsiCustomerDetails(plan.serviceId)
+        : undefined;
 
       await this.mailNotificationService.addAJob(
         {
@@ -217,6 +234,7 @@ export class CreditNotificationService
             plan.apiCredit.used,
             plan.expiresAt.toISOString(),
             recipient.isSuperAdminNotification,
+            customerDetails,
           ),
         },
         JobNames.SEND_CREDIT_USAGE_NOTIFICATION,
@@ -274,6 +292,35 @@ export class CreditNotificationService
 
   private planId(plan: CreditPlan): string {
     return String((plan as unknown as { _id: unknown })._id);
+  }
+
+  private async getSsiCustomerDetails(serviceId: string): Promise<
+    | {
+        companyName?: string;
+        name?: string;
+        email?: string;
+      }
+    | undefined
+  > {
+    const onboarding = await this.customerOnboardingModel
+      .findOne({ ssiServiceId: serviceId })
+      .select({ companyName: 1, customerEmail: 1, userId: 1 })
+      .lean();
+
+    if (!onboarding) {
+      Logger.warn(`No customer onboarding record found for SSI ${serviceId}`);
+      return undefined;
+    }
+
+    const user = onboarding.userId
+      ? await this.userRepository.findOne({ userId: onboarding.userId })
+      : null;
+
+    return {
+      companyName: onboarding.companyName,
+      name: user?.name,
+      email: onboarding.customerEmail || user?.email,
+    };
   }
 
   private scheduleNextExpiryScan(): void {

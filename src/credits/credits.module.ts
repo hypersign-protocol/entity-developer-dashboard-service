@@ -39,6 +39,10 @@ import {
   CreditCommitOutbox,
   CreditCommitOutboxSchema,
 } from './schemas/credit-commit-outbox.schema';
+import {
+  CustomerOnboarding,
+  CustomerOnboardingSchema,
+} from 'src/customer-onboarding/schemas/customer-onboarding.schema';
 
 const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
 
@@ -51,6 +55,7 @@ const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
       { name: CreditPlan.name, schema: CreditsSchema },
       { name: CreditLedger.name, schema: CreditLedgerSchema },
       { name: CreditCommitOutbox.name, schema: CreditCommitOutboxSchema },
+      { name: CustomerOnboarding.name, schema: CustomerOnboardingSchema },
     ]),
     JwtModule.register({}),
     HidWalletModule,

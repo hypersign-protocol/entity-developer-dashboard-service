@@ -6,6 +6,7 @@
 - Added `DELETE_WIDGET_CONFIG` access permission for deleting widget configurations.
 - Added optional `linkedWidgetConfigIds` parameter to store linked widget configuration IDs.
 - Updated customer onboarding to pass linkedWidgetConfigIds to the KYC verifier page and name/description when configuring the ID widget.
+- Added companyName, email and user name in mail template of super admin
 
 ## [3.16.0] - 2026-08-27
 ### Added

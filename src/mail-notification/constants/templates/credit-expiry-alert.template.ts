@@ -2,6 +2,12 @@ import getBody from '../element/body.template';
 import { getContainer } from '../element/container.template';
 import getHtml from '../element/html.template';
 
+type CustomerDetails = {
+  companyName?: string;
+  name?: string;
+  email?: string;
+};
+
 export default function getCreditExpiryAlertMail(
   serviceId: string,
   remainingDays: number,
@@ -9,6 +15,7 @@ export default function getCreditExpiryAlertMail(
   usedCredits: number,
   expiresAt: string,
   isSuperAdminNotification = false,
+  customerDetails?: CustomerDetails,
 ) {
   const isExpired = remainingDays === 0;
 
@@ -32,6 +39,24 @@ export default function getCreditExpiryAlertMail(
     </p>
   `
     : '';
+  const customerDetailsFields = customerDetails
+    ? `
+    ${
+      customerDetails.companyName
+        ? `<li style="margin:4px 0;"><strong>Company Name:</strong> ${customerDetails.companyName}</li>`
+        : ''
+    }
+    ${
+      customerDetails.name
+        ? `<li style="margin:4px 0;"><strong>Name:</strong> ${customerDetails.name}</li>`
+        : ''
+    }
+    ${
+      customerDetails.email
+        ? `<li style="margin:4px 0;"><strong>Email:</strong> ${customerDetails.email}</li>`
+        : ''
+    }`
+    : '';
   const message = `
   <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;"> ${greeting}</p>
 
@@ -48,6 +73,7 @@ export default function getCreditExpiryAlertMail(
     <li style="margin:4px 0;"><strong>Used Credits:</strong> ${usedCredits} / ${totalCredits}</li>
     <li style="margin:4px 0;"><strong>Remaining Credits:</strong> ${remainingCredits}</li>
     <li style="margin:4px 0;"><strong>Expiry Date:</strong> ${formattedExpiry}</li>
+    ${customerDetailsFields}
   </ul>
 
   ${

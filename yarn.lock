@@ -1525,9 +1525,9 @@
   resolved "https://registry.yarnpkg.com/@humanwhocodes/object-schema/-/object-schema-2.0.3.tgz#4a2868d75d6d6963e423bcf90b7fd1be343409d3"
   integrity sha512-93zYdMES/c1D69yZiKDBj0V24vqNzB/koF26KPaagAfd3P/4gUlh3Dys5ogAK+Exi9QyzlD8x/08Zt7wIKcDcA==
 
-"@hypersign-protocol/credit-middleware@https://github.com/hypersign-protocol/hypersign-credits-middleware/releases/download/v5.0.0/hypersign-protocol-credit-middleware-5.0.0-kyc.tgz":
-  version "5.0.0"
-  resolved "https://github.com/hypersign-protocol/hypersign-credits-middleware/releases/download/v5.0.0/hypersign-protocol-credit-middleware-5.0.0-kyc.tgz#535ea4ebd5ef31cfad474e867c73fa6efe1db51d"
+"@hypersign-protocol/credit-middleware@https://github.com/hypersign-protocol/hypersign-credits-middleware/releases/download/v5.0.1/hypersign-protocol-credit-middleware-5.0.1-kyc.tgz":
+  version "5.0.1"
+  resolved "https://github.com/hypersign-protocol/hypersign-credits-middleware/releases/download/v5.0.1/hypersign-protocol-credit-middleware-5.0.1-kyc.tgz#a52f9b59269a7f0de959430d7b33f8c2ae2b9948"
   dependencies:
     bullmq "5.81.3"
     ioredis "^5.7.0"

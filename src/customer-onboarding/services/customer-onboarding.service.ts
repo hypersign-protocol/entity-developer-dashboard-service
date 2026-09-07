@@ -421,6 +421,7 @@ export class CustomerOnboardingService {
     const onboardingLogs: LogDetail[] = [];
     const onboardingUpdateData: Partial<CustomerOnboarding> = {};
     let ssiService: any,
+      widgetConfigDetail: any,
       kycAccessToken: any,
       ssiAccessToken: any,
       issuerDidData: any,
@@ -970,6 +971,9 @@ export class CustomerOnboardingService {
                 customerOnboardingData.interestedService,
               );
               const requestBody = {
+                name: 'Default Widget Configuration',
+                description:
+                  "Standard KYC configuration with face recognition and  OCR enabled.'",
                 faceRecog: true,
                 idOcr: {
                   enabled: true,
@@ -1004,7 +1008,7 @@ export class CustomerOnboardingService {
                     'The app is requesting your KYC data to provide you service',
                 },
               };
-              await this.makeExternalRequest(
+              widgetConfigDetail = await this.makeExternalRequest(
                 `${sanitizeUrl(
                   kycTenantUrl,
                   true,
@@ -1040,6 +1044,7 @@ export class CustomerOnboardingService {
                 pageType: PageType.KYC,
                 contactEmail: customerEmail,
                 themeColor: 'vibrant',
+                linkedWidgetConfigIds: [widgetConfigDetail?._id?.toString()],
               });
               Logger.debug(
                 'CONFIGURE_KYC_VERIFIER_PAGE step ends',

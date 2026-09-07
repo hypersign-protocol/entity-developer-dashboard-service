@@ -1,7 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsArray,
   IsDateString,
   IsEnum,
+  IsMongoId,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -85,6 +87,17 @@ export class CreateWebpageConfigDto {
   @IsOptional()
   @IsString()
   contactEmail?: string;
+  @ApiProperty({
+    name: 'linkedWidgetConfigIds',
+    description: 'Linked WidgetConfig IDs',
+    example: ['6a7d99b27f4de104281f6c16'],
+    required: false,
+    isArray: true,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  linkedWidgetConfigIds?: string[];
 }
 
 export class CreateWebpageConfigResponseDto extends CreateWebpageConfigDto {

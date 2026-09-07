@@ -2,6 +2,12 @@ import getBody from '../element/body.template';
 import { getContainer } from '../element/container.template';
 import getHtml from '../element/html.template';
 
+type CustomerDetails = {
+  companyName?: string;
+  name?: string;
+  email?: string;
+};
+
 export default function getCreditUsageAlertMail(
   serviceId: string,
   usedPercentage: number,
@@ -10,6 +16,7 @@ export default function getCreditUsageAlertMail(
   usedCredits: number,
   expiresAt?: string,
   isSuperAdminNotification = false,
+  customerDetails?: CustomerDetails,
 ) {
   const isExhausted = usedPercentage >= 100;
 
@@ -40,6 +47,24 @@ export default function getCreditUsageAlertMail(
     </p>
   `
     : '';
+  const customerDetailsFields = customerDetails
+    ? `
+    ${
+      customerDetails.companyName
+        ? `<li style="margin:4px 0;"><strong>Company Name:</strong> ${customerDetails.companyName}</li>`
+        : ''
+    }
+    ${
+      customerDetails.name
+        ? `<li style="margin:4px 0;"><strong>Name:</strong> ${customerDetails.name}</li>`
+        : ''
+    }
+    ${
+      customerDetails.email
+        ? `<li style="margin:4px 0;"><strong>Email:</strong> ${customerDetails.email}</li>`
+        : ''
+    }`
+    : '';
   const message = `
   <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">${greeting}</p>
 
@@ -57,6 +82,7 @@ export default function getCreditUsageAlertMail(
     <li style="margin:4px 0;"><strong>Remaining Credits:</strong> ${remainingCredits}</li>
     <li style="margin:4px 0;"><strong>Usage Percentage:</strong> ${safePercentage}%</li>
     ${expiryField}
+    ${customerDetailsFields}
   </ul>
 
   ${

@@ -4,6 +4,8 @@
 ## [3.16.2] - 2026-09-09
 ### Added
 - Exposed session read access for dashboard
+- Added new service type `AADHAR_VERIFICATION`
+
 ## [3.16.1] - 2026-09-04
 ### Added
 - Added `DELETE_WIDGET_CONFIG` access permission for deleting widget configurations.

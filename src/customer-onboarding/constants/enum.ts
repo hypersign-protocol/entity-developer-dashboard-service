@@ -94,6 +94,7 @@ export enum InterestedService {
   FRAUD_PREVENTION = 'Fraud Prevention',
   COLLECT_WALLET = 'Collect Wallet Address',
   PROOF_OF_PERSONHOOD = 'Proof of Personhood',
+  AADHAR_VERIFICATION= 'Aadhaar Verification'
 }
 
 export enum YearlyVolume {

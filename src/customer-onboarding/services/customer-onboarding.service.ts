@@ -1063,7 +1063,7 @@ export class CustomerOnboardingService {
                 pageType: PageType.KYC,
                 contactEmail: customerEmail,
                 themeColor: 'vibrant',
-                linkedWidgetConfigIds: [widgetConfigDetail?._id?.toString()],
+                linkedWidgetConfigIds: [widgetConfigDetail?.data?._id?.toString()],
               });
               Logger.debug(
                 'CONFIGURE_KYC_VERIFIER_PAGE step ends',

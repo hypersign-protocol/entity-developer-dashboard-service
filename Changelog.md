@@ -5,6 +5,7 @@
 ### Added
 - Exposed session read access for dashboard
 - Added new service type `AADHAR_VERIFICATION`
+- Updated credit request template with more customer information
 
 ## [3.16.1] - 2026-09-04
 ### Added

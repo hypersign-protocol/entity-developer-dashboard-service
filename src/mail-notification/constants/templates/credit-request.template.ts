@@ -2,33 +2,45 @@ import getBody from '../element/body.template';
 import { getContainer } from '../element/container.template';
 import getHtml from '../element/html.template';
 
-export default function getCreditRequestNotificationMail(
-  userId: string,
-  requesterEmail: string,
-  requestedService: string,
-  onboardingId: string,
-  companyName: string,
-  type: string,
-  loggedInEmail: string,
-  twitter?: string,
-  telegram?: string,
-) {
+export default function getCreditRequestNotificationMail(customer: {
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  onboardingId: string;
+  companyName: string;
+  companyDomain?: string;
+  companyRegistrationNumber?: string;
+  companyType: string;
+  linkedinUrl?: string;
+  twitterUrl?: string;
+  telegramUrl?: string;
+  country?: string;
+  phoneNumber?: string;
+  interestedService: string[];
+  yearlyVolume: string;
+  businessField: string[];
+  loggedInEmail: string;
+}) {
   const salutationMessage = 'New Credit Request Received';
 
-  let optionalFields = '';
-  if (twitter) {
-    optionalFields += `<li style="margin:4px 0;"><strong>Twitter:</strong> ${twitter}</li>`;
-  }
-  if (telegram) {
-    optionalFields += `<li style="margin:4px 0;"><strong>Telegram:</strong> ${telegram}</li>`;
-  }
+  const optionalFields = [
+    ['LinkedIn URL', customer.linkedinUrl],
+    ['Twitter URL', customer.twitterUrl],
+    ['Telegram URL', customer.telegramUrl],
+  ]
+    .filter(([, value]) => value)
+    .map(
+      ([label, value]) =>
+        `<li style="margin:4px 0;"><strong>${label}:</strong> ${value}</li>`,
+    )
+    .join('');
 
   const emailFields =
-    loggedInEmail === requesterEmail
-      ? `<li style="margin:4px 0;"><strong>Email:</strong> ${loggedInEmail}</li>`
+    customer.loggedInEmail === customer.customerEmail
+      ? `<li style="margin:4px 0;"><strong>Customer Email:</strong> ${customer.customerEmail}</li>`
       : `
-      <li style="margin:4px 0;"><strong>Login Email:</strong> ${loggedInEmail}</li>
-      <li style="margin:4px 0;"><strong>Company Email:</strong> ${requesterEmail}</li>
+      <li style="margin:4px 0;"><strong>Login Email:</strong> ${customer.loggedInEmail}</li>
+      <li style="margin:4px 0;"><strong>Customer Email:</strong> ${customer.customerEmail}</li>
     `;
 
   const message = `
@@ -41,12 +53,43 @@ export default function getCreditRequestNotificationMail(
     </p>
 
     <ul style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; padding-left:18px;">
-      <li style="margin:4px 0;"><strong>Onboarding ID:</strong> ${onboardingId}</li>
-      <li style="margin:4px 0;"><strong>User ID:</strong> ${userId}</li>
+      <li style="margin:4px 0;"><strong>Onboarding ID:</strong> ${
+        customer.onboardingId
+      }</li>
+      <li style="margin:4px 0;"><strong>Customer ID:</strong> ${
+        customer.customerId
+      }</li>
+      <li style="margin:4px 0;"><strong>Customer Name:</strong> ${
+        customer.customerName
+      }</li>
       ${emailFields}
-      <li style="margin:4px 0;"><strong>Requested Service:</strong> ${requestedService}</li>
-      <li style="margin:4px 0;"><strong>Company Name:</strong> ${companyName}</li>
-      <li style="margin:4px 0;"><strong>Account Type:</strong> ${type}</li>
+      <li style="margin:4px 0;"><strong>Company Name:</strong> ${
+        customer.companyName
+      }</li>
+      <li style="margin:4px 0;"><strong>Company Domain:</strong> ${
+        customer.companyDomain || ''
+      }</li>
+      <li style="margin:4px 0;"><strong>Company Registration Number:</strong> ${
+        customer.companyRegistrationNumber || ''
+      }</li>
+      <li style="margin:4px 0;"><strong>Company Type:</strong> ${
+        customer.companyType
+      }</li>
+      <li style="margin:4px 0;"><strong>Country:</strong> ${
+        customer.country || ''
+      }</li>
+      <li style="margin:4px 0;"><strong>Phone Number:</strong> ${
+        customer.phoneNumber || ''
+      }</li>
+      <li style="margin:4px 0;"><strong>Interested Services:</strong> ${customer.interestedService.join(
+        ', ',
+      )}</li>
+      <li style="margin:4px 0;"><strong>Yearly Volume:</strong> ${
+        customer.yearlyVolume
+      }</li>
+      <li style="margin:4px 0;"><strong>Business Fields:</strong> ${customer.businessField.join(
+        ', ',
+      )}</li>
       ${optionalFields}
     </ul>
 

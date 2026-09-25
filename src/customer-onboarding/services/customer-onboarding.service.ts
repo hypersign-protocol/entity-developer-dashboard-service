@@ -233,7 +233,7 @@ export class CustomerOnboardingService {
     );
     const to = superAdminEmailList[0];
     const cc = superAdminEmailList.slice(1);
-    console.log(message);
+
     await this.mailNotificationService.addAJob(
       {
         to,

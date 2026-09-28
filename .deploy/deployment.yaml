@@ -128,7 +128,7 @@ spec:
         - name: DASHBOARD_CREDIT_USAGE_NOTIFICATION_QUEUE
           value:  __DASHBOARD_CREDIT_USAGE_NOTIFICATION_QUEUE__
         - name: SUPER_ADMIN_EMAILS_IDS
-          value: '["vikrambanand@gmail.com","raj.v.patil108@gmail.com","meet.hypersign@gmail.com","vishwasbhushan001@gmail.com"]'
+          value: '["vikrambanand@gmail.com","raj@hypermine.de","meet.hypersign@gmail.com","vishwasbhushan001@gmail.com","irfan@hypermine.in","pratapmridha@gmail.com","varshakumari370@gmail.com","yxopcok1@parser.zohocrm.in"]'
         - name: CREDIT_USAGE_THRESHOLDS
           value: '__CREDIT_USAGE_THRESHOLDS__' 
         - name: CREDIT_EXPIRY_THRESHOLDS

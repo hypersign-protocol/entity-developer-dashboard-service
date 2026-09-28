@@ -106,31 +106,49 @@ export class CustomerOnboardingService {
           throw new ConflictException['You can only create onboarding once']();
         }
       }
-      const { interestedService, companyName, twitterUrl, telegramUrl, type } =
-        createCustomerOnboardingDto;
+      const {
+        interestedService,
+        companyName,
+        domain,
+        registrationNumber,
+        linkedinUrl,
+        twitterUrl,
+        telegramUrl,
+        country,
+        phoneNumber,
+        yearlyVolume,
+        businessField,
+        type,
+        customerEmail,
+      } = createCustomerOnboardingDto;
       Logger.log('Before storing data in db', 'CustomerOnboardingService');
       const onboardingData =
         await this.customerOnboardingRepository.createCustomerOnboarding({
           ...createCustomerOnboardingDto,
           userId: user.userId,
         });
-      const requestedServices =
-        interestedService.length === 1
-          ? `${interestedService[0]} Service`
-          : `${interestedService.join(', ')} Services`;
-      const { customerEmail } = createCustomerOnboardingDto;
 
-      const message = getCreditRequestNotificationMail(
-        user.userId,
-        customerEmail,
-        requestedServices,
-        onboardingData['_id'].toString(),
+      const customerName =
+        user?.name || loggedInUserEmail?.split('@')[0] || 'User';
+      const message = getCreditRequestNotificationMail({
+        customerId: user.userId,
+        customerName,
+        customerEmail: customerEmail,
+        onboardingId: onboardingData['_id'].toString(),
         companyName,
-        String(type),
-        loggedInUserEmail,
+        companyDomain: domain,
+        companyRegistrationNumber: registrationNumber,
+        companyType: String(type),
+        linkedinUrl,
         twitterUrl,
         telegramUrl,
-      );
+        country,
+        phoneNumber,
+        interestedService,
+        yearlyVolume,
+        businessField,
+        loggedInEmail: loggedInUserEmail,
+      });
       const superAdminDetails = await this.userRepository.find({
         role: UserRole.SUPER_ADMIN,
       });
@@ -215,6 +233,7 @@ export class CustomerOnboardingService {
     );
     const to = superAdminEmailList[0];
     const cc = superAdminEmailList.slice(1);
+
     await this.mailNotificationService.addAJob(
       {
         to,
@@ -1044,7 +1063,9 @@ export class CustomerOnboardingService {
                 pageType: PageType.KYC,
                 contactEmail: customerEmail,
                 themeColor: 'vibrant',
-                linkedWidgetConfigIds: [widgetConfigDetail?._id?.toString()],
+                linkedWidgetConfigIds: [
+                  widgetConfigDetail?.data?._id?.toString(),
+                ],
               });
               Logger.debug(
                 'CONFIGURE_KYC_VERIFIER_PAGE step ends',

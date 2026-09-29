@@ -38,10 +38,12 @@ export class CustomerOnboardingBasicDto {
   @IsString()
   companyName: string;
 
- @ValidateIf((_obj, value) => value !== undefined && value !== null && value !== '')
-@IsString()
-@IsUrlOrBase64Image()
-companyLogo?: string;
+  @ValidateIf(
+    (_obj, value) => value !== undefined && value !== null && value !== '',
+  )
+  @IsString()
+  @IsUrlOrBase64Image()
+  companyLogo?: string;
   @ApiProperty({
     name: 'customerEmail',
     example: 'xyz@gmail.com',

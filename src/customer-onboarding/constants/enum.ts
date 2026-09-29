@@ -116,7 +116,6 @@ export enum MonthlyVolume {
   PLUS_TENK = '+10,000',
 }
 
-
 export enum BusinessField {
   FINTECH = 'Fintech',
   CRYPTO = 'Crypto',

@@ -27,7 +27,7 @@ export class CustomerOnboarding {
   companyName: string;
   @Prop({ type: String })
   customerEmail: string;
-  @Prop({ type: String , required:false})
+  @Prop({ type: String, required: false })
   companyLogo?: string;
   @Prop({ type: String, requried: false })
   domain?: string;

@@ -6,7 +6,7 @@ import {
   InterestedService,
   OnboardingStep,
   StepStatus,
-  YearlyVolume,
+  MonthlyVolume,
 } from '../constants/enum';
 export type CustomerOnboardingDocument = CustomerOnboarding & Document;
 
@@ -27,7 +27,7 @@ export class CustomerOnboarding {
   companyName: string;
   @Prop({ type: String })
   customerEmail: string;
-  @Prop({ type: String })
+  @Prop({ type: String , required:false})
   companyLogo?: string;
   @Prop({ type: String, requried: false })
   domain?: string;
@@ -44,12 +44,14 @@ export class CustomerOnboarding {
   @Prop({ type: String, required: false })
   telegramUrl?: string;
   @Prop({ type: String, required: false })
+  referralSource?: string;
+  @Prop({ type: String, required: false })
   phoneNumber?: string;
   @Prop({ type: String, required: false })
   registrationNumber?: string;
   @Prop({ type: [String], required: true, enum: InterestedService })
   interestedService: InterestedService[];
-  @Prop({ type: String, enum: YearlyVolume, required: true })
+  @Prop({ type: String, enum: MonthlyVolume, required: true })
   yearlyVolume: string;
   @Prop({ type: [String], required: true, enum: BusinessField })
   businessField: BusinessField[];

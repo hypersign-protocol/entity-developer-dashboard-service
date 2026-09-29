@@ -19,9 +19,9 @@ import {
   CreditStatus,
   CustomerType,
   InterestedService,
+  MonthlyVolume,
   OnboardingStep,
   StepStatus,
-  YearlyVolume,
 } from '../constants/enum';
 import { IsPhoneNumberByCountry } from 'src/utils/customDecorator/validate-phone-no-country.decorator';
 import { Type } from 'class-transformer';
@@ -38,17 +38,10 @@ export class CustomerOnboardingBasicDto {
   @IsString()
   companyName: string;
 
-  @ApiProperty({
-    name: 'companyLogo',
-    description: 'logo url og company',
-    example: 'https://logo.com/logo.png',
-    required: false,
-  })
-  @IsOptional()
-  @IsNotEmpty()
-  @IsString()
-  @IsUrlOrBase64Image()
-  companyLogo?: string;
+ @ValidateIf((_obj, value) => value !== undefined && value !== null && value !== '')
+@IsString()
+@IsUrlOrBase64Image()
+companyLogo?: string;
   @ApiProperty({
     name: 'customerEmail',
     example: 'xyz@gmail.com',
@@ -175,12 +168,12 @@ export class CustomerOnboardingBasicDto {
   @ApiProperty({
     name: 'yearlyVolume',
     description: 'Yearly verification volume',
-    example: YearlyVolume.ZERO_ONEK,
-    enum: YearlyVolume,
+    example: MonthlyVolume.ZERO_ONEK,
+    enum: MonthlyVolume,
   })
   @IsNotEmpty()
-  @IsEnum(YearlyVolume)
-  yearlyVolume: YearlyVolume;
+  @IsEnum(MonthlyVolume)
+  yearlyVolume: MonthlyVolume;
   @ApiProperty({
     name: 'businessField',
     description: 'Industry fields the company operates in',

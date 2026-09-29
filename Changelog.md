@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+## [3.16.2] - 2026-09-29
+### Added 
+- Api to fetch list of onboarding based on status, default to all
+
 ## [3.16.2] - 2026-09-28
 ### Added
 - Exposed session read access for dashboard

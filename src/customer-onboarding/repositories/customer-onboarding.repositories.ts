@@ -30,6 +30,38 @@ export class CustomerOnboardingRepository {
     );
     return this.customerOnboardingModel.findOne(customerFilterQuery);
   }
+  async findCustomerOnboardings(
+    customerFilterQuery: FilterQuery<CustomerOnboarding>,
+    page: number,
+    limit: number,
+  ) {
+    Logger.log(
+      'Finding customer onboarding records',
+      'CustomerOnboardingRepository',
+    );
+    const [result] = await this.customerOnboardingModel.aggregate([
+      { $match: customerFilterQuery },
+      {
+        $facet: {
+          data: [
+            { $sort: { createdAt: -1 } },
+            { $skip: (page - 1) * limit },
+            { $limit: limit },
+          ],
+          totalCount: [{ $count: 'count' }],
+        },
+      },
+      {
+        $project: {
+          data: 1,
+          totalCount: {
+            $ifNull: [{ $arrayElemAt: ['$totalCount.count', 0] }, 0],
+          },
+        },
+      },
+    ]);
+    return result;
+  }
   updateCustomerOnboardingDetails(
     customerFilterQuery: FilterQuery<CustomerOnboarding>,
     updateData: UpdateQuery<CustomerOnboarding>,

@@ -8,6 +8,7 @@ import {
   Req,
   ValidationPipe,
   UsePipes,
+  Query,
 } from '@nestjs/common';
 import {
   CreateCustomerOnboardingDto,
@@ -19,15 +20,24 @@ import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
+  ApiQuery,
+  ApiForbiddenResponse,
+  ApiUnauthorizedResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { CustomerOnboardingService } from '../services/customer-onboarding.service';
 import { Request } from 'express';
+import { CreditStatus } from '../constants/enum';
+import {
+  CustomerOnboardingListQueryDto,
+  CustomerOnboardingListRespDto,
+} from '../dto/customer-onboarding-list.dto';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import {
   CustomerOnboardingProcessDto,
   ProcessCustomerOnboardingRespDto,
 } from '../dto/customer-onboarding-process.dto';
+
 @ApiTags('Customer-Onboarding')
 @Controller('api/v1/customer-onboarding')
 export class CustomerOnboardingController {
@@ -63,6 +73,45 @@ export class CustomerOnboardingController {
       createCustomerOnboardingDto,
       req.user,
       req.user['email'],
+    );
+  }
+  @ApiBearerAuth('Authorization')
+  @ApiOkResponse({
+    description: 'Customer onboarding records fetched successfully',
+    type: CustomerOnboardingListRespDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid pagination or onboarding status filter',
+    type: AppError,
+  })
+  @ApiForbiddenResponse({
+    description: 'Only superadmins can fetch all onboarding records',
+    type: AppError,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication is required',
+    type: AppError,
+  })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    example: 10,
+    description: 'Page size (maximum 20)',
+  })
+  @ApiQuery({
+    name: 'status',
+    description: 'Filter by onboarding status',
+    required: false,
+    enum: CreditStatus,
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  @Get('list')
+  findAllCustomerOnboardings(@Query() query: CustomerOnboardingListQueryDto) {
+    return this.customerOnboardingService.findAllCustomerOnboardings(
+      query.page ?? 1,
+      query.limit ?? 10,
+      query.status,
     );
   }
   @ApiBearerAuth('Authorization')

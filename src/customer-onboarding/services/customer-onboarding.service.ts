@@ -1329,6 +1329,29 @@ export class CustomerOnboardingService {
     return url.origin + '/';
   }
 
+  async findAllCustomerOnboardings(
+    page: number,
+    limit: number,
+    status?: CreditStatus,
+  ) {
+    try {
+      const filter = status ? { onboardingStatus: status } : {};
+      return await this.customerOnboardingRepository.findCustomerOnboardings(
+        filter,
+        page,
+        limit,
+      );
+    } catch (e: any) {
+      Logger.error(
+        'Issue while fetching customer onboarding records',
+        e,
+        'CustomerOnboardingService',
+      );
+      if (e instanceof HttpException) throw e;
+      throw new BadRequestException([e.message]);
+    }
+  }
+
   async findUserOnboardingDetail(user) {
     Logger.log(
       'Inside findUserOnboardingDetail() method start:: to get onboarding detail of particular user',

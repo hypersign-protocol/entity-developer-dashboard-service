@@ -12,6 +12,10 @@ import {
   ValidateNested,
   Matches,
   ValidateIf,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 import {
   BusinessField,
@@ -26,6 +30,32 @@ import {
 import { IsPhoneNumberByCountry } from 'src/utils/customDecorator/validate-phone-no-country.decorator';
 import { Type } from 'class-transformer';
 import { IsUrlOrBase64Image } from 'src/utils/customDecorator/IsUrlOrBase64Image.decorator';
+
+const INDIA_ALLOWED_SERVICES = [
+  InterestedService.AADHAR_VERIFICATION,
+  InterestedService.PAN_VERIFICATION,
+  InterestedService.BANK_VERIFICATION,
+];
+
+@ValidatorConstraint({ name: 'indiaInterestedServices', async: false })
+class IndiaInterestedServicesConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(services: unknown, args: ValidationArguments): boolean {
+    const country = (args.object as CustomerOnboardingBasicDto).country;
+    return (
+      country !== 'IN' ||
+      (Array.isArray(services) &&
+        services.every((service) =>
+          INDIA_ALLOWED_SERVICES.includes(service as InterestedService),
+        ))
+    );
+  }
+
+  defaultMessage(): string {
+    return 'For India, interestedService can only include Aadhaar Verification, PAN Verification, and Bank Verification';
+  }
+}
 
 export class CustomerOnboardingBasicDto {
   @ApiProperty({
@@ -148,6 +178,23 @@ export class CustomerOnboardingBasicDto {
   )
   telegramUrl?: string;
   @ApiProperty({
+    name: 'referralSource',
+    description:
+      'How the customer heard about us. When using Other, include the detail as "Other: <detail>".',
+    example: 'Other: testing',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @ValidateIf(
+    (_o, value) => typeof value === 'string' && /^other\b/i.test(value.trim()),
+  )
+  @Matches(/^other\s*:\s*\S[\s\S]*$/i, {
+    message:
+      'referralSource must include a detail when using Other (e.g. Other: testing)',
+  })
+  referralSource?: string;
+  @ApiProperty({
     name: 'phoneNumber',
     description: 'Contact phone number of the company',
     example: '6234572090',
@@ -166,6 +213,7 @@ export class CustomerOnboardingBasicDto {
   })
   @ArrayNotEmpty()
   @IsEnum(InterestedService, { each: true })
+  @Validate(IndiaInterestedServicesConstraint)
   interestedService: InterestedService[];
   @ApiProperty({
     name: 'yearlyVolume',

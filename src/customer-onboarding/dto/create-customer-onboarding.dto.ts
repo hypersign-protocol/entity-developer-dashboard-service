@@ -31,7 +31,7 @@ import { IsPhoneNumberByCountry } from 'src/utils/customDecorator/validate-phone
 import { Type } from 'class-transformer';
 import { IsUrlOrBase64Image } from 'src/utils/customDecorator/IsUrlOrBase64Image.decorator';
 
-const INDIA_ALLOWED_SERVICES = [
+const INDIA_ONLY_SERVICES = [
   InterestedService.AADHAR_VERIFICATION,
   InterestedService.PAN_VERIFICATION,
   InterestedService.BANK_VERIFICATION,
@@ -43,17 +43,17 @@ class IndiaInterestedServicesConstraint
 {
   validate(services: unknown, args: ValidationArguments): boolean {
     const country = (args.object as CustomerOnboardingBasicDto).country;
+    if (!Array.isArray(services)) return false;
     return (
-      country !== 'IN' ||
-      (Array.isArray(services) &&
-        services.every((service) =>
-          INDIA_ALLOWED_SERVICES.includes(service as InterestedService),
-        ))
+      country === 'IN' ||
+      !services.some((service) =>
+        INDIA_ONLY_SERVICES.includes(service as InterestedService),
+      )
     );
   }
 
   defaultMessage(): string {
-    return 'For India, interestedService can only include Aadhaar Verification, PAN Verification, and Bank Verification';
+    return 'Aadhaar Verification, PAN Verification, and Bank Verification can only be selected when the country is India';
   }
 }
 
@@ -212,6 +212,7 @@ export class CustomerOnboardingBasicDto {
     isArray: true,
   })
   @ArrayNotEmpty()
+  @IsArray()
   @IsEnum(InterestedService, { each: true })
   @Validate(IndiaInterestedServicesConstraint)
   interestedService: InterestedService[];

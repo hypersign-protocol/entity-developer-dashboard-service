@@ -35,8 +35,23 @@ export default function getCreditRequestNotificationMail(customer: {
     )
     .join('');
 
+  const companyRegistrationNumberField =
+    customer.companyRegistrationNumber?.trim()
+      ? '<li style="margin:4px 0;"><strong>Company Registration Number:</strong> ' +
+        customer.companyRegistrationNumber +
+        '</li>'
+      : '';
+
+  const companyDomainField = customer.companyDomain?.trim()
+    ? '<li style="margin:4px 0;"><strong>Company Domain:</strong> ' +
+      customer.companyDomain +
+      '</li>'
+    : '';
+
   const phoneNumberField = customer.phoneNumber?.trim()
-    ? '<li style="margin:4px 0;"><strong>Phone Number:</strong> ' + customer.phoneNumber + '</li>'
+    ? '<li style="margin:4px 0;"><strong>Phone Number:</strong> ' +
+      customer.phoneNumber +
+      '</li>'
     : '';
 
   const emailFields =
@@ -70,12 +85,8 @@ export default function getCreditRequestNotificationMail(customer: {
       <li style="margin:4px 0;"><strong>Company Name:</strong> ${
         customer.companyName
       }</li>
-      <li style="margin:4px 0;"><strong>Company Domain:</strong> ${
-        customer.companyDomain || ''
-      }</li>
-      <li style="margin:4px 0;"><strong>Company Registration Number:</strong> ${
-        customer.companyRegistrationNumber || ''
-      }</li>
+      ${companyDomainField}
+      ${companyRegistrationNumberField}
       <li style="margin:4px 0;"><strong>Company Type:</strong> ${
         customer.companyType
       }</li>

@@ -35,6 +35,10 @@ export default function getCreditRequestNotificationMail(customer: {
     )
     .join('');
 
+  const phoneNumberField = customer.phoneNumber?.trim()
+    ? '<li style="margin:4px 0;"><strong>Phone Number:</strong> ' + customer.phoneNumber + '</li>'
+    : '';
+
   const emailFields =
     customer.loggedInEmail === customer.customerEmail
       ? `<li style="margin:4px 0;"><strong>Customer Email:</strong> ${customer.customerEmail}</li>`
@@ -78,9 +82,7 @@ export default function getCreditRequestNotificationMail(customer: {
       <li style="margin:4px 0;"><strong>Country:</strong> ${
         customer.country || ''
       }</li>
-      <li style="margin:4px 0;"><strong>Phone Number:</strong> ${
-        customer.phoneNumber || ''
-      }</li>
+      ${phoneNumberField}
       <li style="margin:4px 0;"><strong>Interested Services:</strong> ${customer.interestedService.join(
         ', ',
       )}</li>

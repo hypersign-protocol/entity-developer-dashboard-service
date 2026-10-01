@@ -8,7 +8,6 @@ import {
   Req,
   ValidationPipe,
   UsePipes,
-  ForbiddenException,
 } from '@nestjs/common';
 import {
   CreateCustomerOnboardingDto,

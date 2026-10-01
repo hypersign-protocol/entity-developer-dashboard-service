@@ -126,6 +126,17 @@ export class CustomerOnboardingService {
           userId: user.userId,
         });
 
+      void this.processCustomerOnboarding(
+        onboardingData['_id'].toString(),
+        user.userId,
+      ).catch((processingError: any) => {
+        Logger.error(
+          `Automatic onboarding processing failed for ${onboardingData['_id']}: ${processingError.message}`,
+          processingError.stack,
+          'CustomerOnboardingService',
+        );
+      });
+
       const customerName =
         user?.name || loggedInUserEmail?.split('@')[0] || 'User';
       const message = getCreditRequestNotificationMail({
@@ -403,7 +414,7 @@ export class CustomerOnboardingService {
     if (isZkpOnly) {
       return {
         kycCreditAmount: 104 * numberOfVerifications,
-        ssiCreditAmount:  420 * numberOfVerifications,
+        ssiCreditAmount: 420 * numberOfVerifications,
       };
     }
 
@@ -471,10 +482,7 @@ export class CustomerOnboardingService {
    * @returns Success message upon completion
    * @throws BadRequestException if any step fails or validation errors occur
    */
-  async processCustomerOnboarding(
-    id: string,
-    superAdminUserId,
-  ) {
+  async processCustomerOnboarding(id: string, superAdminUserId) {
     Logger.log(
       'Inside processCustomerOnboarding() to approve customer onboarding request',
       'CustomerOnboardingService',
@@ -498,7 +506,6 @@ export class CustomerOnboardingService {
         await this.customerOnboardingRepository.findCustomerOnboardingById({
           _id: id,
         });
-console.log(customerOnboardingData)
       if (!customerOnboardingData) {
         throw new BadRequestException([
           `Customer onboarding detail not found for id: ${id}`,
@@ -509,7 +516,6 @@ console.log(customerOnboardingData)
           50,
           customerOnboardingData.interestedService,
         );
-        console.log(kycCreditAmount, ssiCreditAmount);
       const ssiCreditDetail =
         this.createOnboardingCreditDetail(ssiCreditAmount);
       const kycCreditDetail =

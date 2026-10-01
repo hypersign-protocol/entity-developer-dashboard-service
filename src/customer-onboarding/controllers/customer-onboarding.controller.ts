@@ -100,10 +100,7 @@ export class CustomerOnboardingController {
     type: AppError,
   })
   @Post(':id/process')
-  async processCustomerOnboarding(
-    @Param('id') id: string,
-    @Req() req: any,
-  ) {
+  async processCustomerOnboarding(@Param('id') id: string, @Req() req: any) {
     const { user } = req;
     if (user.role !== UserRole.SUPER_ADMIN) {
       const onboarding = await this.customerOnboardingService.findOne(id, user);

@@ -1031,7 +1031,7 @@ export class CustomerOnboardingService {
                 },
                 isEmailNotificationEnabled: false,
                 isVaultEnabled: false,
-                isWidgetLogin: false
+                isWidgetLogin: false,
               };
               widgetConfigDetail = await this.makeExternalRequest(
                 `${sanitizeUrl(

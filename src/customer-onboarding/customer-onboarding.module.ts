@@ -51,6 +51,14 @@ export class CustomerOnboardingModule implements NestModule {
       .apply(JWTAuthorizeMiddleware)
       .forRoutes(CustomerOnboardingController);
     consumer
+      .apply(SuperAdminMiddleware)
+      .exclude(
+        { path: 'api/v1/customer-onboarding/:id', method: RequestMethod.GET },
+        { path: 'api/v1/customer-onboarding', method: RequestMethod.POST },
+        { path: 'api/v1/customer-onboarding', method: RequestMethod.GET },
+      )
+      .forRoutes(CustomerOnboardingController);
+    consumer
       .apply(JWTAccessAccountMiddleware)
       .forRoutes(CustomerOnboardingController);
     consumer.apply(RateLimitMiddleware).forRoutes(CustomerOnboardingController);

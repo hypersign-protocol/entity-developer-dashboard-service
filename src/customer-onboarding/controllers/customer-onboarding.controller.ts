@@ -8,7 +8,6 @@ import {
   Req,
   ValidationPipe,
   UsePipes,
-  ForbiddenException,
 } from '@nestjs/common';
 import {
   CreateCustomerOnboardingDto,
@@ -29,7 +28,6 @@ import {
   CustomerOnboardingProcessDto,
   ProcessCustomerOnboardingRespDto,
 } from '../dto/customer-onboarding-process.dto';
-import { UserRole } from 'src/user/schema/user.schema';
 @ApiTags('Customer-Onboarding')
 @Controller('api/v1/customer-onboarding')
 export class CustomerOnboardingController {
@@ -104,21 +102,11 @@ export class CustomerOnboardingController {
     type: AppError,
   })
   @Post(':id/process')
-  async processCustomerOnboarding(
+  processCustomerOnboarding(
     @Param('id') id: string,
     @Body() customerOnboardingProcessDto: CustomerOnboardingProcessDto,
     @Req() req: any,
   ) {
-    const { user } = req;
-    if (user.role !== UserRole.SUPER_ADMIN) {
-      const onboarding = await this.customerOnboardingService.findOne(id, user);
-
-      if (onboarding.userId !== user.userId) {
-        throw new ForbiddenException([
-          'You are not authorized to access this resource',
-        ]);
-      }
-    }
     return this.customerOnboardingService.processCustomerOnboarding(
       id,
       customerOnboardingProcessDto,

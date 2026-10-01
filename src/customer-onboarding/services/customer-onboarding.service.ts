@@ -1029,6 +1029,9 @@ export class CustomerOnboardingService {
                   reason:
                     'The app is requesting your KYC data to provide you service',
                 },
+                isEmailNotificationEnabled: false,
+                isVaultEnabled: false,
+                isWidgetLogin: false
               };
               widgetConfigDetail = await this.makeExternalRequest(
                 `${sanitizeUrl(

@@ -41,7 +41,9 @@ export default function getCreditRequestNotificationMail(customer: {
   ]
     .map(
       ([label, value]) =>
-        `<li style="margin:4px 0;"><strong>${label}:</strong> ${value || ''}</li>`,
+        `<li style="margin:4px 0;"><strong>${label}:</strong> ${
+          value || ''
+        }</li>`,
     )
     .join('');
 
@@ -63,17 +65,35 @@ export default function getCreditRequestNotificationMail(customer: {
     </p>
 
     <ul style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; padding-left:18px;">
-      <li style="margin:4px 0;"><strong>Onboarding ID:</strong> ${customer.onboardingId}</li>
-      <li style="margin:4px 0;"><strong>Customer ID:</strong> ${customer.customerId}</li>
-      <li style="margin:4px 0;"><strong>Customer Name:</strong> ${customer.customerName}</li>
+      <li style="margin:4px 0;"><strong>Onboarding ID:</strong> ${
+        customer.onboardingId
+      }</li>
+      <li style="margin:4px 0;"><strong>Customer ID:</strong> ${
+        customer.customerId
+      }</li>
+      <li style="margin:4px 0;"><strong>Customer Name:</strong> ${
+        customer.customerName
+      }</li>
       ${emailFields}
-      <li style="margin:4px 0;"><strong>Company Name:</strong> ${customer.companyName}</li>
-      <li style="margin:4px 0;"><strong>Company Type:</strong> ${customer.companyType}</li>
-      <li style="margin:4px 0;"><strong>Country:</strong> ${customer.country || ''}</li>
+      <li style="margin:4px 0;"><strong>Company Name:</strong> ${
+        customer.companyName
+      }</li>
+      <li style="margin:4px 0;"><strong>Company Type:</strong> ${
+        customer.companyType
+      }</li>
+      <li style="margin:4px 0;"><strong>Country:</strong> ${
+        customer.country || ''
+      }</li>
       ${optionalFields}
-      <li style="margin:4px 0;"><strong>Interested Services:</strong> ${customer.interestedService.join(', ')}</li>
-      <li style="margin:4px 0;"><strong>Yearly Volume:</strong> ${customer.yearlyVolume}</li>
-      <li style="margin:4px 0;"><strong>Business Fields:</strong> ${customer.businessField.join(', ')}</li>
+      <li style="margin:4px 0;"><strong>Interested Services:</strong> ${customer.interestedService.join(
+        ', ',
+      )}</li>
+      <li style="margin:4px 0;"><strong>Yearly Volume:</strong> ${
+        customer.yearlyVolume
+      }</li>
+      <li style="margin:4px 0;"><strong>Business Fields:</strong> ${customer.businessField.join(
+        ', ',
+      )}</li>
     </ul>
 
     <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px;">

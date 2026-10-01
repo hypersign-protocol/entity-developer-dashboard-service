@@ -54,6 +54,7 @@ import {
   PageType,
 } from 'src/webpage-config/dto/create-webpage-config.dto';
 import getOnboardingRetryNotificationMail from 'src/mail-notification/constants/templates/request-retry-onboarding';
+import getOnboardingFailureNotificationMail from 'src/mail-notification/constants/templates/onboarding-failure.template';
 import { redisClient } from 'src/utils/redis.provider';
 import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 import { TokenModule } from 'src/config/access-matrix';
@@ -1282,6 +1283,11 @@ export class CustomerOnboardingService {
       // Check for failures
       const failed = onboardingLogs.find((l) => l.status === StepStatus.FAILED);
       if (failed) {
+        await this.notifySuperAdminsOnOnboardingFailure(
+          customerOnboardingData,
+          failed.step,
+          failed.failureReason || 'Failure reason not recorded',
+        );
         throw new InternalServerErrorException([
           `Step ${failed.step} failed: ${failed.failureReason}`,
         ]);
@@ -1322,6 +1328,57 @@ export class CustomerOnboardingService {
       { to, subject, message, cc },
       mailType,
     );
+  }
+
+  private async notifySuperAdminsOnOnboardingFailure(
+    onboardingData: CustomerOnboarding,
+    failedStep: string,
+    failureReason: string,
+  ) {
+    try {
+      const admins = await this.userRepository.find({
+        role: UserRole.SUPER_ADMIN,
+      });
+      const emails = admins.map((admin) => admin.email).filter(Boolean);
+      if (!emails.length) {
+        Logger.warn(
+          'Onboarding failed but no super admin email addresses were found',
+          'CustomerOnboardingService',
+        );
+        return;
+      }
+
+      const details =
+        typeof (onboardingData as any).toObject === 'function'
+          ? (onboardingData as any).toObject()
+          : { ...(onboardingData as any) };
+      const message = getOnboardingFailureNotificationMail(
+        details,
+        failedStep,
+        failureReason,
+      );
+      await this.sendOnboardingRequestMailToSuperAdmin(
+        message,
+        emails,
+        `L1 Support Required: Customer Onboarding Failed at ${failedStep.replace(
+          /_/g,
+          ' ',
+        )}`,
+      );
+      Logger.log(
+        `Onboarding failure notification queued for ${emails.length} super admin(s)`,
+        'CustomerOnboardingService',
+      );
+    } catch (error: any) {
+      // Keep notification errors from masking the original onboarding failure.
+      Logger.error(
+        `Could not queue onboarding failure notification: ${
+          error?.message || error
+        }`,
+        error?.stack,
+        'CustomerOnboardingService',
+      );
+    }
   }
 
   /**

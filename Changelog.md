@@ -6,7 +6,7 @@
 - Added re-usable function to calculate SSI and KYC credit based on service type.
 - Removed credit detail from request body of post `/api/v1/customer-onboarding/{id}/process`.
 - updated the `/api/v1/customer-onboarding` to auto process the credit based on type of service user has requested.
-
+- Added L1 support email to supper admin to trigger re-onboarding in case of onboarding failure
 
 
 ## [3.16.3] - 2026-09-30

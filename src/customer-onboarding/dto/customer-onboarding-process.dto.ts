@@ -4,10 +4,8 @@ import {
   IsNotEmpty,
   IsNumber,
   IsString,
-  ValidateNested,
 } from 'class-validator';
 import { TimeUnit } from '../constants/enum';
-import { Type } from 'class-transformer';
 
 export class CreditDetail {
   @ApiProperty({
@@ -43,25 +41,6 @@ export class CreditDetail {
   @IsNotEmpty()
   amountDenom: string;
 }
-export class CustomerOnboardingProcessDto {
-  @ApiProperty({
-    name: 'ssiCreditDetail',
-    description: 'Credit detail for ssi service',
-    type: CreditDetail,
-  })
-  @Type(() => CreditDetail)
-  @ValidateNested()
-  ssiCreditDetail: CreditDetail;
-  @ApiProperty({
-    name: 'kycCreditDetail',
-    description: 'Credit detail for kyc service',
-    type: CreditDetail,
-  })
-  @Type(() => CreditDetail)
-  @ValidateNested()
-  kycCreditDetail: CreditDetail;
-}
-
 export class ProcessCustomerOnboardingRespDto {
   @ApiProperty({
     name: 'message',

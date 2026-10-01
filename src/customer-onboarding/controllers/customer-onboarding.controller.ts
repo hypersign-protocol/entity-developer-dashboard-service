@@ -25,10 +25,7 @@ import {
 import { CustomerOnboardingService } from '../services/customer-onboarding.service';
 import { Request } from 'express';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
-import {
-  CustomerOnboardingProcessDto,
-  ProcessCustomerOnboardingRespDto,
-} from '../dto/customer-onboarding-process.dto';
+import { ProcessCustomerOnboardingRespDto } from '../dto/customer-onboarding-process.dto';
 import { UserRole } from 'src/user/schema/user.schema';
 @ApiTags('Customer-Onboarding')
 @Controller('api/v1/customer-onboarding')
@@ -93,7 +90,6 @@ export class CustomerOnboardingController {
   findOne(@Param('id') id: string, @Req() req: Request) {
     return this.customerOnboardingService.findOne(id, req.user);
   }
-  @UsePipes(new ValidationPipe())
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({
     description: 'Customer Onboarding detail updated successfully',
@@ -106,7 +102,6 @@ export class CustomerOnboardingController {
   @Post(':id/process')
   async processCustomerOnboarding(
     @Param('id') id: string,
-    @Body() customerOnboardingProcessDto: CustomerOnboardingProcessDto,
     @Req() req: any,
   ) {
     const { user } = req;
@@ -121,7 +116,6 @@ export class CustomerOnboardingController {
     }
     return this.customerOnboardingService.processCustomerOnboarding(
       id,
-      customerOnboardingProcessDto,
       req.user.userId,
     );
   }

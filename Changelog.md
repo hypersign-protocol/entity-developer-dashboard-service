@@ -3,6 +3,9 @@
 ## [Unreleased]
 ## [3.17.3] - 2026-10-01
 - Updated access control for /customer-onboarding/{id}/process: superadmins and the onboarding owner can now access the endpoint.
+- Added re-usable function to calculate SSI and KYC credit based on service type.
+- Removed credit detail from request body of post `/api/v1/customer-onboarding/{id}/process`.
+
 
 ## [3.16.3] - 2026-09-30
 ### Modified

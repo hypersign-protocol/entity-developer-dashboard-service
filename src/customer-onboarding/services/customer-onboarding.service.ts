@@ -14,10 +14,7 @@ import getOnboardingApprovedNotificationMail from 'src/mail-notification/constan
 import { UserRepository } from 'src/user/repository/user.repository';
 import { UserRole } from 'src/user/schema/user.schema';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
-import {
-  CreditDetail,
-  CustomerOnboardingProcessDto,
-} from '../dto/customer-onboarding-process.dto';
+import { CreditDetail } from '../dto/customer-onboarding-process.dto';
 import {
   AppAuthService,
   GRANT_TYPES,
@@ -36,6 +33,7 @@ import {
   OnboardingStep,
   StepStatus,
   SupportedDocument,
+  TimeUnit,
 } from '../constants/enum';
 import {
   CustomerOnboarding,
@@ -377,6 +375,54 @@ export class CustomerOnboardingService {
     ].some((service) => interestedService?.includes(service));
   }
 
+  private calculateOnboardingCreditAmounts(
+    numberOfVerifications: number,
+    interestedServices: InterestedService[],
+  ) {
+    if (!Number.isInteger(numberOfVerifications) || numberOfVerifications < 1) {
+      throw new BadRequestException([
+        'numberOfVerifications must be a positive integer',
+      ]);
+    }
+
+    const hasService = (service: InterestedService) =>
+      interestedServices?.includes(service) ?? false;
+    // These services enable BabyJubJub/ZKP support in the onboarding flow.
+    const zkpServices = [
+      InterestedService.PROOF_OF_PERSONHOOD,
+      InterestedService.AGE_VERIFICATION,
+    ];
+    const isZkpOnly =
+      interestedServices?.length > 0 &&
+      interestedServices.every((service) => zkpServices.includes(service));
+
+    if (hasService(InterestedService.AADHAR_VERIFICATION)) {
+      return { kycCreditAmount: 50 * 15, ssiCreditAmount: 100 };
+    }
+
+    if (isZkpOnly) {
+      return {
+        kycCreditAmount: 104 * numberOfVerifications,
+        ssiCreditAmount:  420 * numberOfVerifications,
+      };
+    }
+
+    const creditAmount = 75 * numberOfVerifications;
+    return {
+      kycCreditAmount: creditAmount,
+      ssiCreditAmount: 420 * numberOfVerifications,
+    };
+  }
+
+  private createOnboardingCreditDetail(amount: number): CreditDetail {
+    return {
+      amount,
+      validityPeriod: 15,
+      validityPeriodUnit: TimeUnit.Days,
+      amountDenom: 'uhid',
+    };
+  }
+
   private shouldEnableProofOfAge(interestedService?: InterestedService[]) {
     return (
       interestedService?.includes(InterestedService.AGE_VERIFICATION) ?? false
@@ -427,7 +473,6 @@ export class CustomerOnboardingService {
    */
   async processCustomerOnboarding(
     id: string,
-    customerOnboardingProcessDto: CustomerOnboardingProcessDto,
     superAdminUserId,
   ) {
     Logger.log(
@@ -448,22 +493,28 @@ export class CustomerOnboardingService {
       didDocument: any;
 
     try {
-      const ssiCreditDetail: CreditDetail =
-        customerOnboardingProcessDto.ssiCreditDetail;
-      const kycCreditDetail: CreditDetail =
-        customerOnboardingProcessDto.kycCreditDetail;
-
       // Validate and fetch customer onboarding details
       const customerOnboardingData =
         await this.customerOnboardingRepository.findCustomerOnboardingById({
           _id: id,
         });
-
+console.log(customerOnboardingData)
       if (!customerOnboardingData) {
         throw new BadRequestException([
           `Customer onboarding detail not found for id: ${id}`,
         ]);
       }
+      const { kycCreditAmount, ssiCreditAmount } =
+        this.calculateOnboardingCreditAmounts(
+          50,
+          customerOnboardingData.interestedService,
+        );
+        console.log(kycCreditAmount, ssiCreditAmount);
+      const ssiCreditDetail =
+        this.createOnboardingCreditDetail(ssiCreditAmount);
+      const kycCreditDetail =
+        this.createOnboardingCreditDetail(kycCreditAmount);
+
       // Initialize configuration
       const { companyName, domain, userId, companyLogo, customerEmail } =
         customerOnboardingData;

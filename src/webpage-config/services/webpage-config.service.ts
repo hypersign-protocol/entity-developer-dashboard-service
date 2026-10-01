@@ -442,14 +442,8 @@ export class WebpageConfigService {
       grantType === GRANT_TYPES.access_service_kyb
         ? `${appId}_${grantType}`
         : appId;
-    const cached = await redisClient.get(generateHash(key));
-    if (cached) return JSON.parse(cached);
-    const serviceDetail = await this.appRepository.findOne({ appId });
-    if (!serviceDetail) {
-      throw new BadRequestException([
-        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
-      ]);
-    }
+    const redisKey = generateHash(key);
+    const cached = await redisClient.get(redisKey);
     const defaultAccessList = getAccessListForModule(
       tokenModule,
       serviceType,
@@ -460,11 +454,41 @@ export class WebpageConfigService {
       serviceType,
       [],
     );
+    const accessListHash = generateHash(JSON.stringify(validateAccessList));
+    if (cached) {
+      const cachedServiceDetail = JSON.parse(cached);
+      if (cachedServiceDetail.accessListHash === accessListHash) {
+        return cachedServiceDetail;
+      }
+
+      const serviceDetail = await this.appRepository.findOne({ appId });
+      if (!serviceDetail) {
+        throw new BadRequestException([
+          WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
+        ]);
+      }
+      await this.appAuthService.storeDataInRedis(
+        grantType,
+        serviceDetail,
+        validateAccessList,
+        redisKey,
+        accessListHash,
+        true,
+      );
+      return serviceDetail;
+    }
+    const serviceDetail = await this.appRepository.findOne({ appId });
+    if (!serviceDetail) {
+      throw new BadRequestException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
+      ]);
+    }
     await this.appAuthService.storeDataInRedis(
       grantType,
       serviceDetail,
       validateAccessList,
-      generateHash(key),
+      redisKey,
+      accessListHash,
     );
     return serviceDetail;
   }

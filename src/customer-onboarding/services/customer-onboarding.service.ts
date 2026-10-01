@@ -628,6 +628,10 @@ export class CustomerOnboardingService {
                       this.config.get<string>('SSI_API_DOMAIN'),
                       false,
                     ),
+                    urlSanitizer(
+                      this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
+                      false,
+                    ),
                   ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,

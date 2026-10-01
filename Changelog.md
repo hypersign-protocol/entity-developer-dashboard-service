@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+## [3.17.3] - 2026-10-01
+- Updated access control for /customer-onboarding/{id}/process: superadmins and the onboarding owner can now access the endpoint.
+
 ## [3.16.3] - 2026-09-30
 ### Modified
 - Added some new services to the Interested Services list.

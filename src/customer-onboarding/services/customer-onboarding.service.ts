@@ -214,7 +214,7 @@ export class CustomerOnboardingService {
           'You are not authorized to access this resource',
         ]);
       }
-      return customerOnboardingData;
+      return this.withLiveOnboardingProgress(customerOnboardingData);
     } catch (e: any) {
       Logger.error(
         'Error occured while fetching onboarding detail',
@@ -567,6 +567,13 @@ export class CustomerOnboardingService {
       }
       let onboardingStatus;
       let userDetail = await this.userRepository.findOne({ userId });
+      const progressKey = this.getOnboardingProgressKey(id);
+      await this.storeOnboardingProgress(
+        progressKey,
+        customerOnboardingData,
+        onboardingLogs,
+        CreditStatus.PROCESSING,
+      );
       // Process each step
       for (const step of remainingSteps) {
         try {
@@ -1260,10 +1267,22 @@ export class CustomerOnboardingService {
             }
           }
           this.logStepSuccess(onboardingLogs, step as OnboardingStep);
+          await this.storeOnboardingProgress(
+            progressKey,
+            customerOnboardingData,
+            onboardingLogs,
+            onboardingStatus || CreditStatus.PROCESSING,
+          );
         } catch (error: any) {
           Logger.error(error, error?.stack, 'CustomerOnboardingService');
           this.logStepFailure(onboardingLogs, step as OnboardingStep, error);
           onboardingStatus = CreditStatus.FAILED;
+          await this.storeOnboardingProgress(
+            progressKey,
+            customerOnboardingData,
+            onboardingLogs,
+            onboardingStatus,
+          );
           break;
         }
       }
@@ -1280,6 +1299,16 @@ export class CustomerOnboardingService {
           ),
         },
       );
+      try {
+        await redisClient.del(progressKey);
+      } catch (error: any) {
+        Logger.warn(
+          `Could not clear live onboarding progress: ${
+            error?.message || error
+          }`,
+          'CustomerOnboardingService',
+        );
+      }
       // Check for failures
       const failed = onboardingLogs.find((l) => l.status === StepStatus.FAILED);
       if (failed) {
@@ -1328,6 +1357,58 @@ export class CustomerOnboardingService {
       { to, subject, message, cc },
       mailType,
     );
+  }
+
+  private getOnboardingProgressKey(id: string): string {
+    return `customer-onboarding:progress:${id}`;
+  }
+
+  private async storeOnboardingProgress(
+    key: string,
+    onboardingData: CustomerOnboarding,
+    logs: LogDetail[],
+    onboardingStatus: CreditStatus,
+  ): Promise<void> {
+    const progress = {
+      onboardingStatus,
+      logs: this.mergeLogs((onboardingData.logs || []) as LogDetail[], logs),
+    };
+    // Expire abandoned snapshots after 30 minutes so stale progress cannot mask the database.
+    try {
+      await redisClient.set(key, JSON.stringify(progress), 'EX', 60 * 30);
+    } catch (error: any) {
+      Logger.warn(
+        `Could not store live onboarding progress: ${error?.message || error}`,
+        'CustomerOnboardingService',
+      );
+    }
+  }
+
+  private async withLiveOnboardingProgress<T extends object>(
+    onboardingData: T,
+  ): Promise<T> {
+    const id = (onboardingData as any)._id?.toString();
+    if (!id) return onboardingData;
+
+    try {
+      const progressJson = await redisClient.get(
+        this.getOnboardingProgressKey(id),
+      );
+      if (!progressJson) return onboardingData;
+      const progress = JSON.parse(progressJson);
+      return Object.assign(onboardingData, {
+        onboardingStatus: progress.onboardingStatus,
+        logs: progress.logs,
+      });
+    } catch (error: any) {
+      Logger.warn(
+        `Could not read live onboarding progress for ${id}: ${
+          error?.message || error
+        }`,
+        'CustomerOnboardingService',
+      );
+      return onboardingData;
+    }
   }
 
   private async notifySuperAdminsOnOnboardingFailure(
@@ -1461,7 +1542,7 @@ export class CustomerOnboardingService {
           `No onboarding detail found for user with id: ${user.userId}`,
         ]);
       }
-      return userOnboardingDetail;
+      return this.withLiveOnboardingProgress(userOnboardingDetail);
     } catch (e: any) {
       Logger.error(
         'Issue while fetching userOnboardingDetail',

@@ -44,6 +44,7 @@ import {
   evaluateAccessPolicy,
   generateHash,
   getAccessListForModule,
+  ONBOARDING_CONFIG,
   sanitizeUrl,
 } from 'src/utils/utils';
 import { RoleRepository } from 'src/roles/repository/role.repository';
@@ -412,7 +413,10 @@ export class CustomerOnboardingService {
       interestedServices.every((service) => zkpServices.includes(service));
 
     if (hasService(InterestedService.AADHAR_VERIFICATION)) {
-      return { kycCreditAmount: 50 * 15, ssiCreditAmount: 100 };
+      return {
+        kycCreditAmount: numberOfVerifications * 15,
+        ssiCreditAmount: 100,
+      };
     }
 
     if (isZkpOnly) {
@@ -426,15 +430,6 @@ export class CustomerOnboardingService {
     return {
       kycCreditAmount: creditAmount,
       ssiCreditAmount: 420 * numberOfVerifications,
-    };
-  }
-
-  private createOnboardingCreditDetail(amount: number): CreditDetail {
-    return {
-      amount,
-      validityPeriod: 15,
-      validityPeriodUnit: TimeUnit.Days,
-      amountDenom: 'uhid',
     };
   }
 
@@ -517,13 +512,21 @@ export class CustomerOnboardingService {
       }
       const { kycCreditAmount, ssiCreditAmount } =
         this.calculateOnboardingCreditAmounts(
-          50,
+          ONBOARDING_CONFIG.TOTAL_VERIFICATION,
           customerOnboardingData.interestedService,
         );
-      const ssiCreditDetail =
-        this.createOnboardingCreditDetail(ssiCreditAmount);
-      const kycCreditDetail =
-        this.createOnboardingCreditDetail(kycCreditAmount);
+      const ssiCreditDetail = {
+        amount: ssiCreditAmount,
+        validityPeriod: ONBOARDING_CONFIG.EXPIRY,
+        validityPeriodUnit: TimeUnit.Days,
+        amountDenom: 'uhid',
+      };
+      const kycCreditDetail = {
+        amount: kycCreditAmount,
+        validityPeriod: ONBOARDING_CONFIG.EXPIRY,
+        validityPeriodUnit: TimeUnit.Days,
+        amountDenom: 'uhid',
+      };
 
       // Initialize configuration
       const { companyName, domain, userId, companyLogo, customerEmail } =
@@ -570,7 +573,7 @@ export class CustomerOnboardingService {
       }
       let onboardingStatus;
       let userDetail = await this.userRepository.findOne({ userId });
-      const progressKey = this.getOnboardingProgressKey(id);
+      const progressKey = `customer-onboarding:progress:${id}`;
       await this.storeOnboardingProgress(
         progressKey,
         customerOnboardingData,
@@ -1369,10 +1372,6 @@ export class CustomerOnboardingService {
     );
   }
 
-  private getOnboardingProgressKey(id: string): string {
-    return `customer-onboarding:progress:${id}`;
-  }
-
   private async storeOnboardingProgress(
     key: string,
     onboardingData: CustomerOnboarding,
@@ -1402,7 +1401,7 @@ export class CustomerOnboardingService {
 
     try {
       const progressJson = await redisClient.get(
-        this.getOnboardingProgressKey(id),
+        `customer-onboarding:progress:${id}`,
       );
       if (!progressJson) return onboardingData;
       const progress = JSON.parse(progressJson);

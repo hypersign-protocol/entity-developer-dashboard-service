@@ -242,3 +242,9 @@ export class VerifierParamsDto {
   @IsMongoId({ message: 'Invalid verifier id' })
   id: string;
 }
+
+export const ONBOARDING_CONFIG = {
+
+  TOTAL_VERIFICATION: 50,
+  EXPIRY: 15, // in days
+}

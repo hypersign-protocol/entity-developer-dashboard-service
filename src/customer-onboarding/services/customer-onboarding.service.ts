@@ -46,6 +46,7 @@ import {
   getAccessListForModule,
   ONBOARDING_CONFIG,
   sanitizeUrl,
+  sumCatalogCreditCost,
 } from 'src/utils/utils';
 import { RoleRepository } from 'src/roles/repository/role.repository';
 import { ONBORDING_CONSTANT_DATA } from '../constants/en';
@@ -64,6 +65,9 @@ import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { VerificationMethodTypes } from 'src/utils/generated/client/enums';
 import { Types } from 'mongoose';
 import { CreditSourceEnum } from 'src/credits/schemas/credit.schema';
+import { catalog as kycCreditCatalog } from '@hypersign-protocol/credit-middleware';
+import { catalog as ssiCreditCatalog } from '@hypersign-protocol/credit-middleware-ssi';
+import type { OnboardingCreditAmounts } from '../dto/onboarding-credit-amounts.interface';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -329,6 +333,7 @@ export class CustomerOnboardingService {
     serviceInfo: { appId: string; subdomain: string },
     superAdminUserId: string,
     referenceId: string,
+    onChainAllowanceAmount?: number,
   ) {
     Logger.log(
       `Inside handleCreditService() to fund credit to the service with appId ${serviceInfo.appId}`,
@@ -345,43 +350,8 @@ export class CustomerOnboardingService {
       superAdminUserId,
       CreditSourceEnum.CUSTOMER_ONBOARDING,
       referenceId,
+      onChainAllowanceAmount?.toString(),
     );
-    // const creditPayload = {
-    //   serviceId: serviceInfo.appId,
-    //   purpose: 'CreditRecharge',
-    //   amount: creditDetail.amount,
-    //   validityPeriod: creditDetail.validityPeriod,
-    //   validityPeriodUnit: creditDetail.validityPeriodUnit,
-    //   amountDenom: creditDetail.amountDenom,
-    //   subdomain: serviceInfo.subdomain,
-    //   grantType,
-    //   whitelistedCors,
-    //   accessList,
-    //   creditedBy: superAdminUserId,
-    // };
-    // const creditToken = await this.generateCreditToken(creditPayload, secret);
-    // const headers: Record<string, string> = {
-    //   'Content-Type': 'application/json',
-    //   'x-api-credit-token': creditToken,
-    // };
-    // const requestOptions: any = {
-    //   method: 'POST',
-    //   headers,
-    // };
-    // if (grantType === GRANT_TYPES.access_service_ssi) {
-    //   const authzCreditDetail = await this.creditService.grantSSIAllowance(
-    //     serviceInfo.appId,
-    //     '5000000',
-    //   );
-    //   requestOptions.body = JSON.stringify({
-    //     ...authzCreditDetail,
-    //   });
-    // }
-    // await this.makeExternalRequest(
-    //   `${sanitizeUrl(tenantUrl, true)}api/v1/credit`,
-    //   requestOptions,
-    //   'Failed to credit service',
-    // );
   }
 
   private shouldUseBabyJubJubIssuer(interestedService?: InterestedService[]) {
@@ -394,42 +364,89 @@ export class CustomerOnboardingService {
   private calculateOnboardingCreditAmounts(
     numberOfVerifications: number,
     interestedServices: InterestedService[],
-  ) {
-    if (!Number.isInteger(numberOfVerifications) || numberOfVerifications < 1) {
+    validityPeriod: number,
+  ): OnboardingCreditAmounts {
+    if (
+      !Number.isSafeInteger(numberOfVerifications) ||
+      numberOfVerifications < 1
+    ) {
       throw new BadRequestException([
         'numberOfVerifications must be a positive integer',
       ]);
     }
-
-    const hasService = (service: InterestedService) =>
-      interestedServices?.includes(service) ?? false;
-    // These services enable BabyJubJub/ZKP support in the onboarding flow.
-    const zkpServices = [
-      InterestedService.PROOF_OF_PERSONHOOD,
-      InterestedService.AGE_VERIFICATION,
-    ];
-    const isZkpOnly =
-      interestedServices?.length > 0 &&
-      interestedServices.every((service) => zkpServices.includes(service));
-
-    if (hasService(InterestedService.AADHAR_VERIFICATION)) {
-      return {
-        kycCreditAmount: numberOfVerifications * 15,
-        ssiCreditAmount: 100,
-      };
+    if (!Number.isSafeInteger(validityPeriod) || validityPeriod < 1) {
+      throw new BadRequestException([
+        'validityPeriod must be a positive integer',
+      ]);
     }
 
-    if (isZkpOnly) {
-      return {
-        kycCreditAmount: 104 * numberOfVerifications,
-        ssiCreditAmount: 420 * numberOfVerifications,
-      };
+    // Aadhaar is selected explicitly; other onboarding service combinations
+    // use the KYC verification route set, as requested.
+    const isAadhaar =
+      interestedServices?.includes(InterestedService.AADHAR_VERIFICATION) ??
+      false;
+    const verificationRoutes = isAadhaar
+      ? ONBOARDING_CONFIG.AADHAAR_VERIFICATION_ROUTES
+      : ONBOARDING_CONFIG.KYC_VERIFICATION_ROUTES;
+
+    const kycCostPerVerification = sumCatalogCreditCost(
+      kycCreditCatalog,
+      'POST',
+      verificationRoutes,
+      'API_CREDIT',
+    );
+
+    const credentialIssueApiCost = sumCatalogCreditCost(
+      ssiCreditCatalog,
+      'POST',
+      ONBOARDING_CONFIG.SSI_CREDENTIAL_ISSUE_ROUTES,
+      'API_CREDIT',
+    );
+    const credentialIssueHidCost = sumCatalogCreditCost(
+      ssiCreditCatalog,
+      'POST',
+      ONBOARDING_CONFIG.SSI_CREDENTIAL_ISSUE_ROUTES,
+      'BLOCKCHAIN_TXN_CREDIT',
+    );
+    const didApiCost = sumCatalogCreditCost(
+      ssiCreditCatalog,
+      'POST',
+      ONBOARDING_CONFIG.SSI_DID_ROUTES,
+      'API_CREDIT',
+    );
+    const didHidCost = sumCatalogCreditCost(
+      ssiCreditCatalog,
+      'POST',
+      ONBOARDING_CONFIG.SSI_DID_ROUTES,
+      'BLOCKCHAIN_TXN_CREDIT',
+    );
+
+    // Each verification API step issues one credential. DID creation and
+    // registration happen once for the onboarding, not once per verification.
+    const credentialIssueCount =
+      numberOfVerifications * verificationRoutes.length;
+    const ssiCreditAmount =
+      credentialIssueCount * credentialIssueApiCost + didApiCost;
+    const ssiHidAllowanceAmount =
+      credentialIssueCount * credentialIssueHidCost + didHidCost;
+    const kycCreditAmount = kycCostPerVerification * numberOfVerifications;
+
+    if (
+      !Number.isSafeInteger(credentialIssueCount) ||
+      !Number.isSafeInteger(kycCreditAmount) ||
+      !Number.isSafeInteger(ssiCreditAmount) ||
+      !Number.isSafeInteger(ssiHidAllowanceAmount)
+    ) {
+      throw new InternalServerErrorException(
+        'Calculated onboarding credit requirements exceed the maximum safe integer',
+      );
     }
 
-    const creditAmount = 75 * numberOfVerifications;
     return {
-      kycCreditAmount: creditAmount,
-      ssiCreditAmount: 420 * numberOfVerifications,
+      kycCreditAmount,
+      ssiCreditAmount,
+      ssiHidAllowanceAmount,
+      validityPeriod,
     };
   }
 
@@ -510,20 +527,25 @@ export class CustomerOnboardingService {
           `Customer onboarding detail not found for id: ${id}`,
         ]);
       }
-      const { kycCreditAmount, ssiCreditAmount } =
-        this.calculateOnboardingCreditAmounts(
-          ONBOARDING_CONFIG.TOTAL_VERIFICATION,
-          customerOnboardingData.interestedService,
-        );
+      const {
+        kycCreditAmount,
+        ssiCreditAmount,
+        ssiHidAllowanceAmount,
+        validityPeriod,
+      } = this.calculateOnboardingCreditAmounts(
+        ONBOARDING_CONFIG.TOTAL_VERIFICATION,
+        customerOnboardingData.interestedService,
+        ONBOARDING_CONFIG.EXPIRY,
+      );
       const ssiCreditDetail = {
         amount: ssiCreditAmount,
-        validityPeriod: ONBOARDING_CONFIG.EXPIRY,
+        validityPeriod,
         validityPeriodUnit: TimeUnit.Days,
         amountDenom: 'uhid',
       };
       const kycCreditDetail = {
         amount: kycCreditAmount,
-        validityPeriod: ONBOARDING_CONFIG.EXPIRY,
+        validityPeriod,
         validityPeriodUnit: TimeUnit.Days,
         amountDenom: 'uhid',
       };
@@ -736,6 +758,7 @@ export class CustomerOnboardingService {
                 },
                 superAdminUserId,
                 `customer-onboarding:${id}:ssi`,
+                ssiHidAllowanceAmount,
               );
               Logger.debug(
                 'CREDIT_SSI_SERVICE step ends',

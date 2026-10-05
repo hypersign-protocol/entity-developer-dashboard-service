@@ -288,7 +288,6 @@ export function sumCatalogCreditCost(
     const routeCharges = route.charges.filter(
       (charge) => charge.creditType === creditType,
     );
-    // This route adds zero; keep the amount accumulated from earlier routes.
     if (routeCharges.length === 0) return total;
 
     const routeCost = routeCharges.reduce(

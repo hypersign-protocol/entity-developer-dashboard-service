@@ -1,7 +1,7 @@
 # Changelog
 
 ## [Unreleased]
-## [3.17.3] - 2026-10-01
+## [3.17.3] - 2026-10-05
 
 - Updated access control for `/customer-onboarding/{id}/process`: superadmins and the onboarding owner can now access the endpoint.
 - Added a reusable function to calculate SSI and KYC credits based on the service type.
@@ -9,7 +9,7 @@
 - Updated `POST /api/v1/customer-onboarding` to automatically process credits based on the type of service requested by the user.
 - Added an L1 support email to superadmins to trigger re-onboarding in case of onboarding failure.
 - Implemented Redis to display the live status of the onboarding process.
-- 
+
 ## [3.16.3] - 2026-09-30
 ### Modified
 - Added some new services to the Interested Services list.

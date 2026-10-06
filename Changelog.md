@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+## [3.16.4] - 2026-10-06
+### Updated
+- Mail footer
+- Twitter link
+
 ## [3.16.3] - 2026-09-30
 ### Modified
 - Added some new services to the Interested Services list.

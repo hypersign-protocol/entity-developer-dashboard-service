@@ -137,6 +137,8 @@ export class CustomerOnboardingService {
         onboardingId: onboardingData['_id'].toString(),
         companyName,
         companyDomain: domain,
+        companyLogo: createCustomerOnboardingDto.companyLogo || '',
+        billingAddress: createCustomerOnboardingDto.billingAddress || '',
         companyRegistrationNumber: registrationNumber,
         companyType: String(type),
         linkedinUrl,
@@ -148,6 +150,7 @@ export class CustomerOnboardingService {
         yearlyVolume,
         businessField,
         loggedInEmail: loggedInUserEmail,
+        referralSource: createCustomerOnboardingDto.referralSource || '',
       });
       const superAdminDetails = await this.userRepository.find({
         role: UserRole.SUPER_ADMIN,
@@ -625,6 +628,10 @@ export class CustomerOnboardingService {
                       this.config.get<string>('SSI_API_DOMAIN'),
                       false,
                     ),
+                    urlSanitizer(
+                      this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
+                      false,
+                    ),
                   ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
@@ -1026,6 +1033,9 @@ export class CustomerOnboardingService {
                   reason:
                     'The app is requesting your KYC data to provide you service',
                 },
+                isEmailNotificationEnabled: false,
+                isVaultEnabled: false,
+                isWidgetLogin: false,
               };
               widgetConfigDetail = await this.makeExternalRequest(
                 `${sanitizeUrl(

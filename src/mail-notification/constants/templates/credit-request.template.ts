@@ -9,6 +9,8 @@ export default function getCreditRequestNotificationMail(customer: {
   onboardingId: string;
   companyName: string;
   companyDomain?: string;
+  companyLogo?: string;
+  billingAddress?: string;
   companyRegistrationNumber?: string;
   companyType: string;
   linkedinUrl?: string;
@@ -20,18 +22,28 @@ export default function getCreditRequestNotificationMail(customer: {
   yearlyVolume: string;
   businessField: string[];
   loggedInEmail: string;
+  referralSource?: string;
 }) {
   const salutationMessage = 'New Credit Request Received';
+  const referralSource = customer.referralSource?.trim() || '';
+  const displayReferralSource = referralSource.replace(/^other\s*:\s*/i, '');
 
   const optionalFields = [
+    ['Company Domain', customer.companyDomain],
+    ['Company Logo', customer.companyLogo],
+    ['Company Registration Number', customer.companyRegistrationNumber],
+    ['Billing Address', customer.billingAddress],
+    ['Phone Number', customer.phoneNumber],
     ['LinkedIn URL', customer.linkedinUrl],
     ['Twitter URL', customer.twitterUrl],
     ['Telegram URL', customer.telegramUrl],
+    ['How did you hear about us?', displayReferralSource],
   ]
-    .filter(([, value]) => value)
     .map(
       ([label, value]) =>
-        `<li style="margin:4px 0;"><strong>${label}:</strong> ${value}</li>`,
+        `<li style="margin:4px 0;"><strong>${label}:</strong> ${
+          value || ''
+        }</li>`,
     )
     .join('');
 
@@ -66,21 +78,13 @@ export default function getCreditRequestNotificationMail(customer: {
       <li style="margin:4px 0;"><strong>Company Name:</strong> ${
         customer.companyName
       }</li>
-      <li style="margin:4px 0;"><strong>Company Domain:</strong> ${
-        customer.companyDomain || ''
-      }</li>
-      <li style="margin:4px 0;"><strong>Company Registration Number:</strong> ${
-        customer.companyRegistrationNumber || ''
-      }</li>
       <li style="margin:4px 0;"><strong>Company Type:</strong> ${
         customer.companyType
       }</li>
       <li style="margin:4px 0;"><strong>Country:</strong> ${
         customer.country || ''
       }</li>
-      <li style="margin:4px 0;"><strong>Phone Number:</strong> ${
-        customer.phoneNumber || ''
-      }</li>
+      ${optionalFields}
       <li style="margin:4px 0;"><strong>Interested Services:</strong> ${customer.interestedService.join(
         ', ',
       )}</li>
@@ -90,7 +94,6 @@ export default function getCreditRequestNotificationMail(customer: {
       <li style="margin:4px 0;"><strong>Business Fields:</strong> ${customer.businessField.join(
         ', ',
       )}</li>
-      ${optionalFields}
     </ul>
 
     <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px;">
@@ -100,6 +103,5 @@ export default function getCreditRequestNotificationMail(customer: {
 
   const container = getContainer(message, salutationMessage);
   const body = getBody(container);
-  const html = getHtml(body);
-  return html;
+  return getHtml(body);
 }

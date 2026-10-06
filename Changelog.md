@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+## [3.16.3] - 2026-09-30
+### Modified
+- Added some new services to the Interested Services list.
+- Added a new field, referralSource, to track how users came to know about us.
+- Added validation for AADHAR_VERIFICATION, PAN_VERIFICATION, and BANK_VERIFICATION services. These services can only be selected if the user is from India.
+- Disable built-in-login&vault-setp and email notification while onboarding
+- Fixed access list caching issue
 ## [3.16.2] - 2026-09-28
 ### Added
 - Exposed session read access for dashboard

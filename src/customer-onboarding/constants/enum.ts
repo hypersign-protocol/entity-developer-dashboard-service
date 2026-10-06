@@ -95,6 +95,11 @@ export enum InterestedService {
   COLLECT_WALLET = 'Collect Wallet Address',
   PROOF_OF_PERSONHOOD = 'Proof of Personhood',
   AADHAR_VERIFICATION = 'Aadhaar Verification',
+  PAN_VERIFICATION = 'PAN Verification',
+  BANK_VERIFICATION = 'Bank Verification',
+  BIOMETRIC_VERIFICATION = 'Biometric Verification & Liveness Detection',
+  DEVICE_AND_RISK_INTELLIGENCE = 'Device & Risk Intelligence',
+  DEEPFAKE_DETECTION = 'Deepfake Detection',
 }
 
 export enum YearlyVolume {
@@ -102,6 +107,13 @@ export enum YearlyVolume {
   ONEKONE_TWENTYK = '1,001 - 20,000',
   TWENTYKONE_FIFTYK = '20,000 - 50,000',
   PLUS_FIFTYK = '+50,000',
+}
+
+export enum MonthlyVolume {
+  ZERO_ONEK = '0 - 1,000',
+  ONEK_FIVEK = '1,000 - 5,000',
+  FIVEK_TENK = '5,000 - 10,000',
+  PLUS_TENK = '+10,000',
 }
 
 export enum BusinessField {

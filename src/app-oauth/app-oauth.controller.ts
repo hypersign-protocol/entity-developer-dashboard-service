@@ -81,6 +81,7 @@ export class AppOauthController {
     required: false,
     enum: GRANT_TYPES,
   })
+  @ApiQuery({ name: 'businessId', required: false, type: String })
   @UsePipes(ValidationPipe)
   generateAccessToken(
     @Headers('X-Api-Secret-Key') apiSectretKey: string,
@@ -88,12 +89,14 @@ export class AppOauthController {
     @Headers('ExpiresIn') oauthexpiresin: string,
     @OauthTokenExpiryHeader() expiresin,
     @Query('grant_type') grantType,
+    @Query('businessId') businessId?: string,
   ): Promise<{ access_token; expiresIn; tokenType }> {
     Logger.log('generateAccessToken() method: starts', 'AppOAuthController');
     return this.appAuthService.generateAccessToken(
       appSecreatKey,
       expiresin,
       grantType,
+      businessId
     );
   }
 

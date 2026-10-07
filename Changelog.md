@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+## [3.17.0] - 2026-10-07
+### Added
+- Added new access for `/oauth` api for access kyb apis by thirdparty customer.
+- Added `businessId` as optional query parameter in `/oauth` api.
 
 ## [3.16.5] - 2026-10-06
 
@@ -63,8 +67,7 @@
 ## [3.14.0] - 2026-07-14
 
 ### Changed
-
-- Added a way to track credit issuer.
+- Added a way to trak credit issuer.
 
 ## [3.13.1] - 2026-07-06
 

@@ -96,7 +96,7 @@ export class AppOauthController {
       appSecreatKey,
       expiresin,
       grantType,
-      businessId
+      businessId,
     );
   }
 

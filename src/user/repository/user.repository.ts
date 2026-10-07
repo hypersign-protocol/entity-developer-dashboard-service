@@ -36,11 +36,14 @@ export class UserRepository {
       new: true,
     });
   }
-  async find(userFilterQuery: FilterQuery<User>): Promise<User[]> {
+  async find(
+    userFilterQuery: FilterQuery<User>,
+    projection?: Record<string, any>,
+  ): Promise<User[]> {
     Logger.log(
       'find() method: starts, finding particular user from db',
       'UserRepository',
     );
-    return this.userModel.find(userFilterQuery).lean();
+    return this.userModel.find(userFilterQuery, projection).lean();
   }
 }

@@ -59,6 +59,7 @@ export class WebpageConfigService {
       pageTitle,
       pageType = 'kyc',
       contactEmail,
+      linkedWidgetConfigIds,
     } = createWebpageConfigDto;
     const serviceDetail = await this.appRepository.findOne({
       appId: serviceId,
@@ -105,6 +106,9 @@ export class WebpageConfigService {
       // tenantUrl,
       generatedUrl,
       contactEmail,
+      linkedWidgetConfigIds: linkedWidgetConfigIds?.map(
+        (id) => new Types.ObjectId(id),
+      ),
     };
     Logger.log('Before inserting webpage detail', 'WebpageConfigService');
     const webpageConfigData = await this.webPageConfigRepo.createwebPageConfig(
@@ -113,6 +117,9 @@ export class WebpageConfigService {
     const webpageConfigObject = webpageConfigData;
     return {
       ...webpageConfigObject,
+      linkedWidgetConfigIds: webpageConfigObject.linkedWidgetConfigIds?.map(
+        (id) => id.toString(),
+      ),
       serviceName: appName,
       developmentStage: env,
       tenantUrl,
@@ -150,6 +157,9 @@ export class WebpageConfigService {
     }
     return {
       ...webPAgeConfigData,
+      linkedWidgetConfigIds: webPAgeConfigData.linkedWidgetConfigIds?.map(
+        (id) => id.toString(),
+      ),
       serviceName: appName,
       developmentStage: env,
       logoUrl,
@@ -191,6 +201,9 @@ export class WebpageConfigService {
     });
     return {
       ...webpageConfiguration,
+      linkedWidgetConfigIds: webpageConfiguration.linkedWidgetConfigIds?.map(
+        (id) => id.toString(),
+      ),
       developmentStage: serviceDetail?.env as APP_ENVIRONMENT,
       serviceName: serviceDetail.appName,
       logoUrl: serviceDetail.logoUrl,
@@ -227,7 +240,12 @@ export class WebpageConfigService {
         'KYC service must have a dependent SSI service linked to it.',
       ]);
     }
-    const dataToUpdate = { ...updateWebpageConfigDto };
+    const dataToUpdate = {
+      ...updateWebpageConfigDto,
+      linkedWidgetConfigIds: updateWebpageConfigDto.linkedWidgetConfigIds?.map(
+        (id) => new Types.ObjectId(id),
+      ),
+    };
     delete dataToUpdate['_id'];
     if (updateWebpageConfigDto.expiryType) {
       const { expiryDate } = await this.generateExpiryDate(
@@ -253,6 +271,9 @@ export class WebpageConfigService {
     const env: APP_ENVIRONMENT = serviceDetail?.env as APP_ENVIRONMENT;
     return {
       ...webpageConfiguration,
+      linkedWidgetConfigIds: webpageConfiguration.linkedWidgetConfigIds?.map(
+        (id) => id.toString(),
+      ),
       serviceName: appName,
       developmentStage: env,
       logoUrl,
@@ -421,14 +442,8 @@ export class WebpageConfigService {
       grantType === GRANT_TYPES.access_service_kyb
         ? `${appId}_${grantType}`
         : appId;
-    const cached = await redisClient.get(generateHash(key));
-    if (cached) return JSON.parse(cached);
-    const serviceDetail = await this.appRepository.findOne({ appId });
-    if (!serviceDetail) {
-      throw new BadRequestException([
-        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
-      ]);
-    }
+    const redisKey = generateHash(key);
+    const cached = await redisClient.get(redisKey);
     const defaultAccessList = getAccessListForModule(
       tokenModule,
       serviceType,
@@ -439,11 +454,41 @@ export class WebpageConfigService {
       serviceType,
       [],
     );
+    const accessListHash = generateHash(JSON.stringify(validateAccessList));
+    if (cached) {
+      const cachedServiceDetail = JSON.parse(cached);
+      if (cachedServiceDetail.accessListHash === accessListHash) {
+        return cachedServiceDetail;
+      }
+
+      const serviceDetail = await this.appRepository.findOne({ appId });
+      if (!serviceDetail) {
+        throw new BadRequestException([
+          WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
+        ]);
+      }
+      await this.appAuthService.storeDataInRedis(
+        grantType,
+        serviceDetail,
+        validateAccessList,
+        redisKey,
+        accessListHash,
+        true,
+      );
+      return serviceDetail;
+    }
+    const serviceDetail = await this.appRepository.findOne({ appId });
+    if (!serviceDetail) {
+      throw new BadRequestException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
+      ]);
+    }
     await this.appAuthService.storeDataInRedis(
       grantType,
       serviceDetail,
       validateAccessList,
-      generateHash(key),
+      redisKey,
+      accessListHash,
     );
     return serviceDetail;
   }

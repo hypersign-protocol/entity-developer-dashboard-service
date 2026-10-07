@@ -12,6 +12,10 @@ import {
   ValidateNested,
   Matches,
   ValidateIf,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 import {
   BusinessField,
@@ -19,13 +23,40 @@ import {
   CreditStatus,
   CustomerType,
   InterestedService,
+  MonthlyVolume,
   OnboardingStep,
   StepStatus,
-  YearlyVolume,
 } from '../constants/enum';
 import { IsPhoneNumberByCountry } from 'src/utils/customDecorator/validate-phone-no-country.decorator';
 import { Type } from 'class-transformer';
 import { IsUrlOrBase64Image } from 'src/utils/customDecorator/IsUrlOrBase64Image.decorator';
+
+const INDIA_ONLY_SERVICES = [
+  InterestedService.AADHAR_VERIFICATION,
+  InterestedService.PAN_VERIFICATION,
+  InterestedService.BANK_VERIFICATION,
+];
+
+@ValidatorConstraint({ name: 'indiaInterestedServices', async: false })
+class IndiaInterestedServicesConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(services: unknown, args: ValidationArguments): boolean {
+    const country = (args.object as CustomerOnboardingBasicDto).country;
+    if (!Array.isArray(services)) return false;
+    return (
+      country === 'IN' ||
+      country === 'IND' ||
+      !services.some((service) =>
+        INDIA_ONLY_SERVICES.includes(service as InterestedService),
+      )
+    );
+  }
+
+  defaultMessage(): string {
+    return 'Aadhaar Verification, PAN Verification, and Bank Verification can only be selected when the country is India';
+  }
+}
 
 export class CustomerOnboardingBasicDto {
   @ApiProperty({
@@ -38,14 +69,9 @@ export class CustomerOnboardingBasicDto {
   @IsString()
   companyName: string;
 
-  @ApiProperty({
-    name: 'companyLogo',
-    description: 'logo url og company',
-    example: 'https://logo.com/logo.png',
-    required: false,
-  })
-  @IsOptional()
-  @IsNotEmpty()
+  @ValidateIf(
+    (_obj, value) => value !== undefined && value !== null && value !== '',
+  )
   @IsString()
   @IsUrlOrBase64Image()
   companyLogo?: string;
@@ -153,6 +179,23 @@ export class CustomerOnboardingBasicDto {
   )
   telegramUrl?: string;
   @ApiProperty({
+    name: 'referralSource',
+    description:
+      'How the customer heard about us. When using Other, include the detail as "Other: <detail>".',
+    example: 'Other: testing',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @ValidateIf(
+    (_o, value) => typeof value === 'string' && /^other\b/i.test(value.trim()),
+  )
+  @Matches(/^other\s*:\s*\S[\s\S]*$/i, {
+    message:
+      'referralSource must include a detail when using Other (e.g. Other: testing)',
+  })
+  referralSource?: string;
+  @ApiProperty({
     name: 'phoneNumber',
     description: 'Contact phone number of the company',
     example: '6234572090',
@@ -170,17 +213,19 @@ export class CustomerOnboardingBasicDto {
     isArray: true,
   })
   @ArrayNotEmpty()
+  @IsArray()
   @IsEnum(InterestedService, { each: true })
+  @Validate(IndiaInterestedServicesConstraint)
   interestedService: InterestedService[];
   @ApiProperty({
     name: 'yearlyVolume',
     description: 'Yearly verification volume',
-    example: YearlyVolume.ZERO_ONEK,
-    enum: YearlyVolume,
+    example: MonthlyVolume.ZERO_ONEK,
+    enum: MonthlyVolume,
   })
   @IsNotEmpty()
-  @IsEnum(YearlyVolume)
-  yearlyVolume: YearlyVolume;
+  @IsEnum(MonthlyVolume)
+  yearlyVolume: MonthlyVolume;
   @ApiProperty({
     name: 'businessField',
     description: 'Industry fields the company operates in',

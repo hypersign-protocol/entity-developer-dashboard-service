@@ -11,3 +11,7 @@ export class CreateMailNotificationDto {
   @IsString()
   inviteLink: string;
 }
+export enum CreditNotificationJobNames {
+  CREDIT_USAGE = 'credit-usage-notification',
+  CREDIT_EXPIRY = 'credit-expiry-notification',
+}

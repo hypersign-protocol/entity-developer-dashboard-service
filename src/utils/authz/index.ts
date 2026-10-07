@@ -1,7 +1,10 @@
 import { StdFee } from '@cosmjs/stargate';
 import { BasicAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/feegrant';
-import { MsgGrantAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/tx';
-import { MsgGrant } from 'cosmjs-types/cosmos/authz/v1beta1/tx';
+import {
+  MsgGrantAllowance,
+  MsgRevokeAllowance,
+} from 'cosmjs-types/cosmos/feegrant/v1beta1/tx';
+import { MsgGrant, MsgRevoke } from 'cosmjs-types/cosmos/authz/v1beta1/tx';
 import { GenericAuthorization } from 'cosmjs-types/cosmos/authz/v1beta1/authz';
 import { Timestamp } from 'cosmjs-types/google/protobuf/timestamp';
 import * as Long from 'long';
@@ -9,6 +12,7 @@ import { Coin } from 'cosmjs-types/cosmos/base/v1beta1/coin';
 
 export const MSG_CREATE_DID_TYPEURL = '/hypersign.ssi.v1.MsgRegisterDID';
 export const MSG_UPDATE_DID_TYPEURL = '/hypersign.ssi.v1.MsgUpdateDID';
+export const MSG_DEACTIVATE_DID_TYPEURL = '/hypersign.ssi.v1.MsgDeactivateDID';
 export const MSG_REGISTER_CREDENTIAL_STATUS =
   '/hypersign.ssi.v1.MsgRegisterCredentialStatus';
 export const MSG_REGISTER_CREDENTIAL_SCHEMA =
@@ -16,18 +20,17 @@ export const MSG_REGISTER_CREDENTIAL_SCHEMA =
 export const MSG_UPDATE_CREDENTIAL_STATUS =
   '/hypersign.ssi.v1.MsgUpdateCredentialStatus';
 
-function getExpirationDateInSeconds(periodInYears: number): Long {
-  const timeNowUnixTimestamp = Math.floor(Date.now() / 1000); // Get the current unix timestamp
-  const timeFutureUnixTimestamp: Long = Long.fromNumber(
+function getExpirationDateInSeconds(periodInYears = 1): Long {
+  const timeNowUnixTimestamp = Math.floor(Date.now() / 1000);
+  return Long.fromNumber(
     timeNowUnixTimestamp + 365 * 24 * 60 * 60 * periodInYears,
   );
-
-  return timeFutureUnixTimestamp;
 }
 export async function generateAuthzGrantTxnMessage(
   granteeAddress: string,
   granterAddress: string,
   grantMsgTypeUrl: string,
+  periodInYears = 1,
 ) {
   const authGrantMsg: MsgGrant = {
     granter: granterAddress,
@@ -42,7 +45,7 @@ export async function generateAuthzGrantTxnMessage(
         ).finish(),
       },
       expiration: Timestamp.fromPartial({
-        seconds: getExpirationDateInSeconds(1),
+        seconds: getExpirationDateInSeconds(periodInYears),
       }),
     },
   };
@@ -67,10 +70,28 @@ export async function generateAuthzGrantTxnMessage(
   };
 }
 
+export function generateAuthzRevokeTxnMessage(
+  granteeAddress: string,
+  granterAddress: string,
+  grantMsgTypeUrl: string,
+) {
+  const revokeMsg: MsgRevoke = {
+    granter: granterAddress,
+    grantee: granteeAddress,
+    msgTypeUrl: grantMsgTypeUrl,
+  };
+
+  return {
+    typeUrl: '/cosmos.authz.v1beta1.MsgRevoke',
+    value: revokeMsg,
+  };
+}
+
 export async function generatePerformFeegrantAllowanceTxn(
   granteeAddress: string,
   granterAddress: string,
   feeAllowanceInUhid: string,
+  periodInYears = 1,
 ) {
   const feeAllowanceAmount = feeAllowanceInUhid.split('u')[0];
   const feeAllowanceDenom = 'u' + feeAllowanceInUhid.split('u')[1];
@@ -95,7 +116,7 @@ export async function generatePerformFeegrantAllowanceTxn(
             }),
           ],
           expiration: Timestamp.fromPartial({
-            seconds: getExpirationDateInSeconds(1),
+            seconds: getExpirationDateInSeconds(periodInYears),
           }),
         }),
       ).finish(),
@@ -120,5 +141,20 @@ export async function generatePerformFeegrantAllowanceTxn(
   return {
     txMsg,
     fee,
+  };
+}
+
+export function generateFeegrantRevokeTxnMessage(
+  granteeAddress: string,
+  granterAddress: string,
+) {
+  const revokeAllowanceMsg: MsgRevokeAllowance = {
+    granter: granterAddress,
+    grantee: granteeAddress,
+  };
+
+  return {
+    typeUrl: '/cosmos.feegrant.v1beta1.MsgRevokeAllowance',
+    value: revokeAllowanceMsg,
   };
 }

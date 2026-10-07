@@ -91,6 +91,7 @@ export class CustomerOnboardingController {
   findOne(@Param('id') id: string, @Req() req: Request) {
     return this.customerOnboardingService.findOne(id, req.user);
   }
+  @UsePipes(new ValidationPipe())
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({
     description: 'Customer Onboarding detail updated successfully',

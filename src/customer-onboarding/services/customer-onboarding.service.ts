@@ -14,7 +14,10 @@ import getOnboardingApprovedNotificationMail from 'src/mail-notification/constan
 import { UserRepository } from 'src/user/repository/user.repository';
 import { UserRole } from 'src/user/schema/user.schema';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
-import { CustomerOnboardingProcessDto } from '../dto/customer-onboarding-process.dto';
+import {
+  CreditDetail,
+  CustomerOnboardingProcessDto,
+} from '../dto/customer-onboarding-process.dto';
 import {
   AppAuthService,
   GRANT_TYPES,
@@ -56,10 +59,11 @@ import getOnboardingRetryNotificationMail from 'src/mail-notification/constants/
 import { redisClient } from 'src/utils/redis.provider';
 import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 import { TokenModule } from 'src/config/access-matrix';
-import { AuthzCreditService } from 'src/credits/services/credits.service';
+import { CreditService } from 'src/credits/services/credits.service';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { VerificationMethodTypes } from 'src/utils/generated/client/enums';
 import { Types } from 'mongoose';
+import { CreditSourceEnum } from 'src/credits/schemas/credit.schema';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -73,7 +77,7 @@ export class CustomerOnboardingService {
     private readonly appAuthRepository: AppRepository,
     private readonly roleRepository: RoleRepository,
     private readonly webPageConfig: WebpageConfigService,
-    private readonly authzService: AuthzCreditService,
+    private readonly creditService: CreditService,
   ) {}
   /**
    * Creates a new customer onboarding record and notifies super admins
@@ -102,31 +106,52 @@ export class CustomerOnboardingService {
           throw new ConflictException['You can only create onboarding once']();
         }
       }
-      const { interestedService, companyName, twitterUrl, telegramUrl, type } =
-        createCustomerOnboardingDto;
+      const {
+        interestedService,
+        companyName,
+        domain,
+        registrationNumber,
+        linkedinUrl,
+        twitterUrl,
+        telegramUrl,
+        country,
+        phoneNumber,
+        yearlyVolume,
+        businessField,
+        type,
+        customerEmail,
+      } = createCustomerOnboardingDto;
       Logger.log('Before storing data in db', 'CustomerOnboardingService');
       const onboardingData =
         await this.customerOnboardingRepository.createCustomerOnboarding({
           ...createCustomerOnboardingDto,
           userId: user.userId,
         });
-      const requestedServices =
-        interestedService.length === 1
-          ? `${interestedService[0]} Service`
-          : `${interestedService.join(', ')} Services`;
-      const { customerEmail } = createCustomerOnboardingDto;
 
-      const message = getCreditRequestNotificationMail(
-        user.userId,
-        customerEmail,
-        requestedServices,
-        onboardingData['_id'].toString(),
+      const customerName =
+        user?.name || loggedInUserEmail?.split('@')[0] || 'User';
+      const message = getCreditRequestNotificationMail({
+        customerId: user.userId,
+        customerName,
+        customerEmail: customerEmail,
+        onboardingId: onboardingData['_id'].toString(),
         companyName,
-        String(type),
-        loggedInUserEmail,
+        companyDomain: domain,
+        companyLogo: createCustomerOnboardingDto.companyLogo || '',
+        billingAddress: createCustomerOnboardingDto.billingAddress || '',
+        companyRegistrationNumber: registrationNumber,
+        companyType: String(type),
+        linkedinUrl,
         twitterUrl,
         telegramUrl,
-      );
+        country,
+        phoneNumber,
+        interestedService,
+        yearlyVolume,
+        businessField,
+        loggedInEmail: loggedInUserEmail,
+        referralSource: createCustomerOnboardingDto.referralSource || '',
+      });
       const superAdminDetails = await this.userRepository.find({
         role: UserRole.SUPER_ADMIN,
       });
@@ -211,6 +236,7 @@ export class CustomerOnboardingService {
     );
     const to = superAdminEmailList[0];
     const cc = superAdminEmailList.slice(1);
+
     await this.mailNotificationService.addAJob(
       {
         to,
@@ -288,56 +314,63 @@ export class CustomerOnboardingService {
    * @param whitelistedCors - CORS whitelist array (defaults to ['*'])
    */
   private async handleCreditService(
-    creditDetail: any,
+    creditDetail: CreditDetail,
     serviceInfo: { appId: string; subdomain: string },
-    grantType: string,
-    tenantUrl: string,
-    secret: string,
-    whitelistedCors: string[] = ['*'],
-    accessList: string[],
-    superAdminUserId,
+    superAdminUserId: string,
+    referenceId: string,
   ) {
-    Logger.debug(tenantUrl);
     Logger.log(
-      `Inside handleCreditService() to fund credit to the service with tenantUrl ${tenantUrl}`,
+      `Inside handleCreditService() to fund credit to the service with appId ${serviceInfo.appId}`,
       'CustomerOnboardingService',
     );
-    const creditPayload = {
-      serviceId: serviceInfo.appId,
-      purpose: 'CreditRecharge',
-      amount: creditDetail.amount,
-      validityPeriod: creditDetail.validityPeriod,
-      validityPeriodUnit: creditDetail.validityPeriodUnit,
-      amountDenom: creditDetail.amountDenom,
-      subdomain: serviceInfo.subdomain,
-      grantType,
-      whitelistedCors,
-      accessList,
-      creditedBy: superAdminUserId,
-    };
-    const creditToken = await this.generateCreditToken(creditPayload, secret);
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-api-credit-token': creditToken,
-    };
-    const requestOptions: any = {
-      method: 'POST',
-      headers,
-    };
-    if (grantType === GRANT_TYPES.access_service_ssi) {
-      const authzCreditDetail = await this.authzService.grantSSICredit(
-        serviceInfo.appId,
-        '5000000',
-      );
-      requestOptions.body = JSON.stringify({
-        ...authzCreditDetail,
-      });
-    }
-    await this.makeExternalRequest(
-      `${sanitizeUrl(tenantUrl, true)}api/v1/credit`,
-      requestOptions,
-      'Failed to credit service',
+    await this.creditService.grantCredit(
+      serviceInfo.appId,
+      {
+        amount: creditDetail.amount.toString(),
+        validityPeriod: creditDetail.validityPeriod,
+        validityPeriodUnit: creditDetail.validityPeriodUnit,
+        amountDenom: creditDetail.amountDenom,
+      },
+      superAdminUserId,
+      CreditSourceEnum.CUSTOMER_ONBOARDING,
+      referenceId,
     );
+    // const creditPayload = {
+    //   serviceId: serviceInfo.appId,
+    //   purpose: 'CreditRecharge',
+    //   amount: creditDetail.amount,
+    //   validityPeriod: creditDetail.validityPeriod,
+    //   validityPeriodUnit: creditDetail.validityPeriodUnit,
+    //   amountDenom: creditDetail.amountDenom,
+    //   subdomain: serviceInfo.subdomain,
+    //   grantType,
+    //   whitelistedCors,
+    //   accessList,
+    //   creditedBy: superAdminUserId,
+    // };
+    // const creditToken = await this.generateCreditToken(creditPayload, secret);
+    // const headers: Record<string, string> = {
+    //   'Content-Type': 'application/json',
+    //   'x-api-credit-token': creditToken,
+    // };
+    // const requestOptions: any = {
+    //   method: 'POST',
+    //   headers,
+    // };
+    // if (grantType === GRANT_TYPES.access_service_ssi) {
+    //   const authzCreditDetail = await this.creditService.grantSSIAllowance(
+    //     serviceInfo.appId,
+    //     '5000000',
+    //   );
+    //   requestOptions.body = JSON.stringify({
+    //     ...authzCreditDetail,
+    //   });
+    // }
+    // await this.makeExternalRequest(
+    //   `${sanitizeUrl(tenantUrl, true)}api/v1/credit`,
+    //   requestOptions,
+    //   'Failed to credit service',
+    // );
   }
 
   private shouldUseBabyJubJubIssuer(interestedService?: InterestedService[]) {
@@ -410,6 +443,7 @@ export class CustomerOnboardingService {
     const onboardingLogs: LogDetail[] = [];
     const onboardingUpdateData: Partial<CustomerOnboarding> = {};
     let ssiService: any,
+      widgetConfigDetail: any,
       kycAccessToken: any,
       ssiAccessToken: any,
       issuerDidData: any,
@@ -417,7 +451,10 @@ export class CustomerOnboardingService {
       didDocument: any;
 
     try {
-      const { ssiCreditDetail, kycCreditDetail } = customerOnboardingProcessDto;
+      const ssiCreditDetail: CreditDetail =
+        customerOnboardingProcessDto.ssiCreditDetail;
+      const kycCreditDetail: CreditDetail =
+        customerOnboardingProcessDto.kycCreditDetail;
 
       // Validate and fetch customer onboarding details
       const customerOnboardingData =
@@ -591,6 +628,10 @@ export class CustomerOnboardingService {
                       this.config.get<string>('SSI_API_DOMAIN'),
                       false,
                     ),
+                    urlSanitizer(
+                      this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
+                      false,
+                    ),
                   ],
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
@@ -625,15 +666,8 @@ export class CustomerOnboardingService {
                     ssiService?.subdomain ||
                     customerOnboardingData.ssiSubdomain,
                 },
-                GRANT_TYPES.access_service_ssi,
-                ssiTenantUrl,
-                secret,
-                ssiService?.whitelistedCors,
-                getAccessListForModule(
-                  TokenModule.SUPER_ADMIN,
-                  SERVICE_TYPES.SSI_API,
-                ),
                 superAdminUserId,
+                `customer-onboarding:${id}:ssi`,
               );
               Logger.debug(
                 'CREDIT_SSI_SERVICE step ends',
@@ -903,15 +937,8 @@ export class CustomerOnboardingService {
                     kycService?.subdomain ||
                     customerOnboardingData.kycSubdomain,
                 },
-                GRANT_TYPES.access_service_kyc,
-                kycTenantUrl,
-                secret,
-                kycService?.whitelistedCors,
-                getAccessListForModule(
-                  TokenModule.SUPER_ADMIN,
-                  SERVICE_TYPES.CAVACH_API,
-                ),
                 superAdminUserId,
+                `customer-onboarding:${id}:kyc`,
               );
               Logger.debug(
                 'CREDIT_KYC_SERVICE step ends',
@@ -970,6 +997,9 @@ export class CustomerOnboardingService {
                 customerOnboardingData.interestedService,
               );
               const requestBody = {
+                name: 'Default Widget Configuration',
+                description:
+                  "Standard KYC configuration with face recognition and  OCR enabled.'",
                 faceRecog: true,
                 idOcr: {
                   enabled: true,
@@ -1003,8 +1033,11 @@ export class CustomerOnboardingService {
                   reason:
                     'The app is requesting your KYC data to provide you service',
                 },
+                isEmailNotificationEnabled: false,
+                isVaultEnabled: false,
+                isWidgetLogin: false,
               };
-              await this.makeExternalRequest(
+              widgetConfigDetail = await this.makeExternalRequest(
                 `${sanitizeUrl(
                   kycTenantUrl,
                   true,
@@ -1040,6 +1073,9 @@ export class CustomerOnboardingService {
                 pageType: PageType.KYC,
                 contactEmail: customerEmail,
                 themeColor: 'vibrant',
+                linkedWidgetConfigIds: [
+                  widgetConfigDetail?.data?._id?.toString(),
+                ],
               });
               Logger.debug(
                 'CONFIGURE_KYC_VERIFIER_PAGE step ends',

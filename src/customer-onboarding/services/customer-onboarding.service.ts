@@ -1143,7 +1143,7 @@ export class CustomerOnboardingService {
                 issuerVerificationMethodId:
                   issuerDetails.issuerVerificationMethodId,
                 collectCertOfIncorporationDoc: true,
-                collectPowerOfAttorneyDoc: true,
+                collectPowerOfAttorneyDoc: false,
                 collectAddressProofDoc: true,
                 collectZkProof: {
                   enable: false,

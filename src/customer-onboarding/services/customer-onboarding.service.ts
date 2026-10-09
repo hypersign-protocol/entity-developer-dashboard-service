@@ -137,7 +137,6 @@ export class CustomerOnboardingService {
         onboardingId: onboardingData['_id'].toString(),
         companyName,
         companyDomain: domain,
-        companyLogo: createCustomerOnboardingDto.companyLogo || '',
         billingAddress: createCustomerOnboardingDto.billingAddress || '',
         companyRegistrationNumber: registrationNumber,
         companyType: String(type),

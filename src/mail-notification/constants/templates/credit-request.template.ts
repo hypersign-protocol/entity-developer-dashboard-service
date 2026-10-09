@@ -9,7 +9,6 @@ export default function getCreditRequestNotificationMail(customer: {
   onboardingId: string;
   companyName: string;
   companyDomain?: string;
-  companyLogo?: string;
   billingAddress?: string;
   companyRegistrationNumber?: string;
   companyType: string;
@@ -30,7 +29,6 @@ export default function getCreditRequestNotificationMail(customer: {
 
   const optionalFields = [
     ['Company Domain', customer.companyDomain],
-    ['Company Logo', customer.companyLogo],
     ['Company Registration Number', customer.companyRegistrationNumber],
     ['Billing Address', customer.billingAddress],
     ['Phone Number', customer.phoneNumber],

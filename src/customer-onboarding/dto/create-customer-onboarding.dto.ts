@@ -46,6 +46,7 @@ class IndiaInterestedServicesConstraint
     if (!Array.isArray(services)) return false;
     return (
       country === 'IN' ||
+      country === 'IND' ||
       !services.some((service) =>
         INDIA_ONLY_SERVICES.includes(service as InterestedService),
       )

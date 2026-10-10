@@ -41,6 +41,9 @@ export class SanitizeUrlValidator implements ValidatorConstraintInterface {
   }
 }
 export function urlSanitizer(url, endsWith) {
+  if (!url) {
+    throw new Error('URL must be passed in the function');
+  }
   switch (endsWith) {
     case true: {
       if (url.endsWith('/')) {

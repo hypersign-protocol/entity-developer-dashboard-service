@@ -59,7 +59,11 @@ export class CreditNotificationService
   }
 
   async onApplicationBootstrap(): Promise<void> {
-    await this.scanExpiringCredits();
+    try {
+      await this.scanExpiringCredits();
+    } catch (error) {
+      Logger.error('Initial credit expiry scan failed', error);
+    }
     this.scheduleNextExpiryScan();
   }
 
@@ -179,6 +183,13 @@ export class CreditNotificationService
   }
 
   async scanExpiringCredits(): Promise<void> {
+    if (!this.creditExpiryThresholds.length) {
+      Logger.warn(
+        'CREDIT_EXPIRY_THRESHOLDS is not configured; skipping credit expiry scan',
+        'CreditNotificationService',
+      );
+      return;
+    }
     const now = new Date();
     const plans = await this.creditRepository.findCreditDetailList({
       status: CreditStatus.ACTIVE,
@@ -229,6 +240,7 @@ export class CreditNotificationService
               : `⏳ Credits Expiring Soon for Service ${plan.serviceId}`,
           message: getCreditExpiryAlertMail(
             plan.serviceId,
+            plan.serviceType,
             remainingDays,
             plan.apiCredit.total,
             plan.apiCredit.used,

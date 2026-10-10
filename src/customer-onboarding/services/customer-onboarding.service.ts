@@ -137,7 +137,6 @@ export class CustomerOnboardingService {
         onboardingId: onboardingData['_id'].toString(),
         companyName,
         companyDomain: domain,
-        companyLogo: createCustomerOnboardingDto.companyLogo || '',
         billingAddress: createCustomerOnboardingDto.billingAddress || '',
         companyRegistrationNumber: registrationNumber,
         companyType: String(type),
@@ -885,8 +884,7 @@ export class CustomerOnboardingService {
                       false,
                     ),
                     urlSanitizer(
-                      this.config.get<string>('KYB_WIDGET_URL') ||
-                        'https://verify.business.hypersign.id',
+                      this.config.get<string>('KYB_WIDGET_URL'),
                       false,
                     ),
                   ],

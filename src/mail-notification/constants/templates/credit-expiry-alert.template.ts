@@ -1,6 +1,16 @@
 import getBody from '../element/body.template';
 import { getContainer } from '../element/container.template';
 import getHtml from '../element/html.template';
+import {
+  CAVACH_API_SERVICE_INFO,
+  SERVICE_TYPES,
+  SSI_API_SERVICE_INFO,
+} from 'src/supported-service/services/iServiceList';
+
+const SERVICE_TYPE_NAMES: Partial<Record<SERVICE_TYPES, string>> = {
+  [SERVICE_TYPES.SSI_API]: SSI_API_SERVICE_INFO.name,
+  [SERVICE_TYPES.CAVACH_API]: CAVACH_API_SERVICE_INFO.name,
+};
 
 type CustomerDetails = {
   companyName?: string;
@@ -10,6 +20,7 @@ type CustomerDetails = {
 
 export default function getCreditExpiryAlertMail(
   serviceId: string,
+  serviceType: SERVICE_TYPES | undefined,
   remainingDays: number,
   totalCredits: number,
   usedCredits: number,
@@ -24,6 +35,8 @@ export default function getCreditExpiryAlertMail(
     : '⏳ Credit Expiry Reminder';
 
   const remainingCredits = Math.max(totalCredits - usedCredits, 0);
+
+  const serviceTypeName = serviceType && SERVICE_TYPE_NAMES[serviceType];
 
   const formattedExpiry = new Date(expiresAt).toLocaleDateString();
   const greeting = isSuperAdminNotification
@@ -69,7 +82,12 @@ export default function getCreditExpiryAlertMail(
   </p>
 
   <ul style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; padding-left:18px;">
-    <li style="margin:4px 0;"><strong>Service ID:</strong> ${serviceId}</li>
+    <li style="margin:4px 0;"><strong>Application ID:</strong> ${serviceId}</li>
+    ${
+      serviceTypeName
+        ? `<li style="margin:4px 0;"><strong>Service Type:</strong> ${serviceTypeName}</li>`
+        : ''
+    }
     <li style="margin:4px 0;"><strong>Used Credits:</strong> ${usedCredits} / ${totalCredits}</li>
     <li style="margin:4px 0;"><strong>Remaining Credits:</strong> ${remainingCredits}</li>
     <li style="margin:4px 0;"><strong>Expiry Date:</strong> ${formattedExpiry}</li>

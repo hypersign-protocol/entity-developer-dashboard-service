@@ -240,6 +240,7 @@ export class CreditNotificationService
               : `⏳ Credits Expiring Soon for Service ${plan.serviceId}`,
           message: getCreditExpiryAlertMail(
             plan.serviceId,
+            plan.serviceType,
             remainingDays,
             plan.apiCredit.total,
             plan.apiCredit.used,

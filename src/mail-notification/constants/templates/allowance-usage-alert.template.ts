@@ -51,7 +51,7 @@ export default function getAllowanceUsageAlertMail(
     }:
   </p>
   <ul style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; padding-left:18px;">
-    <li style="margin:4px 0;"><strong>Service ID:</strong> ${serviceId}</li>
+    <li style="margin:4px 0;"><strong>Application ID:</strong> ${serviceId}</li>
     <li style="margin:4px 0;"><strong>Used Allowance:</strong> ${usedAllowance} / ${totalAllowance} ${denom}</li>
     <li style="margin:4px 0;"><strong>Remaining Allowance:</strong> ${remainingAllowance} ${denom}</li>
     <li style="margin:4px 0;"><strong>Usage Percentage:</strong> ${Math.min(

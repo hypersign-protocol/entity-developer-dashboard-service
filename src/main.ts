@@ -19,8 +19,12 @@ import * as cookieParser from 'cookie-parser';
 import { WebpageConfigModule } from './webpage-config/webpage-config.module';
 import { CustomerOnboardingModule } from './customer-onboarding/customer-onboarding.module';
 import { CreditModule } from './credits/credits.module';
+import { validateEnv } from './utils/env-validator';
 
 async function bootstrap() {
+  // .env is already loaded by ConfigModule.forRoot() when AppModule is imported
+  validateEnv();
+
   const app = await NestFactory.create(AppModule);
 
   app.use(json({ limit: '10mb' }));

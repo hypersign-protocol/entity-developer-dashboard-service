@@ -86,9 +86,7 @@ export class WebpageConfigService {
       expiryType,
       customExpiryDate,
     );
-    const veriferAppBaseUrl =
-      this.config.get('KYC_VERIFIER_APP_BASE_URL') ||
-      'https://verifier.hypersign.id';
+    const veriferAppBaseUrl = this.config.get('KYC_VERIFIER_APP_BASE_URL');
     const id = new Types.ObjectId();
     const generatedUrl = `${urlSanitizer(
       veriferAppBaseUrl,

@@ -157,7 +157,9 @@ export class CustomerOnboardingService {
         namespace ? `${namespace}:` : ''
       }${uuidv4()}`;
       const jwtResult = await this.makeExternalRequest(
-        `${sanitizeUrl(ssiServiceUrl, true)}${SERVICE_ENDPOINTS.SSI_ISSUE_DID_JWT}`,
+        `${sanitizeUrl(ssiServiceUrl, true)}${
+          SERVICE_ENDPOINTS.SSI_ISSUE_DID_JWT
+        }`,
         {
           method: 'POST',
           headers: {
@@ -189,7 +191,9 @@ export class CustomerOnboardingService {
       }
 
       const exchangeResult = await this.makeExternalRequest(
-        `${sanitizeUrl(idServiceUrl, true)}${SERVICE_ENDPOINTS.ID_AUTH_EXCHANGE}`,
+        `${sanitizeUrl(idServiceUrl, true)}${
+          SERVICE_ENDPOINTS.ID_AUTH_EXCHANGE
+        }`,
         {
           method: 'POST',
           headers: {
@@ -225,7 +229,9 @@ export class CustomerOnboardingService {
         formData.append('entityType', 'Company');
         formData.append('documentType', documents[index].type);
         const uploadResult = await this.makeExternalRequest(
-          `${sanitizeUrl(idServiceUrl, true)}${SERVICE_ENDPOINTS.ID_DOCUMENT_UPLOAD}`,
+          `${sanitizeUrl(idServiceUrl, true)}${
+            SERVICE_ENDPOINTS.ID_DOCUMENT_UPLOAD
+          }`,
           {
             method: 'POST',
             headers: {
@@ -248,7 +254,9 @@ export class CustomerOnboardingService {
       }
 
       const companyResult = await this.makeExternalRequest(
-        `${sanitizeUrl(idServiceUrl, true)}${SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION}`,
+        `${sanitizeUrl(idServiceUrl, true)}${
+          SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
+        }`,
         {
           method: 'POST',
           headers: {

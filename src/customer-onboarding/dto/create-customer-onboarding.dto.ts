@@ -323,6 +323,28 @@ export class CustomerStepLogs {
   failureReason?: string;
 }
 export class FetchCustomerOnboardingRespDto extends CreateCustomerOnboardingRespDto {
+  @ApiProperty({ description: 'ID-Service company record ID', required: false })
+  @IsOptional()
+  @IsString()
+  companyId?: string;
+
+  @ApiProperty({
+    description: 'Result of the KYB company submission',
+    enum: ['pending', 'success', 'failed'],
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  companyVerificationStatus?: string;
+
+  @ApiProperty({
+    description: 'Company status reasons returned by ID-Service',
+    isArray: true,
+    required: false,
+  })
+  @IsOptional()
+  companyStatusReason?: string[];
+
   @ApiProperty({
     name: 'logs',
     description: 'Logs related to customer onboarding process',

@@ -56,6 +56,10 @@ export class CustomerOnboardingModule implements NestModule {
         { path: 'api/v1/customer-onboarding/:id', method: RequestMethod.GET },
         { path: 'api/v1/customer-onboarding', method: RequestMethod.POST },
         { path: 'api/v1/customer-onboarding', method: RequestMethod.GET },
+        {
+          path: 'api/v1/customer-onboarding/:id',
+          method: RequestMethod.PATCH,
+        },
       )
       .forRoutes(CustomerOnboardingController);
     consumer

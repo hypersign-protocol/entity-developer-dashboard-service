@@ -76,6 +76,16 @@ export class CustomerOnboarding {
   ssiServiceId?: string;
   @Prop({ type: String, required: false })
   kycServiceId?: string;
+  @Prop({ type: String, required: false })
+  companyId?: string;
+  @Prop({
+    type: String,
+    enum: ['pending', 'success', 'failed'],
+    default: 'pending',
+  })
+  companyVerificationStatus?: string;
+  @Prop({ type: [String], required: false, default: [] })
+  companyStatusReason?: string[];
   @Prop({ type: String, required: true })
   userId: string;
 }

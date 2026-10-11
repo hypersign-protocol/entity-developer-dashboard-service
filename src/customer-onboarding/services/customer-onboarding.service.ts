@@ -122,140 +122,114 @@ export class CustomerOnboardingService {
       );
     }
 
-    try {
-      const kybApp = await this.appAuthRepository.findOne({ appId: kybAppId });
-      if (
-        !kybApp ||
-        !kybApp.services?.some(
-          (service) => service.id === SERVICE_TYPES.CAVACH_API,
-        )
-      ) {
-        throw new BadRequestException(['Configured KYB app was not found']);
-      }
-      const ssiAppId = kybApp.dependentServices?.[0];
-      if (!ssiAppId) {
-        throw new BadRequestException([
-          'Configured KYB app does not have a dependent SSI app',
-        ]);
-      }
-      const ssiApp = await this.appAuthRepository.findOne({ appId: ssiAppId });
-      const [kybAccessToken, ssiAccessToken] = await Promise.all([
-        this.createConfiguredServiceToken(
-          kybApp,
-          GRANT_TYPES.access_service_kyb,
-          SERVICE_TYPES.CAVACH_API,
-        ),
-        this.createConfiguredServiceToken(
-          ssiApp,
-          GRANT_TYPES.access_service_ssi,
-          SERVICE_TYPES.SSI_API,
-        ),
+    const kybApp = await this.appAuthRepository.findOne({ appId: kybAppId });
+    if (
+      !kybApp ||
+      !kybApp.services?.some(
+        (service) => service.id === SERVICE_TYPES.CAVACH_API,
+      )
+    ) {
+      throw new BadRequestException(['Configured KYB app was not found']);
+    }
+    const ssiAppId = kybApp.dependentServices?.[0];
+    if (!ssiAppId) {
+      throw new BadRequestException([
+        'Configured KYB app does not have a dependent SSI app',
       ]);
+    }
+    const ssiApp = await this.appAuthRepository.findOne({ appId: ssiAppId });
+    const [kybAccessToken, ssiAccessToken] = await Promise.all([
+      this.createConfiguredServiceToken(
+        kybApp,
+        GRANT_TYPES.access_service_kyb,
+        SERVICE_TYPES.CAVACH_API,
+      ),
+      this.createConfiguredServiceToken(
+        ssiApp,
+        GRANT_TYPES.access_service_ssi,
+        SERVICE_TYPES.SSI_API,
+      ),
+    ]);
 
-      const namespace = this.config.get<string>('HID_NETWORK_NAMESPACE') || '';
-      const temporaryDid = `did:hid:${
-        namespace ? `${namespace}:` : ''
-      }${uuidv4()}`;
-      const jwtResult = await this.makeExternalRequest(
-        `${sanitizeUrl(ssiServiceUrl, true)}${
-          SERVICE_ENDPOINTS.SSI_ISSUE_DID_JWT
-        }`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${ssiAccessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            issuer: {
-              verificationMethodId: kybApp?.issuerVerificationMethodId,
-              did: kybApp?.issuerDid,
-            },
-            audience: sanitizeUrl('idServiceUrl', false),
-            claims: {
-              name: user.name,
-              email: user.email,
-              did: temporaryDid,
-            },
-            ttlSeconds: 3600,
-          }),
+    const namespace = this.config.get<string>('HID_NETWORK_NAMESPACE') || '';
+    const temporaryDid = `did:hid:${
+      namespace ? `${namespace}:` : ''
+    }${uuidv4()}`;
+    const jwtResult = await this.makeExternalRequest(
+      `${sanitizeUrl(ssiServiceUrl, true)}${
+        SERVICE_ENDPOINTS.SSI_ISSUE_DID_JWT
+      }`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ssiAccessToken}`,
+          'Content-Type': 'application/json',
         },
-        'Failed to issue KYB onboarding DID JWT',
-        true,
-      );
-      const didJwt = jwtResult?.accessToken || jwtResult?.data?.accessToken;
-      if (!didJwt) {
-        throw new InternalServerErrorException(
-          'SSI service did not return a DID JWT',
-        );
-      }
-
-      const exchangeResult = await this.makeExternalRequest(
-        `${sanitizeUrl(idServiceUrl, true)}${
-          SERVICE_ENDPOINTS.ID_AUTH_EXCHANGE
-        }`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${didJwt}`,
-            'x-kyb-access-token': kybAccessToken,
-            'x-ssi-access-token': ssiAccessToken,
-            'Content-Type': 'application/json',
+        body: JSON.stringify({
+          issuer: {
+            verificationMethodId: kybApp?.issuerVerificationMethodId,
+            did: kybApp?.issuerDid,
           },
-          body: JSON.stringify({ provider: 'client_auth' }),
+          audience: sanitizeUrl('idServiceUrl', false),
+          claims: {
+            name: user.name,
+            email: user.email,
+            did: temporaryDid,
+          },
+          ttlSeconds: 3600,
+        }),
+      },
+      'Failed to issue KYB onboarding DID JWT',
+      true,
+    );
+    const didJwt = jwtResult?.accessToken || jwtResult?.data?.accessToken;
+    if (!didJwt) {
+      throw new InternalServerErrorException(
+        'SSI service did not return a DID JWT',
+      );
+    }
+
+    const exchangeResult = await this.makeExternalRequest(
+      `${sanitizeUrl(idServiceUrl, true)}${
+        SERVICE_ENDPOINTS.ID_AUTH_EXCHANGE
+      }`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${didJwt}`,
+          'x-kyb-access-token': kybAccessToken,
+          'x-ssi-access-token': ssiAccessToken,
+          'Content-Type': 'application/json',
         },
-        'Failed to exchange the KYB onboarding identity',
-        true,
+        body: JSON.stringify({ provider: 'client_auth' }),
+      },
+      'Failed to exchange the KYB onboarding identity',
+      true,
+    );
+    const userAccessToken =
+      exchangeResult?.data?.kycServiceUserAccessToken ||
+      exchangeResult?.kycServiceUserAccessToken;
+    if (!userAccessToken) {
+      throw new InternalServerErrorException(
+        'ID-Service did not return a KYB user access token',
       );
-      const userAccessToken =
-        exchangeResult?.data?.kycServiceUserAccessToken ||
-        exchangeResult?.kycServiceUserAccessToken;
-      if (!userAccessToken) {
-        throw new InternalServerErrorException(
-          'ID-Service did not return a KYB user access token',
-        );
-      }
+    }
 
-      const documentIds: string[] = [];
-      for (let index = 0; index < orderedFiles.length; index += 1) {
-        const formData = new FormData();
-        formData.append(
-          'file',
-          new Blob([new Uint8Array(orderedFiles[index].buffer)], {
-            type: orderedFiles[index].mimetype,
-          }),
-          orderedFiles[index].originalname,
-        );
-        formData.append('entityType', 'Company');
-        formData.append('documentType', documents[index].type);
-        const uploadResult = await this.makeExternalRequest(
-          `${sanitizeUrl(idServiceUrl, true)}${
-            SERVICE_ENDPOINTS.ID_DOCUMENT_UPLOAD
-          }`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${userAccessToken}`,
-              'x-kyb-access-token': kybAccessToken,
-              'x-ssi-access-token': ssiAccessToken,
-            },
-            body: formData,
-          },
-          `Failed to upload KYB document ${index + 1}`,
-          true,
-        );
-        const documentId = uploadResult?.data?.id || uploadResult?.id;
-        if (!documentId) {
-          throw new InternalServerErrorException(
-            `ID-Service did not return an ID for KYB document ${index + 1}`,
-          );
-        }
-        documentIds.push(documentId);
-      }
-
-      const companyResult = await this.makeExternalRequest(
+    const documentIds: string[] = [];
+    for (let index = 0; index < orderedFiles.length; index += 1) {
+      const formData = new FormData();
+      formData.append(
+        'file',
+        new Blob([new Uint8Array(orderedFiles[index].buffer)], {
+          type: orderedFiles[index].mimetype,
+        }),
+        orderedFiles[index].originalname,
+      );
+      formData.append('entityType', 'Company');
+      formData.append('documentType', documents[index].type);
+      const uploadResult = await this.makeExternalRequest(
         `${sanitizeUrl(idServiceUrl, true)}${
-          SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
+          SERVICE_ENDPOINTS.ID_DOCUMENT_UPLOAD
         }`,
         {
           method: 'POST',
@@ -263,49 +237,62 @@ export class CustomerOnboardingService {
             Authorization: `Bearer ${userAccessToken}`,
             'x-kyb-access-token': kybAccessToken,
             'x-ssi-access-token': ssiAccessToken,
-            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ ...company, documentIds }),
+          body: formData,
         },
-        'Failed to create the KYB company',
+        `Failed to upload KYB document ${index + 1}`,
         true,
       );
-      const companyData = companyResult?.data || companyResult;
-      const companyId = companyData?._id || companyData?.id;
-      if (!companyId) {
+      const documentId = uploadResult?.data?.id || uploadResult?.id;
+      if (!documentId) {
         throw new InternalServerErrorException(
-          'ID-Service did not return a company ID',
+          `ID-Service did not return an ID for KYB document ${index + 1}`,
         );
       }
-      const statusReason = companyData.statusReason;
-      const updatedOnboarding =
-        await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
-          { _id: onboardingId, userId: user.userId },
-          {
-            $set: {
-              companyId,
-              companyVerificationStatus: 'success',
-              companyStatusReason: Array.isArray(statusReason)
-                ? statusReason.map(String)
-                : statusReason
-                ? [String(statusReason)]
-                : [],
-            },
-          },
-        );
-      return updatedOnboarding;
-    } catch (error: any) {
+      documentIds.push(documentId);
+    }
+
+    const companyResult = await this.makeExternalRequest(
+      `${sanitizeUrl(idServiceUrl, true)}${
+        SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
+      }`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${userAccessToken}`,
+          'x-kyb-access-token': kybAccessToken,
+          'x-ssi-access-token': ssiAccessToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ...company, documentIds }),
+      },
+      'Failed to create the KYB company',
+      true,
+    );
+    const companyData = companyResult?.data || companyResult;
+    const companyId = companyData?._id || companyData?.id;
+    if (!companyId) {
+      throw new InternalServerErrorException(
+        'ID-Service did not return a company ID',
+      );
+    }
+    const statusReason = companyData.statusReason;
+    const updatedOnboarding =
       await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
         { _id: onboardingId, userId: user.userId },
         {
           $set: {
-            companyVerificationStatus: 'failed',
-            companyStatusReason: [error?.message || 'KYB onboarding failed'],
+            companyId,
+            companyVerificationStatus: 'success',
+            companyStatusReason: Array.isArray(statusReason)
+              ? statusReason.map(String)
+              : statusReason
+              ? [String(statusReason)]
+              : [],
           },
         },
       );
-      throw error;
-    }
+    return updatedOnboarding;
   }
 
   private parseMultipartJson(value: any, fieldName: string): any {

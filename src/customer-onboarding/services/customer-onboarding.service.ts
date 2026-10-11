@@ -170,7 +170,7 @@ export class CustomerOnboardingService {
             verificationMethodId: kybApp?.issuerVerificationMethodId,
             did: kybApp?.issuerDid,
           },
-          audience: sanitizeUrl('idServiceUrl', false),
+          audience: sanitizeUrl(idServiceUrl, false),
           claims: {
             name: user.name,
             email: user.email,

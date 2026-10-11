@@ -640,3 +640,10 @@ export const TaxIdTypes: TaxIdInfo[] = [
     country: 'XX',
   },
 ];
+
+export enum KybVerificationEnum{
+    Approved = 'Approved', // Company kyb verification successfully completed and approved by customer
+  Rejected = 'Rejected', // Company verification completed and was rejected by customer
+  Completed = 'Completed', // Company kyb verification is finished (either failed or success)
+}
+

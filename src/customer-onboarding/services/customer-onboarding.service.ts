@@ -70,6 +70,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { validate, ValidationError } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { KybCompanyFieldsDto } from '../dto/submit-kyb-company.dto';
+import { KybVerificationEnum } from '../constants/identifier-types';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -283,7 +284,7 @@ export class CustomerOnboardingService {
         {
           $set: {
             companyId,
-            companyVerificationStatus: 'success',
+            companyVerificationStatus: KybVerificationEnum.Completed,
             companyStatusReason: Array.isArray(statusReason)
               ? statusReason.map(String)
               : statusReason

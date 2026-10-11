@@ -111,6 +111,7 @@ export class CustomerOnboardingService {
 
     const companyPayload = this.parseMultipartJson(body.company, 'company');
     const company = companyPayload?.fields || companyPayload;
+    const phoneNumber = body.phoneNumber;
     const { documents, orderedFiles } = this.parseKybDocumentParts(body, files);
     await this.validateKybCompanyRequest(company, documents, orderedFiles);
 
@@ -138,6 +139,16 @@ export class CustomerOnboardingService {
         'Configured KYB app does not have a dependent SSI app',
       ]);
     }
+    await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+      { _id: onboardingId, userId: user.userId },
+      {
+        $set: {
+          companyIDPAppId: kybAppId,
+          ...(phoneNumber && { phoneNumber: String(phoneNumber) }),
+        },
+      },
+    );
+
     const ssiApp = await this.appAuthRepository.findOne({ appId: ssiAppId });
     const [kybAccessToken, ssiAccessToken] = await Promise.all([
       this.createConfiguredServiceToken(
@@ -191,9 +202,7 @@ export class CustomerOnboardingService {
     }
 
     const exchangeResult = await this.makeExternalRequest(
-      `${sanitizeUrl(idServiceUrl, true)}${
-        SERVICE_ENDPOINTS.ID_AUTH_EXCHANGE
-      }`,
+      `${sanitizeUrl(idServiceUrl, true)}${SERVICE_ENDPOINTS.ID_AUTH_EXCHANGE}`,
       {
         method: 'POST',
         headers: {
@@ -285,11 +294,11 @@ export class CustomerOnboardingService {
           $set: {
             companyId,
             companyVerificationStatus: KybVerificationEnum.Completed,
-            companyStatusReason: Array.isArray(statusReason)
-              ? statusReason.map(String)
-              : statusReason
-              ? [String(statusReason)]
-              : [],
+            ...(statusReason !== undefined && {
+              companyStatusReason: Array.isArray(statusReason)
+                ? statusReason.map(String).join(', ')
+                : String(statusReason),
+            }),
           },
         },
       );

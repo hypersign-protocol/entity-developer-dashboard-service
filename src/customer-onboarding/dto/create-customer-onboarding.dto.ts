@@ -339,11 +339,11 @@ export class FetchCustomerOnboardingRespDto extends CreateCustomerOnboardingResp
 
   @ApiProperty({
     description: 'Company status reasons returned by ID-Service',
-    isArray: true,
     required: false,
   })
   @IsOptional()
-  companyStatusReason?: string[];
+  @IsString()
+  companyStatusReason?: string;
 
   @ApiProperty({
     name: 'logs',

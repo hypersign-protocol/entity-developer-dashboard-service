@@ -582,10 +582,9 @@ export class AppAuthService {
       }
 
       if (
-        ![
-          KybVerificationEnum.Completed,
-          KybVerificationEnum.Approved,
-        ].includes(onboarding?.companyVerificationStatus as KybVerificationEnum)
+        ![KybVerificationEnum.Completed, KybVerificationEnum.Approved].includes(
+          onboarding?.companyVerificationStatus as KybVerificationEnum,
+        )
       ) {
         throw new BadRequestException([
           'Customer onboarding verification must be completed or approved before moving to production',

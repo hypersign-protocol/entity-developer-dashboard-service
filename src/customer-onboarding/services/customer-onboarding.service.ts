@@ -6,6 +6,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { CreateCustomerOnboardingDto } from '../dto/create-customer-onboarding.dto';
 import { CustomerOnboardingRepository } from '../repositories/customer-onboarding.repositories';
@@ -71,6 +72,7 @@ import { validate, ValidationError } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { KybCompanyFieldsDto } from '../dto/submit-kyb-company.dto';
 import { KybVerificationEnum } from '../constants/identifier-types';
+import { CompanyVerificationWebhookDto } from '../dto/company-verification-webhook.dto';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -86,6 +88,55 @@ export class CustomerOnboardingService {
     private readonly webPageConfig: WebpageConfigService,
     private readonly creditService: CreditService,
   ) {}
+
+  async updateCompanyVerificationStatus(
+    payload: CompanyVerificationWebhookDto,
+    secret: string,
+  ) {
+    const expectedSecret = this.config.get<string>(
+      'DASHBOARD_COMPANY_WEBHOOK_SECRET',
+    );
+    if (!expectedSecret || secret !== expectedSecret) {
+      throw new UnauthorizedException(['Invalid webhook secret']);
+    }
+
+    const onboarding =
+      await this.customerOnboardingRepository.findCustomerOnboardingById({
+        companyId: payload.companyId,
+      });
+    if (!onboarding) {
+      throw new BadRequestException(['Company onboarding detail not found']);
+    }
+
+    const reason = payload.statusReason?.join(', ') || '';
+    const isUnchanged =
+      onboarding.companyVerificationStatus === payload.status &&
+      (onboarding.companyStatusReason || '') === reason;
+    if (isUnchanged) return onboarding;
+
+    if (payload.status === KybVerificationEnum.Rejected) {
+      if (!onboarding.kycServiceId) {
+        throw new BadRequestException(['Onboarding KYC service ID is missing']);
+      }
+      await this.appAuthService.moveAppToDevelopment(
+        onboarding.kycServiceId,
+        onboarding.userId,
+      );
+    }
+
+    const updated =
+      await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+        { companyId: payload.companyId },
+        {
+          $set: {
+            companyVerificationStatus: payload.status,
+            companyStatusReason: reason,
+          },
+        },
+      );
+
+    return updated;
+  }
 
   async submitKybCompany(
     onboardingId: string,
@@ -105,9 +156,9 @@ export class CustomerOnboardingService {
     if (!onboarding) {
       throw new BadRequestException(['Customer onboarding detail not found']);
     }
-    if (onboarding.companyId) {
-      throw new ConflictException(['A KYB company is already linked']);
-    }
+    // if (onboarding.companyId) {
+    //   throw new ConflictException(['A KYB company is already linked']);
+    // }
 
     const companyPayload = this.parseMultipartJson(body.company, 'company');
     const company = companyPayload?.fields || companyPayload;
@@ -1853,6 +1904,7 @@ export class CustomerOnboardingService {
           `No onboarding detail found for user with id: ${user.userId}`,
         ]);
       }
+      console.log('userOnboardingDetail', userOnboardingDetail);
       return userOnboardingDetail;
     } catch (e: any) {
       Logger.error(

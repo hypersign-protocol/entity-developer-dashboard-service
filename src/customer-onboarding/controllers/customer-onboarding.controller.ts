@@ -12,6 +12,7 @@ import {
   UsePipes,
   UploadedFiles,
   UseInterceptors,
+  Headers,
   ParseFilePipe,
   MaxFileSizeValidator,
   FileTypeValidator,
@@ -29,6 +30,7 @@ import {
   ApiOkResponse,
   ApiConsumes,
   ApiBody,
+  ApiHeader,
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
@@ -40,6 +42,7 @@ import {
   CustomerOnboardingProcessDto,
   ProcessCustomerOnboardingRespDto,
 } from '../dto/customer-onboarding-process.dto';
+import { CompanyVerificationWebhookDto } from '../dto/company-verification-webhook.dto';
 @ApiTags('Customer-Onboarding')
 @Controller('api/v1/customer-onboarding')
 export class CustomerOnboardingController {
@@ -89,6 +92,19 @@ export class CustomerOnboardingController {
   @Get()
   findUserOnboardingDetail(@Req() req: Request) {
     return this.customerOnboardingService.findUserOnboardingDetail(req.user);
+  }
+
+  @Post('company-verification/webhook')
+  @ApiHeader({ name: 'x-dashboard-webhook-secret', required: true })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  updateCompanyVerificationStatus(
+    @Headers('x-dashboard-webhook-secret') secret: string,
+    @Body() payload: CompanyVerificationWebhookDto,
+  ) {
+    return this.customerOnboardingService.updateCompanyVerificationStatus(
+      payload,
+      secret,
+    );
   }
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({

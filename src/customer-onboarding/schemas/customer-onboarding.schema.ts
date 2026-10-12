@@ -84,7 +84,7 @@ export class CustomerOnboarding {
   @Prop({
     type: String,
     enum: KybVerificationEnum,
-    default: KybVerificationEnum.Completed,
+    // default: KybVerificationEnum.Completed,
   })
   companyVerificationStatus?: string;
   @Prop({ type: String, required: false })

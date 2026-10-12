@@ -1181,6 +1181,25 @@ export class AppAuthService {
       ),
     );
   }
+
+  async moveAppToDevelopment(appId: string, userId: string): Promise<void> {
+    const app = await this.appRepository.findOne({ appId, userId });
+    if (!app) {
+      throw new NotFoundException([`No App found for appId ${appId}`]);
+    }
+    await this.appRepository.findOneAndUpdate(
+      { appId, userId },
+      { env: APP_ENVIRONMENT.dev },
+    );
+    await Promise.all([
+      this.updateDependentServicesEnv(
+        app.dependentServices,
+        APP_ENVIRONMENT.dev,
+        userId,
+      ),
+      this.updateAppRedis(appId, userId, { env: APP_ENVIRONMENT.dev }),
+    ]);
+  }
   private async updateAppRedis(
     appId: string,
     userId,

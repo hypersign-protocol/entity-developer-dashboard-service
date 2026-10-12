@@ -1904,7 +1904,6 @@ export class CustomerOnboardingService {
           `No onboarding detail found for user with id: ${user.userId}`,
         ]);
       }
-      console.log('userOnboardingDetail', userOnboardingDetail);
       return userOnboardingDetail;
     } catch (e: any) {
       Logger.error(

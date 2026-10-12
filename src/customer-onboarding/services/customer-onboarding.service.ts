@@ -12,6 +12,7 @@ import { CreateCustomerOnboardingDto } from '../dto/create-customer-onboarding.d
 import { CustomerOnboardingRepository } from '../repositories/customer-onboarding.repositories';
 import getCreditRequestNotificationMail from 'src/mail-notification/constants/templates/credit-request.template';
 import getOnboardingApprovedNotificationMail from 'src/mail-notification/constants/templates/onboarding-approve.template';
+import getOnboardingRejectedNotificationMail from 'src/mail-notification/constants/templates/onboarding-rejected.template';
 import { UserRepository } from 'src/user/repository/user.repository';
 import { UserRole } from 'src/user/schema/user.schema';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
@@ -135,6 +136,29 @@ export class CustomerOnboardingService {
         },
       );
 
+    if (payload.status === KybVerificationEnum.Rejected) {
+      const user = await this.userRepository.findOne({
+        userId: onboarding.userId,
+      });
+      if (user?.email) {
+        await this.sendCustomerCreditRequestNotification({
+          to: user.email,
+          message: getOnboardingRejectedNotificationMail(
+            user.name,
+            reason,
+          ),
+          subject: 'Business Verification Rejected',
+          cc: [],
+          mailType: 'send-company-verification-rejected-notification-mail',
+        });
+      } else {
+        Logger.warn(
+          `Could not send business verification rejection email: no email found for user ${onboarding.userId}`,
+          'CustomerOnboardingService',
+        );
+      }
+    }
+
     return updated;
   }
 
@@ -156,9 +180,19 @@ export class CustomerOnboardingService {
     if (!onboarding) {
       throw new BadRequestException(['Customer onboarding detail not found']);
     }
-    // if (onboarding.companyId) {
-    //   throw new ConflictException(['A KYB company is already linked']);
-    // }
+    const existingCompanyId = onboarding.companyId;
+    if (
+      existingCompanyId &&
+      (onboarding.companyVerificationStatus === KybVerificationEnum.Completed ||
+        onboarding.companyVerificationStatus === KybVerificationEnum.Approved)
+    ) {
+      return onboarding;
+    }
+    const isRejectedRetry = Boolean(
+      existingCompanyId &&
+        onboarding.companyVerificationStatus === KybVerificationEnum.Rejected &&
+        onboarding.companyStatusReason?.trim(),
+    );
 
     const companyPayload = this.parseMultipartJson(body.company, 'company');
     const company = companyPayload?.fields || companyPayload;
@@ -275,6 +309,54 @@ export class CustomerOnboardingService {
         'ID-Service did not return a KYB user access token',
       );
     }
+    let existingCompanyDocuments: any[] = [];
+    if (isRejectedRetry) {
+      const companyResult = await this.makeExternalRequest(
+        `${sanitizeUrl(idServiceUrl, true)}${
+          SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
+        }/${encodeURIComponent(existingCompanyId)}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${userAccessToken}`,
+            'x-kyb-access-token': kybAccessToken,
+            'x-ssi-access-token': ssiAccessToken,
+          },
+        },
+        'Failed to fetch the existing KYB company',
+        true,
+      );
+      const existingCompany = companyResult?.data || companyResult;
+      existingCompanyDocuments = Array.isArray(existingCompany?.documents)
+        ? existingCompany.documents
+        : [];
+      const replacementTypes = new Set(documents.map(({ type }) => type));
+      const documentsToReplace = existingCompanyDocuments.filter((document) =>
+        replacementTypes.has(document.documentType),
+      );
+      for (const document of documentsToReplace) {
+        if (!document?.id) {
+          throw new InternalServerErrorException(
+            `Existing ${document?.documentType || 'KYB'} document is missing its ID`,
+          );
+        }
+        await this.makeExternalRequest(
+          `${sanitizeUrl(idServiceUrl, true)}${
+            SERVICE_ENDPOINTS.ID_DOCUMENT
+          }/${encodeURIComponent(document.id)}`,
+          {
+            method: 'DELETE',
+            headers: {
+              Authorization: `Bearer ${userAccessToken}`,
+              'x-kyb-access-token': kybAccessToken,
+              'x-ssi-access-token': ssiAccessToken,
+            },
+          },
+          `Failed to delete existing KYB document ${document.id}`,
+          true,
+        );
+      }
+    }
 
     const documentIds: string[] = [];
     for (let index = 0; index < orderedFiles.length; index += 1) {
@@ -316,22 +398,38 @@ export class CustomerOnboardingService {
     const companyResult = await this.makeExternalRequest(
       `${sanitizeUrl(idServiceUrl, true)}${
         SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
-      }`,
+      }${isRejectedRetry ? `/${encodeURIComponent(existingCompanyId)}` : ''}`,
       {
-        method: 'POST',
+        method: isRejectedRetry ? 'PATCH' : 'POST',
         headers: {
           Authorization: `Bearer ${userAccessToken}`,
           'x-kyb-access-token': kybAccessToken,
           'x-ssi-access-token': ssiAccessToken,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...company, documentIds }),
+        body: JSON.stringify({
+          ...company,
+          documentIds: isRejectedRetry
+            ? [
+                ...existingCompanyDocuments
+                  .filter(
+                    (document) =>
+                      !documents.some(
+                        ({ type }) => type === document.documentType,
+                      ),
+                  )
+                  .map((document) => document.id)
+                  .filter(Boolean),
+                ...documentIds,
+              ]
+            : documentIds,
+        }),
       },
       'Failed to create the KYB company',
       true,
     );
     const companyData = companyResult?.data || companyResult;
-    const companyId = companyData?._id || companyData?.id;
+    const companyId = companyData?._id || companyData?.id || existingCompanyId;
     if (!companyId) {
       throw new InternalServerErrorException(
         'ID-Service did not return a company ID',
@@ -349,6 +447,9 @@ export class CustomerOnboardingService {
               companyStatusReason: Array.isArray(statusReason)
                 ? statusReason.map(String).join(', ')
                 : String(statusReason),
+            }),
+            ...(isRejectedRetry && statusReason === undefined && {
+              companyStatusReason: '',
             }),
           },
         },
@@ -1818,6 +1919,7 @@ export class CustomerOnboardingService {
       'Inside sendCustomerCreditRequestNotification()',
       'CustomerOnboardingService',
     );
+    console.log(message,'message')
     await this.mailNotificationService.addAJob(
       { to, subject, message, cc },
       mailType,

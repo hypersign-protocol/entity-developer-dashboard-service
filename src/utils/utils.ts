@@ -32,6 +32,7 @@ export const SERVICE_ENDPOINTS = {
   SSI_ISSUE_DID_JWT: 'api/v1/did/auth/issue-jwt',
   ID_AUTH_EXCHANGE: 'api/v2/auth/exchange',
   ID_DOCUMENT_UPLOAD: 'api/v1/document/upload',
+  ID_DOCUMENT: 'api/v1/document',
   ID_KYB_COMPANY_VERIFICATION: 'api/v1/e-kyb/verification/company',
 } as const;
 

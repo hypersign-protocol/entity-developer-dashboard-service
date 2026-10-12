@@ -143,10 +143,7 @@ export class CustomerOnboardingService {
       if (user?.email) {
         await this.sendCustomerCreditRequestNotification({
           to: user.email,
-          message: getOnboardingRejectedNotificationMail(
-            user.name,
-            reason,
-          ),
+          message: getOnboardingRejectedNotificationMail(user.name, reason),
           subject: 'Business Verification Rejected',
           cc: [],
           mailType: 'send-company-verification-rejected-notification-mail',
@@ -337,7 +334,9 @@ export class CustomerOnboardingService {
       for (const document of documentsToReplace) {
         if (!document?.id) {
           throw new InternalServerErrorException(
-            `Existing ${document?.documentType || 'KYB'} document is missing its ID`,
+            `Existing ${
+              document?.documentType || 'KYB'
+            } document is missing its ID`,
           );
         }
         await this.makeExternalRequest(
@@ -448,9 +447,10 @@ export class CustomerOnboardingService {
                 ? statusReason.map(String).join(', ')
                 : String(statusReason),
             }),
-            ...(isRejectedRetry && statusReason === undefined && {
-              companyStatusReason: '',
-            }),
+            ...(isRejectedRetry &&
+              statusReason === undefined && {
+                companyStatusReason: '',
+              }),
           },
         },
       );
@@ -1919,7 +1919,6 @@ export class CustomerOnboardingService {
       'Inside sendCustomerCreditRequestNotification()',
       'CustomerOnboardingService',
     );
-    console.log(message,'message')
     await this.mailNotificationService.addAJob(
       { to, subject, message, cc },
       mailType,

@@ -20,7 +20,9 @@ export default function getOnboardingRejectedNotificationMail(
 ) {
   const safeName = escapeHtml(userName?.trim() || 'there');
   const reasonParagraph = rejectionReason?.trim()
-    ? `<p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">Reason provided: <strong>${escapeHtml(rejectionReason.trim())}</strong></p>`
+    ? `<p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">Reason provided: <strong>${escapeHtml(
+        rejectionReason.trim(),
+      )}</strong></p>`
     : '';
   const message = `
     <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; line-height:1.7;">Dear <strong style="color:#111827;">${safeName}</strong>,</p>

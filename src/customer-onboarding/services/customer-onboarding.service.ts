@@ -95,7 +95,7 @@ export class CustomerOnboardingService {
     secret: string,
   ) {
     const expectedSecret = this.config.get<string>(
-      'COMPANY_VERIFICATION_WEBHOOK_SECRET',
+      'CUSTOMER_ONBOARDING_WEBHOOK_SECRET',
     );
     if (!expectedSecret || secret !== expectedSecret) {
       throw new UnauthorizedException(['Invalid webhook secret']);

@@ -38,7 +38,7 @@ describe('CustomerOnboardingService company verification webhook', () => {
       {} as any,
       {
         get: jest.fn((key) =>
-          key === 'COMPANY_VERIFICATION_WEBHOOK_SECRET' ? 'secret' : undefined,
+          key === 'CUSTOMER_ONBOARDING_WEBHOOK_SECRET' ? 'secret' : undefined,
         ),
       } as any,
       {} as any,

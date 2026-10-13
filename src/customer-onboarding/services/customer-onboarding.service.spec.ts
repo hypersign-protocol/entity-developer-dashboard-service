@@ -1,4 +1,5 @@
 import { KybVerificationEnum } from '../constants/identifier-types';
+import { WebhookVerificationType } from '../dto/company-verification-webhook.dto';
 import { CustomerOnboardingService } from './customer-onboarding.service';
 
 jest.mock('src/app-auth/services/app-auth.service', () => ({
@@ -37,7 +38,7 @@ describe('CustomerOnboardingService company verification webhook', () => {
       {} as any,
       {
         get: jest.fn((key) =>
-          key === 'DASHBOARD_COMPANY_WEBHOOK_SECRET' ? 'secret' : undefined,
+          key === 'COMPANY_VERIFICATION_WEBHOOK_SECRET' ? 'secret' : undefined,
         ),
       } as any,
       {} as any,
@@ -64,9 +65,16 @@ describe('CustomerOnboardingService company verification webhook', () => {
     });
     await service.updateCompanyVerificationStatus(
       {
-        companyId: onboarding.companyId,
-        status: KybVerificationEnum.Rejected,
-        statusReason: ['COMPANY_INACTIVE'],
+        type: WebhookVerificationType.BUSINESS,
+        success: false,
+        environment: 'prod',
+        data: {
+          event: 'company.verification.updated',
+          companyId: onboarding.companyId,
+          status: KybVerificationEnum.Rejected,
+          statusReason: ['COMPANY_INACTIVE'],
+          createdAt: '2026-10-13T10:00:00.000Z',
+        },
       },
       'secret',
     );
@@ -97,9 +105,16 @@ describe('CustomerOnboardingService company verification webhook', () => {
 
     await service.updateCompanyVerificationStatus(
       {
-        companyId: '665f17f9c2b4f5a6d7e8f901',
-        status: KybVerificationEnum.Rejected,
-        statusReason: ['COMPANY_INACTIVE'],
+        type: WebhookVerificationType.BUSINESS,
+        success: false,
+        environment: 'prod',
+        data: {
+          event: 'company.verification.updated',
+          companyId: '665f17f9c2b4f5a6d7e8f901',
+          status: KybVerificationEnum.Rejected,
+          statusReason: ['COMPANY_INACTIVE'],
+          createdAt: '2026-10-13T10:00:00.000Z',
+        },
       },
       'secret',
     );

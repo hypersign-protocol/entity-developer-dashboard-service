@@ -95,27 +95,28 @@ export class CustomerOnboardingService {
     secret: string,
   ) {
     const expectedSecret = this.config.get<string>(
-      'DASHBOARD_COMPANY_WEBHOOK_SECRET',
+      'COMPANY_VERIFICATION_WEBHOOK_SECRET',
     );
     if (!expectedSecret || secret !== expectedSecret) {
       throw new UnauthorizedException(['Invalid webhook secret']);
     }
 
+    const { companyId, status, statusReason } = payload.data;
     const onboarding =
       await this.customerOnboardingRepository.findCustomerOnboardingById({
-        companyId: payload.companyId,
+        companyId,
       });
     if (!onboarding) {
       throw new BadRequestException(['Company onboarding detail not found']);
     }
 
-    const reason = payload.statusReason?.join(', ') || '';
+    const reason = statusReason?.join(', ') || '';
     const isUnchanged =
-      onboarding.companyVerificationStatus === payload.status &&
+      onboarding.companyVerificationStatus === status &&
       (onboarding.companyStatusReason || '') === reason;
     if (isUnchanged) return onboarding;
 
-    if (payload.status === KybVerificationEnum.Rejected) {
+    if (status === KybVerificationEnum.Rejected) {
       if (!onboarding.kycServiceId) {
         throw new BadRequestException(['Onboarding KYC service ID is missing']);
       }
@@ -127,16 +128,16 @@ export class CustomerOnboardingService {
 
     const updated =
       await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
-        { companyId: payload.companyId },
+        { companyId },
         {
           $set: {
-            companyVerificationStatus: payload.status,
+            companyVerificationStatus: status,
             companyStatusReason: reason,
           },
         },
       );
 
-    if (payload.status === KybVerificationEnum.Rejected) {
+    if (status === KybVerificationEnum.Rejected) {
       const user = await this.userRepository.findOne({
         userId: onboarding.userId,
       });
@@ -264,7 +265,10 @@ export class CustomerOnboardingService {
             verificationMethodId: kybApp?.issuerVerificationMethodId,
             did: kybApp?.issuerDid,
           },
-          audience: sanitizeUrl(idServiceUrl, false),
+          audience: sanitizeUrl(
+            'https://api.cavach.hypersign.id' /*idServiceUrl*/,
+            false,
+          ),
           claims: {
             name: user.name,
             email: user.email,

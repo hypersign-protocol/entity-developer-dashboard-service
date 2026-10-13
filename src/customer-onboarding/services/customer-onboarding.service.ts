@@ -2014,7 +2014,7 @@ export class CustomerOnboardingService {
       'domain',
       'region',
       'countryOfRegistration',
-            'registrationNumber',
+      'registrationNumber',
       'registrationNumberType',
       'taxIdType',
       'taxIdNumber',
@@ -2025,9 +2025,7 @@ export class CustomerOnboardingService {
         .filter((key) => fields[key] !== undefined)
         .map((key) => [key, fields[key]]),
     );
-    const documents = Array.isArray(company.documents)
-      ? company.documents
-      : [];
+    const documents = Array.isArray(company.documents) ? company.documents : [];
     const rawStatusReason = company.statusReason;
     return {
       id: company._id || company.id,
@@ -2036,8 +2034,8 @@ export class CustomerOnboardingService {
       statusReason: Array.isArray(rawStatusReason)
         ? rawStatusReason.map(String).join(', ')
         : rawStatusReason == null
-          ? ''
-          : String(rawStatusReason),
+        ? ''
+        : String(rawStatusReason),
       documents,
     };
   }
@@ -2098,7 +2096,9 @@ export class CustomerOnboardingService {
           SERVICE_TYPES.CAVACH_API,
         );
         const companyResult = await this.makeExternalRequest(
-          `${sanitizeUrl(cavachApiDomain, true)}${SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION}/${encodeURIComponent(userOnboardingDetail.companyId)}`,
+          `${sanitizeUrl(cavachApiDomain, true)}${
+            SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
+          }/${encodeURIComponent(userOnboardingDetail.companyId)}`,
           {
             method: 'GET',
             headers: {

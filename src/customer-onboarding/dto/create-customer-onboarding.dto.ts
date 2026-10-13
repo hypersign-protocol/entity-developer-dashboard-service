@@ -364,6 +364,12 @@ export class KybCompanyDetailRespDto {
   @ApiPropertyOptional({ example: 'IN' })
   countryOfRegistration?: string;
 
+  @ApiPropertyOptional({ example: 'U12345KA2024PTC123456' })
+  registrationNumber?: string;
+
+  @ApiPropertyOptional({ example: 'CIN' })
+  registrationNumberType?: string;
+
   @ApiPropertyOptional({ example: 'GSTIN' })
   taxIdType?: string;
 

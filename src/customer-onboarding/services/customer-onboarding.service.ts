@@ -270,10 +270,7 @@ export class CustomerOnboardingService {
             verificationMethodId: kybApp?.issuerVerificationMethodId,
             did: kybApp?.issuerDid,
           },
-          audience: sanitizeUrl(
-            'https://api.cavach.hypersign.id' /*idServiceUrl*/,
-            false,
-          ),
+          audience: sanitizeUrl(idServiceUrl, false),
           claims: {
             name: user.name,
             email: user.email,

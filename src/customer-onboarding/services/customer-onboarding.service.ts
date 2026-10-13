@@ -116,16 +116,6 @@ export class CustomerOnboardingService {
       (onboarding.companyStatusReason || '') === reason;
     if (isUnchanged) return onboarding;
 
-    if (status === KybVerificationEnum.Rejected) {
-      if (!onboarding.kycServiceId) {
-        throw new BadRequestException(['Onboarding KYC service ID is missing']);
-      }
-      await this.appAuthService.moveAppToDevelopment(
-        onboarding.kycServiceId,
-        onboarding.userId,
-      );
-    }
-
     const updated =
       await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
         { companyId },
@@ -194,12 +184,13 @@ export class CustomerOnboardingService {
     const isRetry = Boolean(
       existingCompanyId &&
         (isRejectedRetry ||
-          onboarding.companyVerificationStatus === KybVerificationEnum.Submitted),
+          onboarding.companyVerificationStatus ===
+            KybVerificationEnum.Submitted),
     );
 
     const companyPayload = this.parseMultipartJson(body.company, 'company');
     const company = companyPayload?.fields || companyPayload;
-    
+
     const phoneNumber =
       body.phoneNumber ?? company?.phoneNumber ?? onboarding.phoneNumber;
     const { documents, orderedFiles } = this.parseKybDocumentParts(
@@ -459,7 +450,7 @@ export class CustomerOnboardingService {
         {
           $set: {
             companyId,
-            companyVerificationStatus:companyData.status,
+            companyVerificationStatus: companyData.status,
             ...(statusReason !== undefined && {
               companyStatusReason: Array.isArray(statusReason)
                 ? statusReason.map(String).join(', ')

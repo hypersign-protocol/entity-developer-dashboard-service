@@ -25,7 +25,7 @@ describe('CustomerOnboardingService company verification webhook', () => {
   };
   const userRepository = { findOne: jest.fn() };
   const mailService = { addAJob: jest.fn() };
-  const appAuthService = { moveAppToDevelopment: jest.fn() };
+  const appAuthService = {};
   let service: CustomerOnboardingService;
 
   beforeEach(async () => {
@@ -48,12 +48,11 @@ describe('CustomerOnboardingService company verification webhook', () => {
     );
   });
 
-  it('stores rejection and downgrades the onboarding apps', async () => {
+  it('stores the rejection status and reason', async () => {
     const onboarding = {
       companyId: '665f17f9c2b4f5a6d7e8f901',
       companyName: 'Acme',
       companyVerificationStatus: KybVerificationEnum.Completed,
-      kycServiceId: 'kyc-app',
       userId: 'user-1',
     };
     onboardingRepository.findCustomerOnboardingById.mockResolvedValue(
@@ -79,10 +78,6 @@ describe('CustomerOnboardingService company verification webhook', () => {
       'secret',
     );
 
-    expect(appAuthService.moveAppToDevelopment).toHaveBeenCalledWith(
-      'kyc-app',
-      'user-1',
-    );
     expect(
       onboardingRepository.updateCustomerOnboardingDetails,
     ).toHaveBeenCalledWith(
@@ -119,7 +114,6 @@ describe('CustomerOnboardingService company verification webhook', () => {
       'secret',
     );
 
-    expect(appAuthService.moveAppToDevelopment).not.toHaveBeenCalled();
     expect(
       onboardingRepository.updateCustomerOnboardingDetails,
     ).not.toHaveBeenCalled();

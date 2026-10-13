@@ -2103,7 +2103,9 @@ export class CustomerOnboardingService {
             method: 'GET',
             headers: {
               'x-kyb-access-token': kybAccessToken,
-              Origin: cavachApiDomain,
+              Origin: this.config.get<string>(
+                'DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP',
+              ),
             },
           },
           'Failed to refresh the KYB company verification status',

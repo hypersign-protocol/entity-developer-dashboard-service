@@ -30,6 +30,11 @@ export const ENV_DEFINITIONS: EnvDefinition[] = [
     isUrl: true,
   },
   {
+    name: 'DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP',
+    description: 'Public URL of the developer dashboard service',
+    isUrl: true,
+  },
+  {
     name: 'KYC_WIDGET_URL',
     description: 'URL of the KYC widget',
     defaultValue: 'https://verify.hypersign.id',

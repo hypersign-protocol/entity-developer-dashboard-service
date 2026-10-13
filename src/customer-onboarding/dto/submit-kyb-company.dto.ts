@@ -57,7 +57,7 @@ export class KybCompanyFieldsDto {
   @IsString()
   region: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 'IN',
     enum: CountryCode,
     description: 'Country of company registration (ISO 3166-1 alpha-2).',
@@ -104,6 +104,14 @@ export class KybCompanyFieldsDto {
 }
 
 export class SubmitKybCompanyMultipartDto {
+  @ApiPropertyOptional({
+    description: 'Contact phone number of the company',
+    example: '6234572090',
+  })
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
+
   @ApiProperty({
     type: KybCompanyFieldsDto,
     example: {
@@ -138,9 +146,9 @@ export class SubmitKybCompanyMultipartDto {
       },
     ],
     description:
-      'Each document contains its type and uploaded file. Include one item per file.',
+      'Each document contains its type and uploaded file. Required for initial submission; optional when retrying if no documents need to be replaced.',
   })
-  documents: KybDocumentMultipartDto[];
+  documents?: KybDocumentMultipartDto[];
 }
 
 class KybDocumentMultipartDto {

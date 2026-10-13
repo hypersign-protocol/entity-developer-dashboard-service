@@ -47,7 +47,7 @@ import { CreditModule } from 'src/credits/credits.module';
 export class CustomerOnboardingModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     const companyWebhook = {
-      path: 'api/v1/customer-onboarding/company-verification/webhook',
+      path: 'api/v1/customer-onboarding/webhook',
       method: RequestMethod.POST,
     };
     consumer.apply(TrimMiddleware).forRoutes(CustomerOnboardingController);

@@ -94,7 +94,7 @@ export class CustomerOnboardingController {
     return this.customerOnboardingService.findUserOnboardingDetail(req.user);
   }
 
-  @Post('company-verification/webhook')
+  @Post('webhook')
   @ApiHeader({ name: 'x-dashboard-webhook-secret', required: true })
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   updateCompanyVerificationStatus(

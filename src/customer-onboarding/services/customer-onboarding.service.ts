@@ -191,11 +191,22 @@ export class CustomerOnboardingService {
         onboarding.companyVerificationStatus === KybVerificationEnum.Rejected &&
         onboarding.companyStatusReason?.trim(),
     );
+    const isRetry = Boolean(
+      existingCompanyId &&
+        (isRejectedRetry ||
+          onboarding.companyVerificationStatus === KybVerificationEnum.Submitted),
+    );
 
     const companyPayload = this.parseMultipartJson(body.company, 'company');
     const company = companyPayload?.fields || companyPayload;
-    const phoneNumber = body.phoneNumber;
-    const { documents, orderedFiles } = this.parseKybDocumentParts(body, files);
+    
+    const phoneNumber =
+      body.phoneNumber ?? company?.phoneNumber ?? onboarding.phoneNumber;
+    const { documents, orderedFiles } = this.parseKybDocumentParts(
+      body,
+      files,
+      isRetry,
+    );
     await this.validateKybCompanyRequest(company, documents, orderedFiles);
 
     const kybAppId = this.config.get<string>('KYB_APP_ID')?.trim();
@@ -227,7 +238,10 @@ export class CustomerOnboardingService {
       {
         $set: {
           companyIDPAppId: kybAppId,
-          ...(phoneNumber && { phoneNumber: String(phoneNumber) }),
+          ...(phoneNumber != null &&
+            String(phoneNumber).trim() && {
+              phoneNumber: String(phoneNumber).trim(),
+            }),
         },
       },
     );
@@ -311,7 +325,7 @@ export class CustomerOnboardingService {
       );
     }
     let existingCompanyDocuments: any[] = [];
-    if (isRejectedRetry) {
+    if (isRetry) {
       const companyResult = await this.makeExternalRequest(
         `${sanitizeUrl(idServiceUrl, true)}${
           SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
@@ -401,9 +415,9 @@ export class CustomerOnboardingService {
     const companyResult = await this.makeExternalRequest(
       `${sanitizeUrl(idServiceUrl, true)}${
         SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
-      }${isRejectedRetry ? `/${encodeURIComponent(existingCompanyId)}` : ''}`,
+      }${isRetry ? `/${encodeURIComponent(existingCompanyId)}` : ''}`,
       {
-        method: isRejectedRetry ? 'PATCH' : 'POST',
+        method: isRetry ? 'PATCH' : 'POST',
         headers: {
           Authorization: `Bearer ${userAccessToken}`,
           'x-kyb-access-token': kybAccessToken,
@@ -412,7 +426,7 @@ export class CustomerOnboardingService {
         },
         body: JSON.stringify({
           ...company,
-          documentIds: isRejectedRetry
+          documentIds: isRetry
             ? [
                 ...existingCompanyDocuments
                   .filter(
@@ -445,7 +459,7 @@ export class CustomerOnboardingService {
         {
           $set: {
             companyId,
-            companyVerificationStatus: KybVerificationEnum.Completed,
+            companyVerificationStatus:companyData.status,
             ...(statusReason !== undefined && {
               companyStatusReason: Array.isArray(statusReason)
                 ? statusReason.map(String).join(', ')
@@ -470,7 +484,11 @@ export class CustomerOnboardingService {
     }
   }
 
-  private parseKybDocumentParts(body: Record<string, any>, files: any[]) {
+  private parseKybDocumentParts(
+    body: Record<string, any>,
+    files: any[],
+    allowNoDocuments = false,
+  ) {
     if (!Array.isArray(files)) {
       throw new BadRequestException(['Document uploads must be files']);
     }
@@ -532,8 +550,12 @@ export class CustomerOnboardingService {
       }
     }
 
-    if (documentTypes.size === 0) {
+    if (documentTypes.size === 0 && !allowNoDocuments) {
       throw new BadRequestException(['At least one document is required']);
+    }
+
+    if (documentTypes.size === 0 && files.length === 0) {
+      return { documents: [], orderedFiles: [] };
     }
 
     const indexedFiles = files.map((file) => {

@@ -627,8 +627,6 @@ export class CustomerOnboardingService {
       'domain',
       'region',
       'countryOfRegistration',
-      'registrationNumber',
-      'registrationNumberType',
       'taxIdType',
       'taxIdNumber',
       'address',
@@ -2004,6 +2002,46 @@ export class CustomerOnboardingService {
     return url.origin + '/';
   }
 
+  private toDashboardCompanyDetail(company: any) {
+    if (!company || typeof company !== 'object') return undefined;
+
+    const fields =
+      company.fields && typeof company.fields === 'object'
+        ? company.fields
+        : company;
+    const allowedCompanyFields = [
+      'name',
+      'domain',
+      'region',
+      'countryOfRegistration',
+            'registrationNumber',
+      'registrationNumberType',
+      'taxIdType',
+      'taxIdNumber',
+      'address',
+    ];
+    const companyFields = Object.fromEntries(
+      allowedCompanyFields
+        .filter((key) => fields[key] !== undefined)
+        .map((key) => [key, fields[key]]),
+    );
+    const documents = Array.isArray(company.documents)
+      ? company.documents
+      : [];
+    const rawStatusReason = company.statusReason;
+    return {
+      id: company._id || company.id,
+      ...companyFields,
+      status: company.status,
+      statusReason: Array.isArray(rawStatusReason)
+        ? rawStatusReason.map(String).join(', ')
+        : rawStatusReason == null
+          ? ''
+          : String(rawStatusReason),
+      documents,
+    };
+  }
+
   async findUserOnboardingDetail(user) {
     Logger.log(
       'Inside findUserOnboardingDetail() method start:: to get onboarding detail of particular user',
@@ -2022,6 +2060,66 @@ export class CustomerOnboardingService {
           `No onboarding detail found for user with id: ${user.userId}`,
         ]);
       }
+
+      if (
+        userOnboardingDetail.companyId &&
+        userOnboardingDetail.companyVerificationStatus !==
+          KybVerificationEnum.Approved &&
+        userOnboardingDetail.companyVerificationStatus !==
+          KybVerificationEnum.Completed
+      ) {
+        const kybAppId =
+          userOnboardingDetail.companyIDPAppId ||
+          this.config.get<string>('KYB_APP_ID')?.trim();
+        const cavachApiDomain = this.config
+          .get<string>('CAVACH_API_DOMAIN')
+          ?.trim();
+        if (!kybAppId || !cavachApiDomain) {
+          throw new InternalServerErrorException(
+            'KYB_APP_ID and CAVACH_API_DOMAIN must be configured',
+          );
+        }
+
+        const kybApp = await this.appAuthRepository.findOne({
+          appId: kybAppId,
+        });
+        if (
+          !kybApp ||
+          !kybApp.services?.some(
+            (service) => service.id === SERVICE_TYPES.CAVACH_API,
+          )
+        ) {
+          throw new BadRequestException(['Configured KYB app was not found']);
+        }
+
+        const kybAccessToken = await this.createConfiguredServiceToken(
+          kybApp,
+          GRANT_TYPES.access_service_kyb,
+          SERVICE_TYPES.CAVACH_API,
+        );
+        const companyResult = await this.makeExternalRequest(
+          `${sanitizeUrl(cavachApiDomain, true)}${SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION}/${encodeURIComponent(userOnboardingDetail.companyId)}`,
+          {
+            method: 'GET',
+            headers: {
+              'x-kyb-access-token': kybAccessToken,
+              Origin: cavachApiDomain,
+            },
+          },
+          'Failed to refresh the KYB company verification status',
+          true,
+        );
+
+        const companyData = companyResult?.data || companyResult;
+        const companyDetail = this.toDashboardCompanyDetail(companyData);
+        return {
+          ...(typeof userOnboardingDetail.toObject === 'function'
+            ? userOnboardingDetail.toObject()
+            : userOnboardingDetail),
+          companyDetail,
+        };
+      }
+
       return userOnboardingDetail;
     } catch (e: any) {
       Logger.error(

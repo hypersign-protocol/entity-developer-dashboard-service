@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayNotEmpty,
   IsArray,
@@ -30,6 +30,7 @@ import {
 import { IsPhoneNumberByCountry } from 'src/utils/customDecorator/validate-phone-no-country.decorator';
 import { Type } from 'class-transformer';
 import { IsUrlOrBase64Image } from 'src/utils/customDecorator/IsUrlOrBase64Image.decorator';
+import { KybCompanyAddressDto } from './submit-kyb-company.dto';
 
 const INDIA_ONLY_SERVICES = [
   InterestedService.AADHAR_VERIFICATION,
@@ -322,7 +323,77 @@ export class CustomerStepLogs {
   @IsString()
   failureReason?: string;
 }
+export class KybCompanyDocumentVerificationRespDto {
+  @ApiPropertyOptional({ example: 'Submitted' })
+  status?: string;
+}
+
+export class KybCompanyDocumentRespDto {
+  @ApiPropertyOptional({ example: '665f17f9c2b4f5a6d7e8f901' })
+  id?: string;
+
+  @ApiPropertyOptional({ example: 'TaxRegistration' })
+  documentType?: string;
+
+  @ApiPropertyOptional({ example: 'Screenshot from 2026-10-09 10-31-37.png' })
+  fileName?: string;
+
+  @ApiPropertyOptional({ type: String, format: 'date-time' })
+  createdAt?: Date;
+
+  @ApiPropertyOptional({ type: String, format: 'date-time' })
+  updatedAt?: Date;
+
+  @ApiPropertyOptional({ type: KybCompanyDocumentVerificationRespDto })
+  verification?: KybCompanyDocumentVerificationRespDto;
+}
+
+export class KybCompanyDetailRespDto {
+  @ApiPropertyOptional({ example: '665f17f9c2b4f5a6d7e8f901' })
+  id?: string;
+
+  @ApiPropertyOptional({ example: 'Example Private Limited' })
+  name?: string;
+
+  @ApiPropertyOptional({ example: 'example.com' })
+  domain?: string;
+
+  @ApiPropertyOptional({ example: 'Asia' })
+  region?: string;
+
+  @ApiPropertyOptional({ example: 'IN' })
+  countryOfRegistration?: string;
+
+  @ApiPropertyOptional({ example: 'GSTIN' })
+  taxIdType?: string;
+
+  @ApiPropertyOptional({ example: '29ABCDE1234F1Z5' })
+  taxIdNumber?: string;
+
+  @ApiPropertyOptional({ type: KybCompanyAddressDto })
+  address?: KybCompanyAddressDto;
+
+  @ApiPropertyOptional({ example: 'Rejected' })
+  status?: string;
+
+  @ApiPropertyOptional({ example: 'tesitng rejection flow' })
+  statusReason?: string;
+
+  @ApiPropertyOptional({ type: [KybCompanyDocumentRespDto] })
+  documents?: KybCompanyDocumentRespDto[];
+}
+
 export class FetchCustomerOnboardingRespDto extends CreateCustomerOnboardingRespDto {
+  @ApiPropertyOptional({
+    description:
+      'Company details required by the dashboard for KYB review and resubmission',
+    type: KybCompanyDetailRespDto,
+  })
+  @IsOptional()
+  @Type(() => KybCompanyDetailRespDto)
+  @ValidateNested()
+  companyDetail?: KybCompanyDetailRespDto;
+
   @ApiProperty({ description: 'ID-Service company record ID', required: false })
   @IsOptional()
   @IsString()

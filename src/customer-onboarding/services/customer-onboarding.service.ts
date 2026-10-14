@@ -160,11 +160,22 @@ export class CustomerOnboardingService {
       throw new BadRequestException(['Invalid customer onboarding ID']);
     }
 
-    const onboarding =
-      await this.customerOnboardingRepository.findCustomerOnboardingById({
+    const kybAppId = this.config.get<string>('KYB_APP_ID')?.trim();
+    const idServiceUrl = this.config.get<string>('CAVACH_API_DOMAIN');
+    const ssiServiceUrl = this.config.get<string>('SSI_API_DOMAIN');
+    if (!kybAppId || !idServiceUrl || !ssiServiceUrl) {
+      throw new InternalServerErrorException(
+        'KYB_APP_ID, CAVACH_API_DOMAIN, and SSI_API_DOMAIN must be configured',
+      );
+    }
+
+    const [onboarding, kybApp] = await Promise.all([
+      this.customerOnboardingRepository.findCustomerOnboardingById({
         _id: onboardingId,
         userId: user.userId,
-      });
+      }),
+      this.appAuthRepository.findOne({ appId: kybAppId }),
+    ]);
     if (!onboarding) {
       throw new BadRequestException(['Customer onboarding detail not found']);
     }
@@ -199,16 +210,6 @@ export class CustomerOnboardingService {
     );
     await this.validateKybCompanyRequest(company, documents, orderedFiles);
 
-    const kybAppId = this.config.get<string>('KYB_APP_ID')?.trim();
-    const idServiceUrl = this.config.get<string>('CAVACH_API_DOMAIN');
-    const ssiServiceUrl = this.config.get<string>('SSI_API_DOMAIN');
-    if (!kybAppId || !idServiceUrl || !ssiServiceUrl) {
-      throw new InternalServerErrorException(
-        'KYB_APP_ID, CAVACH_API_DOMAIN, and SSI_API_DOMAIN must be configured',
-      );
-    }
-
-    const kybApp = await this.appAuthRepository.findOne({ appId: kybAppId });
     if (
       !kybApp ||
       !kybApp.services?.some(
@@ -223,41 +224,42 @@ export class CustomerOnboardingService {
         'Configured KYB app does not have a dependent SSI app',
       ]);
     }
-    await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
-      { _id: onboardingId, userId: user.userId },
-      {
-        $set: {
-          companyIDPAppId: kybAppId,
-          ...(phoneNumber != null &&
-            String(phoneNumber).trim() && {
-              phoneNumber: String(phoneNumber).trim(),
-            }),
+    const [[kybAccessToken, ssiAccessToken], accountUser] = await Promise.all([
+      this.appAuthRepository.findOne({ appId: ssiAppId }).then((ssiApp) => {
+        if (!ssiApp) {
+          throw new BadRequestException([
+            'Configured dependent SSI app was not found',
+          ]);
+        }
+        return Promise.all([
+          this.createConfiguredServiceToken(
+            kybApp,
+            GRANT_TYPES.access_service_kyb,
+            SERVICE_TYPES.CAVACH_API,
+          ),
+          this.createConfiguredServiceToken(
+            ssiApp,
+            GRANT_TYPES.access_service_ssi,
+            SERVICE_TYPES.SSI_API,
+          ),
+        ]);
+      }),
+      // Fetching account user details to ensure correct user information in case of tenant login.
+      this.userRepository.findOne({ userId: user.userId }),
+      // Phone number is owned by the dashboard, so it is saved even if KYB submission fails later.
+      this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+        { _id: onboardingId, userId: user.userId },
+        {
+          $set: {
+            companyIDPAppId: kybAppId,
+            ...(phoneNumber != null &&
+              String(phoneNumber).trim() && {
+                phoneNumber: String(phoneNumber).trim(),
+              }),
+          },
         },
-      },
-    );
-
-    const ssiApp = await this.appAuthRepository.findOne({ appId: ssiAppId });
-    if (!ssiApp) {
-      throw new BadRequestException([
-        'Configured dependent SSI app was not found',
-      ]);
-    }
-    const [kybAccessToken, ssiAccessToken] = await Promise.all([
-      this.createConfiguredServiceToken(
-        kybApp,
-        GRANT_TYPES.access_service_kyb,
-        SERVICE_TYPES.CAVACH_API,
-      ),
-      this.createConfiguredServiceToken(
-        ssiApp,
-        GRANT_TYPES.access_service_ssi,
-        SERVICE_TYPES.SSI_API,
       ),
     ]);
-    // Fetching account user details to ensure correct user information in case of tenant login.
-    const accountUser = await this.userRepository.findOne({
-      userId: user.userId,
-    });
     if (!accountUser) {
       throw new BadRequestException(['Account user detail not found']);
     }
@@ -322,78 +324,69 @@ export class CustomerOnboardingService {
         'ID-Service did not return a KYB user access token',
       );
     }
-    let existingCompanyDocuments: any[] = [];
-    let documentsToReplace: any[] = [];
-    if (isRetry) {
-      const companyResult = await this.makeExternalRequest(
-        `${sanitizeUrl(idServiceUrl, true)}${
-          SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
-        }/${encodeURIComponent(existingCompanyId)}`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${userAccessToken}`,
-            'x-kyb-access-token': kybAccessToken,
-            'x-ssi-access-token': ssiAccessToken,
-          },
-        },
-        'Failed to fetch the existing KYB company',
-        true,
-      );
-      const existingCompany = companyResult?.data || companyResult;
-      existingCompanyDocuments = Array.isArray(existingCompany?.documents)
-        ? existingCompany.documents
-        : [];
-      const replacementTypes = new Set(documents.map(({ type }) => type));
-      documentsToReplace = existingCompanyDocuments.filter((document) =>
-        replacementTypes.has(document.documentType),
-      );
-      for (const document of documentsToReplace) {
-        if (!document?.id) {
-          throw new InternalServerErrorException(
-            `Existing ${
-              document?.documentType || 'KYB'
-            } document is missing its ID`,
+    const idServiceHeaders = {
+      Authorization: `Bearer ${userAccessToken}`,
+      'x-kyb-access-token': kybAccessToken,
+      'x-ssi-access-token': ssiAccessToken,
+    };
+    // Fetching the existing company and uploading new documents only depend on
+    // the user access token, so they run concurrently.
+    const [existingCompanyDocuments, documentIds] = await Promise.all([
+      isRetry
+        ? this.makeExternalRequest(
+            `${sanitizeUrl(idServiceUrl, true)}${
+              SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
+            }/${encodeURIComponent(existingCompanyId)}`,
+            { method: 'GET', headers: idServiceHeaders },
+            'Failed to fetch the existing KYB company',
+            true,
+          ).then((companyResult) => {
+            const existingCompany = companyResult?.data || companyResult;
+            return Array.isArray(existingCompany?.documents)
+              ? existingCompany.documents
+              : [];
+          })
+        : Promise.resolve([] as any[]),
+      Promise.all(
+        orderedFiles.map(async (file, index) => {
+          const formData = new FormData();
+          formData.append(
+            'file',
+            new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }),
+            file.originalname,
           );
-        }
-      }
-    }
-
-    const documentIds: string[] = [];
-    for (let index = 0; index < orderedFiles.length; index += 1) {
-      const formData = new FormData();
-      formData.append(
-        'file',
-        new Blob([new Uint8Array(orderedFiles[index].buffer)], {
-          type: orderedFiles[index].mimetype,
+          formData.append('entityType', 'Company');
+          formData.append('documentType', documents[index].type);
+          const uploadResult = await this.makeExternalRequest(
+            `${sanitizeUrl(idServiceUrl, true)}${
+              SERVICE_ENDPOINTS.ID_DOCUMENT_UPLOAD
+            }`,
+            { method: 'POST', headers: idServiceHeaders, body: formData },
+            `Failed to upload KYB document ${index + 1}`,
+            true,
+          );
+          const documentId = uploadResult?.data?.id || uploadResult?.id;
+          if (!documentId) {
+            throw new InternalServerErrorException(
+              `ID-Service did not return an ID for KYB document ${index + 1}`,
+            );
+          }
+          return documentId as string;
         }),
-        orderedFiles[index].originalname,
-      );
-      formData.append('entityType', 'Company');
-      formData.append('documentType', documents[index].type);
-      const uploadResult = await this.makeExternalRequest(
-        `${sanitizeUrl(idServiceUrl, true)}${
-          SERVICE_ENDPOINTS.ID_DOCUMENT_UPLOAD
-        }`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${userAccessToken}`,
-            'x-kyb-access-token': kybAccessToken,
-            'x-ssi-access-token': ssiAccessToken,
-          },
-          body: formData,
-        },
-        `Failed to upload KYB document ${index + 1}`,
-        true,
-      );
-      const documentId = uploadResult?.data?.id || uploadResult?.id;
-      if (!documentId) {
+      ),
+    ]);
+    const replacementTypes = new Set(documents.map(({ type }) => type));
+    const documentsToReplace = existingCompanyDocuments.filter((document) =>
+      replacementTypes.has(document.documentType),
+    );
+    for (const document of documentsToReplace) {
+      if (!document?.id) {
         throw new InternalServerErrorException(
-          `ID-Service did not return an ID for KYB document ${index + 1}`,
+          `Existing ${
+            document?.documentType || 'KYB'
+          } document is missing its ID`,
         );
       }
-      documentIds.push(documentId);
     }
 
     const companyResult = await this.makeExternalRequest(
@@ -402,12 +395,7 @@ export class CustomerOnboardingService {
       }${isRetry ? `/${encodeURIComponent(existingCompanyId)}` : ''}`,
       {
         method: isRetry ? 'PATCH' : 'POST',
-        headers: {
-          Authorization: `Bearer ${userAccessToken}`,
-          'x-kyb-access-token': kybAccessToken,
-          'x-ssi-access-token': ssiAccessToken,
-          'Content-Type': 'application/json',
-        },
+        headers: { ...idServiceHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...company,
           documentIds: isRetry
@@ -445,11 +433,7 @@ export class CustomerOnboardingService {
         }/${encodeURIComponent(document.id)}`,
         {
           method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${userAccessToken}`,
-            'x-kyb-access-token': kybAccessToken,
-            'x-ssi-access-token': ssiAccessToken,
-          },
+          headers: idServiceHeaders,
         },
         `Failed to delete replaced KYB document ${document.id}`,
         true,

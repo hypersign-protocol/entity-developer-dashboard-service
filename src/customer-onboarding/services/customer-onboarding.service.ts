@@ -229,6 +229,9 @@ export class CustomerOnboardingService {
       {
         $set: {
           companyIDPAppId: kybAppId,
+          ...(company.registrationNumber !== undefined && {
+            registrationNumber: company.registrationNumber,
+          }),
           ...(phoneNumber != null &&
             String(phoneNumber).trim() && {
               phoneNumber: String(phoneNumber).trim(),
@@ -630,6 +633,8 @@ export class CustomerOnboardingService {
       'domain',
       'region',
       'countryOfRegistration',
+      'registrationNumber',
+      'registrationNumberType',
       'taxIdType',
       'taxIdNumber',
       'address',

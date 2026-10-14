@@ -178,8 +178,7 @@ export class CustomerOnboardingService {
     }
     const isRejectedRetry = Boolean(
       existingCompanyId &&
-        onboarding.companyVerificationStatus === KybVerificationEnum.Rejected &&
-        onboarding.companyStatusReason?.trim(),
+        onboarding.companyVerificationStatus === KybVerificationEnum.Rejected,
     );
     const isRetry = Boolean(
       existingCompanyId &&
@@ -229,9 +228,6 @@ export class CustomerOnboardingService {
       {
         $set: {
           companyIDPAppId: kybAppId,
-          ...(company.registrationNumber !== undefined && {
-            registrationNumber: company.registrationNumber,
-          }),
           ...(phoneNumber != null &&
             String(phoneNumber).trim() && {
               phoneNumber: String(phoneNumber).trim(),
@@ -241,6 +237,11 @@ export class CustomerOnboardingService {
     );
 
     const ssiApp = await this.appAuthRepository.findOne({ appId: ssiAppId });
+    if (!ssiApp) {
+      throw new BadRequestException([
+        'Configured dependent SSI app was not found',
+      ]);
+    }
     const [kybAccessToken, ssiAccessToken] = await Promise.all([
       this.createConfiguredServiceToken(
         kybApp,
@@ -322,6 +323,7 @@ export class CustomerOnboardingService {
       );
     }
     let existingCompanyDocuments: any[] = [];
+    let documentsToReplace: any[] = [];
     if (isRetry) {
       const companyResult = await this.makeExternalRequest(
         `${sanitizeUrl(idServiceUrl, true)}${
@@ -343,7 +345,7 @@ export class CustomerOnboardingService {
         ? existingCompany.documents
         : [];
       const replacementTypes = new Set(documents.map(({ type }) => type));
-      const documentsToReplace = existingCompanyDocuments.filter((document) =>
+      documentsToReplace = existingCompanyDocuments.filter((document) =>
         replacementTypes.has(document.documentType),
       );
       for (const document of documentsToReplace) {
@@ -354,21 +356,6 @@ export class CustomerOnboardingService {
             } document is missing its ID`,
           );
         }
-        await this.makeExternalRequest(
-          `${sanitizeUrl(idServiceUrl, true)}${
-            SERVICE_ENDPOINTS.ID_DOCUMENT
-          }/${encodeURIComponent(document.id)}`,
-          {
-            method: 'DELETE',
-            headers: {
-              Authorization: `Bearer ${userAccessToken}`,
-              'x-kyb-access-token': kybAccessToken,
-              'x-ssi-access-token': ssiAccessToken,
-            },
-          },
-          `Failed to delete existing KYB document ${document.id}`,
-          true,
-        );
       }
     }
 
@@ -442,11 +429,36 @@ export class CustomerOnboardingService {
       'Failed to create the KYB company',
       true,
     );
-    const companyData = companyResult?.data || companyResult;
-    const companyId = companyData?._id || companyData?.id || existingCompanyId;
+    const companyData = companyResult?.data || companyResult || {};
+    const companyId = companyData._id || companyData.id || existingCompanyId;
     if (!companyId) {
       throw new InternalServerErrorException(
         'ID-Service did not return a company ID',
+      );
+    }
+    // Replaced documents are deleted only after the company points to the new
+    // ones, and in the background so a failed delete cannot fail the submission.
+    for (const document of documentsToReplace) {
+      this.makeExternalRequest(
+        `${sanitizeUrl(idServiceUrl, true)}${
+          SERVICE_ENDPOINTS.ID_DOCUMENT
+        }/${encodeURIComponent(document.id)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${userAccessToken}`,
+            'x-kyb-access-token': kybAccessToken,
+            'x-ssi-access-token': ssiAccessToken,
+          },
+        },
+        `Failed to delete replaced KYB document ${document.id}`,
+        true,
+      ).catch((error) =>
+        Logger.error(
+          `Failed to delete replaced KYB document ${document.id} of company ${companyId}: ${error?.message}`,
+          error?.stack,
+          'CustomerOnboardingService',
+        ),
       );
     }
     const statusReason = companyData.statusReason;
@@ -456,7 +468,12 @@ export class CustomerOnboardingService {
         {
           $set: {
             companyId,
-            companyVerificationStatus: companyData.status,
+            ...(companyData.status !== undefined && {
+              companyVerificationStatus: companyData.status,
+            }),
+            ...(company.registrationNumber !== undefined && {
+              registrationNumber: company.registrationNumber,
+            }),
             ...(statusReason !== undefined && {
               companyStatusReason: Array.isArray(statusReason)
                 ? statusReason.map(String).join(', ')

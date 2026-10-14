@@ -250,7 +250,13 @@ export class CustomerOnboardingService {
         SERVICE_TYPES.SSI_API,
       ),
     ]);
-
+    // Fetching account user details to ensure correct user information in case of tenant login.
+    const accountUser = await this.userRepository.findOne({
+      userId: user.userId,
+    });
+    if (!accountUser) {
+      throw new BadRequestException(['Account user detail not found']);
+    }
     const namespace = this.config.get<string>('HID_NETWORK_NAMESPACE') || '';
     const temporaryDid = `did:hid:${
       namespace ? `${namespace}:` : ''
@@ -272,8 +278,8 @@ export class CustomerOnboardingService {
           },
           audience: sanitizeUrl(idServiceUrl, false),
           claims: {
-            name: user.name,
-            email: user.email,
+            name: accountUser.name,
+            email: accountUser.email,
             did: temporaryDid,
           },
           ttlSeconds: 3600,

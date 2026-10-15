@@ -21,8 +21,17 @@ export const ENV_DEFINITIONS: EnvDefinition[] = [
     isUrl: true,
   },
   {
+    name: 'KYB_APP_ID',
+    description: 'Default KYB app used for company onboarding',
+  },
+  {
     name: 'CLIENT_APP_URL',
     description: 'URL of the developer dashboard frontend',
+    isUrl: true,
+  },
+  {
+    name: 'DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP',
+    description: 'Public URL of the developer dashboard service',
     isUrl: true,
   },
   {

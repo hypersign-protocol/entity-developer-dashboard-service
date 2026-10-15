@@ -6,11 +6,13 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { CreateCustomerOnboardingDto } from '../dto/create-customer-onboarding.dto';
 import { CustomerOnboardingRepository } from '../repositories/customer-onboarding.repositories';
 import getCreditRequestNotificationMail from 'src/mail-notification/constants/templates/credit-request.template';
 import getOnboardingApprovedNotificationMail from 'src/mail-notification/constants/templates/onboarding-approve.template';
+import getOnboardingRejectedNotificationMail from 'src/mail-notification/constants/templates/onboarding-rejected.template';
 import { UserRepository } from 'src/user/repository/user.repository';
 import { UserRole } from 'src/user/schema/user.schema';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
@@ -35,6 +37,7 @@ import {
   InterestedService,
   OnboardingStep,
   StepStatus,
+  SupportedKybDocument,
   SupportedDocument,
 } from '../constants/enum';
 import {
@@ -47,6 +50,7 @@ import {
   generateHash,
   getAccessListForModule,
   sanitizeUrl,
+  SERVICE_ENDPOINTS,
 } from 'src/utils/utils';
 import { RoleRepository } from 'src/roles/repository/role.repository';
 import { ONBORDING_CONSTANT_DATA } from '../constants/en';
@@ -64,6 +68,12 @@ import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { VerificationMethodTypes } from 'src/utils/generated/client/enums';
 import { Types } from 'mongoose';
 import { CreditSourceEnum } from 'src/credits/schemas/credit.schema';
+import { v4 as uuidv4 } from 'uuid';
+import { validate, ValidationError } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
+import { KybCompanyFieldsDto } from '../dto/submit-kyb-company.dto';
+import { KybVerificationEnum } from '../constants/identifier-types';
+import { CompanyVerificationWebhookDto } from '../dto/company-verification-webhook.dto';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -79,6 +89,598 @@ export class CustomerOnboardingService {
     private readonly webPageConfig: WebpageConfigService,
     private readonly creditService: CreditService,
   ) {}
+
+  async updateCompanyVerificationStatus(
+    payload: CompanyVerificationWebhookDto,
+    secret: string,
+  ) {
+    const expectedSecret = this.config.get<string>(
+      'CUSTOMER_ONBOARDING_WEBHOOK_SECRET',
+    );
+    if (!expectedSecret || secret !== expectedSecret) {
+      throw new UnauthorizedException(['Invalid webhook secret']);
+    }
+
+    const { companyId, status, statusReason } = payload.data;
+    const onboarding =
+      await this.customerOnboardingRepository.findCustomerOnboardingById({
+        companyId,
+      });
+    if (!onboarding) {
+      throw new BadRequestException(['Company onboarding detail not found']);
+    }
+
+    const reason = statusReason?.join(', ') || '';
+    const isUnchanged =
+      onboarding.companyVerificationStatus === status &&
+      (onboarding.companyStatusReason || '') === reason;
+    if (isUnchanged) return onboarding;
+
+    const updated =
+      await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+        { companyId },
+        {
+          $set: {
+            companyVerificationStatus: status,
+            companyStatusReason: reason,
+          },
+        },
+      );
+
+    if (status === KybVerificationEnum.Rejected) {
+      const user = await this.userRepository.findOne({
+        userId: onboarding.userId,
+      });
+      if (user?.email) {
+        await this.sendCustomerCreditRequestNotification({
+          to: user.email,
+          message: getOnboardingRejectedNotificationMail(user.name, reason),
+          subject: 'Business Verification Rejected',
+          cc: [],
+          mailType: 'send-company-verification-rejected-notification-mail',
+        });
+      } else {
+        Logger.warn(
+          `Could not send business verification rejection email: no email found for user ${onboarding.userId}`,
+          'CustomerOnboardingService',
+        );
+      }
+    }
+
+    return updated;
+  }
+
+  async submitKybCompany(
+    onboardingId: string,
+    body: Record<string, any>,
+    files: any[],
+    user: any,
+  ) {
+    if (!Types.ObjectId.isValid(onboardingId)) {
+      throw new BadRequestException(['Invalid customer onboarding ID']);
+    }
+
+    const kybAppId = this.config.get<string>('KYB_APP_ID')?.trim();
+    const idServiceUrl = this.config.get<string>('CAVACH_API_DOMAIN');
+    const ssiServiceUrl = this.config.get<string>('SSI_API_DOMAIN');
+    if (!kybAppId || !idServiceUrl || !ssiServiceUrl) {
+      throw new InternalServerErrorException(
+        'KYB_APP_ID, CAVACH_API_DOMAIN, and SSI_API_DOMAIN must be configured',
+      );
+    }
+
+    const [onboarding, kybApp] = await Promise.all([
+      this.customerOnboardingRepository.findCustomerOnboardingById({
+        _id: onboardingId,
+        userId: user.userId,
+      }),
+      this.appAuthRepository.findOne({ appId: kybAppId }),
+    ]);
+    if (!onboarding) {
+      throw new BadRequestException(['Customer onboarding detail not found']);
+    }
+    const existingCompanyId = onboarding.companyId;
+    if (
+      existingCompanyId &&
+      (onboarding.companyVerificationStatus === KybVerificationEnum.Completed ||
+        onboarding.companyVerificationStatus === KybVerificationEnum.Approved)
+    ) {
+      return onboarding;
+    }
+    const isRejectedRetry = Boolean(
+      existingCompanyId &&
+        onboarding.companyVerificationStatus === KybVerificationEnum.Rejected,
+    );
+    const isRetry = Boolean(
+      existingCompanyId &&
+        (isRejectedRetry ||
+          onboarding.companyVerificationStatus ===
+            KybVerificationEnum.Submitted),
+    );
+
+    const companyPayload = this.parseMultipartJson(body.company, 'company');
+    const company = companyPayload?.fields || companyPayload;
+
+    const phoneNumber =
+      body.phoneNumber ?? company?.phoneNumber ?? onboarding.phoneNumber;
+    const { documents, orderedFiles } = this.parseKybDocumentParts(
+      body,
+      files,
+      isRetry,
+    );
+    await this.validateKybCompanyRequest(company, documents, orderedFiles);
+
+    if (
+      !kybApp ||
+      !kybApp.services?.some(
+        (service) => service.id === SERVICE_TYPES.CAVACH_API,
+      )
+    ) {
+      throw new BadRequestException(['Configured KYB app was not found']);
+    }
+    const ssiAppId = kybApp.dependentServices?.[0];
+    if (!ssiAppId) {
+      throw new BadRequestException([
+        'Configured KYB app does not have a dependent SSI app',
+      ]);
+    }
+    const [[kybAccessToken, ssiAccessToken], accountUser] = await Promise.all([
+      this.appAuthRepository.findOne({ appId: ssiAppId }).then((ssiApp) => {
+        if (!ssiApp) {
+          throw new BadRequestException([
+            'Configured dependent SSI app was not found',
+          ]);
+        }
+        return Promise.all([
+          this.createConfiguredServiceToken(
+            kybApp,
+            GRANT_TYPES.access_service_kyb,
+            SERVICE_TYPES.CAVACH_API,
+          ),
+          this.createConfiguredServiceToken(
+            ssiApp,
+            GRANT_TYPES.access_service_ssi,
+            SERVICE_TYPES.SSI_API,
+          ),
+        ]);
+      }),
+      // Fetching account user details to ensure correct user information in case of tenant login.
+      this.userRepository.findOne({ userId: user.userId }),
+      // Phone number is owned by the dashboard, so it is saved even if KYB submission fails later.
+      this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+        { _id: onboardingId, userId: user.userId },
+        {
+          $set: {
+            companyIDPAppId: kybAppId,
+            ...(phoneNumber != null &&
+              String(phoneNumber).trim() && {
+                phoneNumber: String(phoneNumber).trim(),
+              }),
+          },
+        },
+      ),
+    ]);
+    if (!accountUser) {
+      throw new BadRequestException(['Account user detail not found']);
+    }
+    const namespace = this.config.get<string>('HID_NETWORK_NAMESPACE') || '';
+    const temporaryDid = `did:hid:${
+      namespace ? `${namespace}:` : ''
+    }${uuidv4()}`;
+    const jwtResult = await this.makeExternalRequest(
+      `${sanitizeUrl(ssiServiceUrl, true)}${
+        SERVICE_ENDPOINTS.SSI_ISSUE_DID_JWT
+      }`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ssiAccessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          issuer: {
+            verificationMethodId: kybApp?.issuerVerificationMethodId,
+            did: kybApp?.issuerDid,
+          },
+          audience: sanitizeUrl(idServiceUrl, false),
+          claims: {
+            name: accountUser.name,
+            email: accountUser.email,
+            did: temporaryDid,
+          },
+          ttlSeconds: 3600,
+        }),
+      },
+      'Failed to issue KYB onboarding DID JWT',
+      true,
+    );
+    const didJwt = jwtResult?.accessToken || jwtResult?.data?.accessToken;
+    if (!didJwt) {
+      throw new InternalServerErrorException(
+        'SSI service did not return a DID JWT',
+      );
+    }
+
+    const exchangeResult = await this.makeExternalRequest(
+      `${sanitizeUrl(idServiceUrl, true)}${SERVICE_ENDPOINTS.ID_AUTH_EXCHANGE}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${didJwt}`,
+          'x-kyb-access-token': kybAccessToken,
+          'x-ssi-access-token': ssiAccessToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ provider: 'client_auth' }),
+      },
+      'Failed to exchange the KYB onboarding identity',
+      true,
+    );
+    const userAccessToken =
+      exchangeResult?.data?.kycServiceUserAccessToken ||
+      exchangeResult?.kycServiceUserAccessToken;
+    if (!userAccessToken) {
+      throw new InternalServerErrorException(
+        'ID-Service did not return a KYB user access token',
+      );
+    }
+    const idServiceHeaders = {
+      Authorization: `Bearer ${userAccessToken}`,
+      'x-kyb-access-token': kybAccessToken,
+      'x-ssi-access-token': ssiAccessToken,
+    };
+    // Fetching the existing company and uploading new documents only depend on
+    // the user access token, so they run concurrently.
+    const [existingCompanyDocuments, documentIds] = await Promise.all([
+      isRetry
+        ? this.makeExternalRequest(
+            `${sanitizeUrl(idServiceUrl, true)}${
+              SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
+            }/${encodeURIComponent(existingCompanyId)}`,
+            { method: 'GET', headers: idServiceHeaders },
+            'Failed to fetch the existing KYB company',
+            true,
+          ).then((companyResult) => {
+            const existingCompany = companyResult?.data || companyResult;
+            return Array.isArray(existingCompany?.documents)
+              ? existingCompany.documents
+              : [];
+          })
+        : Promise.resolve([] as any[]),
+      Promise.all(
+        orderedFiles.map(async (file, index) => {
+          const formData = new FormData();
+          formData.append(
+            'file',
+            new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }),
+            file.originalname,
+          );
+          formData.append('entityType', 'Company');
+          formData.append('documentType', documents[index].type);
+          const uploadResult = await this.makeExternalRequest(
+            `${sanitizeUrl(idServiceUrl, true)}${
+              SERVICE_ENDPOINTS.ID_DOCUMENT_UPLOAD
+            }`,
+            { method: 'POST', headers: idServiceHeaders, body: formData },
+            `Failed to upload KYB document ${index + 1}`,
+            true,
+          );
+          const documentId = uploadResult?.data?.id || uploadResult?.id;
+          if (!documentId) {
+            throw new InternalServerErrorException(
+              `ID-Service did not return an ID for KYB document ${index + 1}`,
+            );
+          }
+          return documentId as string;
+        }),
+      ),
+    ]);
+    const replacementTypes = new Set(documents.map(({ type }) => type));
+    const documentsToReplace = existingCompanyDocuments.filter((document) =>
+      replacementTypes.has(document.documentType),
+    );
+    for (const document of documentsToReplace) {
+      if (!document?.id) {
+        throw new InternalServerErrorException(
+          `Existing ${
+            document?.documentType || 'KYB'
+          } document is missing its ID`,
+        );
+      }
+    }
+
+    const companyResult = await this.makeExternalRequest(
+      `${sanitizeUrl(idServiceUrl, true)}${
+        SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
+      }${isRetry ? `/${encodeURIComponent(existingCompanyId)}` : ''}`,
+      {
+        method: isRetry ? 'PATCH' : 'POST',
+        headers: { ...idServiceHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...company,
+          documentIds: isRetry
+            ? [
+                ...existingCompanyDocuments
+                  .filter(
+                    (document) =>
+                      !documents.some(
+                        ({ type }) => type === document.documentType,
+                      ),
+                  )
+                  .map((document) => document.id)
+                  .filter(Boolean),
+                ...documentIds,
+              ]
+            : documentIds,
+        }),
+      },
+      'Failed to create the KYB company',
+      true,
+    );
+    const companyData = companyResult?.data || companyResult || {};
+    const companyId = companyData._id || companyData.id || existingCompanyId;
+    if (!companyId) {
+      throw new InternalServerErrorException(
+        'ID-Service did not return a company ID',
+      );
+    }
+    // Replaced documents are deleted only after the company points to the new
+    // ones, and in the background so a failed delete cannot fail the submission.
+    for (const document of documentsToReplace) {
+      this.makeExternalRequest(
+        `${sanitizeUrl(idServiceUrl, true)}${
+          SERVICE_ENDPOINTS.ID_DOCUMENT
+        }/${encodeURIComponent(document.id)}`,
+        {
+          method: 'DELETE',
+          headers: idServiceHeaders,
+        },
+        `Failed to delete replaced KYB document ${document.id}`,
+        true,
+      ).catch((error) =>
+        Logger.error(
+          `Failed to delete replaced KYB document ${document.id} of company ${companyId}: ${error?.message}`,
+          error?.stack,
+          'CustomerOnboardingService',
+        ),
+      );
+    }
+    const statusReason = companyData.statusReason;
+    const updatedOnboarding =
+      await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+        { _id: onboardingId, userId: user.userId },
+        {
+          $set: {
+            companyId,
+            ...(companyData.status !== undefined && {
+              companyVerificationStatus: companyData.status,
+            }),
+            ...(company.registrationNumber !== undefined && {
+              registrationNumber: company.registrationNumber,
+            }),
+            ...(statusReason !== undefined && {
+              companyStatusReason: Array.isArray(statusReason)
+                ? statusReason.map(String).join(', ')
+                : String(statusReason),
+            }),
+            ...(isRejectedRetry &&
+              statusReason === undefined && {
+                companyStatusReason: '',
+              }),
+          },
+        },
+      );
+    return updatedOnboarding;
+  }
+
+  private parseMultipartJson(value: any, fieldName: string): any {
+    if (typeof value !== 'string') return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      throw new BadRequestException([`${fieldName} must contain valid JSON`]);
+    }
+  }
+
+  private parseKybDocumentParts(
+    body: Record<string, any>,
+    files: any[],
+    allowNoDocuments = false,
+  ) {
+    if (!Array.isArray(files)) {
+      throw new BadRequestException(['Document uploads must be files']);
+    }
+    const documentTypes = new Map<number, string>();
+    if (body.documents !== undefined) {
+      let documentsPayload = body.documents;
+      if (typeof documentsPayload === 'string') {
+        documentsPayload = this.parseMultipartJson(
+          documentsPayload,
+          'documents',
+        );
+      }
+      let parsedDocuments: any[];
+      if (Array.isArray(documentsPayload)) {
+        parsedDocuments = documentsPayload;
+      } else if (
+        documentsPayload &&
+        typeof documentsPayload === 'object' &&
+        Object.keys(documentsPayload).every((key) => /^\d+$/.test(key))
+      ) {
+        const indexes = Object.keys(documentsPayload).sort(
+          (left, right) => Number(left) - Number(right),
+        );
+        if (indexes.some((key, index) => Number(key) !== index)) {
+          throw new BadRequestException([
+            'Document indexes must start at 0 and be consecutive',
+          ]);
+        }
+        parsedDocuments = indexes.map((key) => documentsPayload[key]);
+      } else {
+        throw new BadRequestException([
+          'documents must be an array of { type, file } items',
+        ]);
+      }
+      parsedDocuments.forEach((document, index) => {
+        if (!document || typeof document.type !== 'string') {
+          throw new BadRequestException([
+            `documents[${index}].type must be a string`,
+          ]);
+        }
+        documentTypes.set(index, document.type);
+      });
+    } else {
+      for (const [fieldName, value] of Object.entries(body)) {
+        if (!fieldName.startsWith('documents')) continue;
+        const match = /^documents\[(\d+)\](?:\[type\]|\.type)$/.exec(fieldName);
+        if (!match || typeof value !== 'string') {
+          throw new BadRequestException([
+            'Document types must use documents[index][type] fields',
+          ]);
+        }
+        const index = Number(match[1]);
+        if (documentTypes.has(index)) {
+          throw new BadRequestException([
+            `Duplicate document type at index ${index}`,
+          ]);
+        }
+        documentTypes.set(index, value);
+      }
+    }
+
+    if (documentTypes.size === 0 && !allowNoDocuments) {
+      throw new BadRequestException(['At least one document is required']);
+    }
+
+    if (documentTypes.size === 0 && files.length === 0) {
+      return { documents: [], orderedFiles: [] };
+    }
+
+    const indexedFiles = files.map((file) => {
+      const match = /^documents\[(\d+)\](?:\[file\]|\.file)$/.exec(
+        file.fieldname || '',
+      );
+      if (!match) {
+        throw new BadRequestException([
+          'Document files must use documents[index][file] fields',
+        ]);
+      }
+      return { file, index: Number(match[1]) };
+    });
+    indexedFiles.sort((left, right) => left.index - right.index);
+    if (indexedFiles.some((entry, index) => entry.index !== index)) {
+      throw new BadRequestException([
+        'Document indexes must start at 0 and be consecutive',
+      ]);
+    }
+    if (
+      documentTypes.size !== indexedFiles.length ||
+      indexedFiles.some(({ index }) => !documentTypes.has(index)) ||
+      [...documentTypes.keys()].some((index) => index >= indexedFiles.length)
+    ) {
+      throw new BadRequestException([
+        'Each document type must have a matching file at the same index',
+      ]);
+    }
+    const documents = indexedFiles.map(({ index }) => ({
+      type: documentTypes.get(index),
+    }));
+    return {
+      documents,
+      orderedFiles: indexedFiles.map(({ file }) => file),
+    };
+  }
+
+  private async validateKybCompanyRequest(
+    company: any,
+    documents: any,
+    files: any[],
+  ): Promise<void> {
+    if (!company || typeof company !== 'object' || Array.isArray(company)) {
+      throw new BadRequestException(['company must be a JSON object']);
+    }
+    const companyErrors = await validate(
+      plainToInstance(KybCompanyFieldsDto, company),
+    );
+    if (companyErrors.length) {
+      const getValidationMessages = (errors: ValidationError[]): string[] =>
+        errors.flatMap((error) => [
+          ...Object.values(error.constraints || {}),
+          ...getValidationMessages(error.children || []),
+        ]);
+      throw new BadRequestException(getValidationMessages(companyErrors));
+    }
+    if (!Array.isArray(documents) || !Array.isArray(files)) {
+      throw new BadRequestException(['documents and files must be arrays']);
+    }
+    if (documents.length !== files.length) {
+      throw new BadRequestException([
+        'Each document metadata item must have a matching uploaded file',
+      ]);
+    }
+    const supportedTypes = new Set(Object.values(SupportedKybDocument));
+    if (
+      documents.some(
+        (document) =>
+          !document ||
+          typeof document.type !== 'string' ||
+          !supportedTypes.has(document.type),
+      )
+    ) {
+      throw new BadRequestException(['documents contains an unsupported type']);
+    }
+    const allowedCompanyFields = [
+      'name',
+      'domain',
+      'region',
+      'countryOfRegistration',
+      'registrationNumber',
+      'registrationNumberType',
+      'taxIdType',
+      'taxIdNumber',
+      'address',
+    ];
+    for (const field of Object.keys(company)) {
+      if (!allowedCompanyFields.includes(field)) delete company[field];
+    }
+  }
+
+  private async createConfiguredServiceToken(
+    app: any,
+    grantType: GRANT_TYPES,
+    serviceType: SERVICE_TYPES,
+  ): Promise<string> {
+    const accessList = getAccessListForModule(
+      TokenModule.APP_AUTH,
+      serviceType,
+      grantType,
+    );
+    const key =
+      grantType === GRANT_TYPES.access_service_kyb
+        ? `${app.appId}_${grantType}`
+        : app.appId;
+    const sessionId = generateHash(key);
+    await this.appAuthService.storeDataInRedis(
+      grantType,
+      app,
+      accessList,
+      sessionId,
+      generateHash(JSON.stringify(accessList)),
+    );
+    const token = await this.appAuthService.getAccessToken(
+      {
+        appId: app.appId,
+        appName: app.appName,
+        grantType,
+        subdomain: app.subdomain,
+        sessionId,
+      },
+      EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
+      EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
+    );
+    return token.access_token;
+  }
+
   /**
    * Creates a new customer onboarding record and notifies super admins
    * @param createCustomerOnboardingDto - DTO containing customer onboarding details including KYC/KYB preferences
@@ -247,17 +849,14 @@ export class CustomerOnboardingService {
     );
   }
   /**
-   * Makes an external HTTP request with error handling and response validation
-   * @param url - The URL to make the request to
-   * @param options - Request options including method, headers, body etc.
-   * @param errorMessage - Custom error message prefix for better error reporting
-   * @returns Promise resolving to the JSON response from the API
-   * @throws Error if request fails or response is not OK
+   * Makes an external HTTP request. KYB calls opt in to the tailored HTTP error
+   * response; other onboarding calls keep the existing error behavior.
    */
   private async makeExternalRequest(
     url: string,
     options: RequestInit,
     errorMessage: string,
+    handleKybErrors = false,
   ) {
     Logger.log('Inside makeExternalRequest()', 'CustomerOnboardingService');
     try {
@@ -267,10 +866,72 @@ export class CustomerOnboardingService {
         `Received response with status ${response.status}`,
         'CustomerOnboardingService',
       );
-      // const detail = await response.json();
       const text = await response.text();
-      const detail = text ? JSON.parse(text) : null;
+      let detail: any = null;
+      if (text) {
+        if (handleKybErrors) {
+          try {
+            detail = JSON.parse(text);
+          } catch {
+            detail = { message: text };
+          }
+        } else {
+          detail = JSON.parse(text);
+        }
+      }
       if (!response.ok) {
+        if (handleKybErrors) {
+          Logger.error(
+            `KYB upstream request failed: ${JSON.stringify({
+              request: errorMessage,
+              method: options.method || 'GET',
+              url,
+              status: response.status,
+              responseBody: text.slice(0, 4000),
+            })}`,
+            undefined,
+            'CustomerOnboardingService',
+          );
+          const upstreamDetails =
+            detail?.error?.details || detail?.message || detail?.error;
+          const messages = Array.isArray(upstreamDetails)
+            ? upstreamDetails.map(String)
+            : typeof upstreamDetails === 'string'
+            ? [upstreamDetails]
+            : upstreamDetails
+            ? [JSON.stringify(upstreamDetails)]
+            : [];
+          const usefulMessages = messages.filter(
+            (message) =>
+              !['error', 'internal server error'].includes(
+                message.trim().toLowerCase(),
+              ),
+          );
+          const readableMessage =
+            usefulMessages.join(', ') ||
+            `Upstream service returned ${response.status}`;
+
+          if (
+            response.status >= 500 ||
+            response.status === 401 ||
+            response.status === 403
+          ) {
+            throw new InternalServerErrorException([
+              `${errorMessage}: ${readableMessage}`,
+            ]);
+          }
+          throw new HttpException(
+            {
+              statusCode: response.status,
+              message: usefulMessages.length ? usefulMessages : messages,
+              error:
+                typeof detail?.message === 'string'
+                  ? detail.message
+                  : 'Upstream request rejected',
+            },
+            response.status,
+          );
+        }
         const serverError =
           detail?.error?.details ||
           (Array.isArray(detail?.message)
@@ -282,8 +943,21 @@ export class CustomerOnboardingService {
       }
       return detail;
     } catch (error: any) {
+      if (handleKybErrors && error instanceof HttpException) {
+        throw error;
+      }
+      if (handleKybErrors) {
+        Logger.error(
+          `KYB upstream request error: ${error?.message || String(error)}`,
+          error?.stack,
+          'CustomerOnboardingService',
+        );
+        throw new InternalServerErrorException([
+          `${errorMessage}: upstream service request failed`,
+        ]);
+      }
       Logger.error(error, error?.stack, 'CustomerOnboardingService');
-      throw error; // don't rewrap
+      throw error;
     }
   }
 
@@ -1337,6 +2011,44 @@ export class CustomerOnboardingService {
     return url.origin + '/';
   }
 
+  private toDashboardCompanyDetail(company: any) {
+    if (!company || typeof company !== 'object') return undefined;
+
+    const fields =
+      company.fields && typeof company.fields === 'object'
+        ? company.fields
+        : company;
+    const allowedCompanyFields = [
+      'name',
+      'domain',
+      'region',
+      'countryOfRegistration',
+      'registrationNumber',
+      'registrationNumberType',
+      'taxIdType',
+      'taxIdNumber',
+      'address',
+    ];
+    const companyFields = Object.fromEntries(
+      allowedCompanyFields
+        .filter((key) => fields[key] !== undefined)
+        .map((key) => [key, fields[key]]),
+    );
+    const documents = Array.isArray(company.documents) ? company.documents : [];
+    const rawStatusReason = company.statusReason;
+    return {
+      id: company._id || company.id,
+      ...companyFields,
+      status: company.status,
+      statusReason: Array.isArray(rawStatusReason)
+        ? rawStatusReason.map(String).join(', ')
+        : rawStatusReason == null
+        ? ''
+        : String(rawStatusReason),
+      documents,
+    };
+  }
+
   async findUserOnboardingDetail(user) {
     Logger.log(
       'Inside findUserOnboardingDetail() method start:: to get onboarding detail of particular user',
@@ -1355,6 +2067,73 @@ export class CustomerOnboardingService {
           `No onboarding detail found for user with id: ${user.userId}`,
         ]);
       }
+
+      if (
+        userOnboardingDetail.companyId &&
+        userOnboardingDetail.companyVerificationStatus !==
+          KybVerificationEnum.Approved &&
+        userOnboardingDetail.companyVerificationStatus !==
+          KybVerificationEnum.Completed
+      ) {
+        const kybAppId =
+          userOnboardingDetail.companyIDPAppId ||
+          this.config.get<string>('KYB_APP_ID')?.trim();
+        const cavachApiDomain = this.config
+          .get<string>('CAVACH_API_DOMAIN')
+          ?.trim();
+        if (!kybAppId || !cavachApiDomain) {
+          throw new InternalServerErrorException(
+            'KYB_APP_ID and CAVACH_API_DOMAIN must be configured',
+          );
+        }
+
+        const kybApp = await this.appAuthRepository.findOne({
+          appId: kybAppId,
+        });
+        if (
+          !kybApp ||
+          !kybApp.services?.some(
+            (service) => service.id === SERVICE_TYPES.CAVACH_API,
+          )
+        ) {
+          throw new BadRequestException(['Configured KYB app was not found']);
+        }
+
+        const kybAccessToken = await this.createConfiguredServiceToken(
+          kybApp,
+          GRANT_TYPES.access_service_kyb,
+          SERVICE_TYPES.CAVACH_API,
+        );
+        const companyResult = await this.makeExternalRequest(
+          `${sanitizeUrl(cavachApiDomain, true)}${
+            SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
+          }/${encodeURIComponent(userOnboardingDetail.companyId)}`,
+          {
+            method: 'GET',
+            headers: {
+              'x-kyb-access-token': kybAccessToken,
+              Origin: sanitizeUrl(
+                this.config.get<string>(
+                  'DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP',
+                ),
+                false,
+              ),
+            },
+          },
+          'Failed to refresh the KYB company verification status',
+          true,
+        );
+
+        const companyData = companyResult?.data || companyResult;
+        const companyDetail = this.toDashboardCompanyDetail(companyData);
+        return {
+          ...(typeof userOnboardingDetail.toObject === 'function'
+            ? userOnboardingDetail.toObject()
+            : userOnboardingDetail),
+          companyDetail,
+        };
+      }
+
       return userOnboardingDetail;
     } catch (e: any) {
       Logger.error(

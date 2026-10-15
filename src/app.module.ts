@@ -72,6 +72,10 @@ export class AppModule implements NestModule {
           method: RequestMethod.POST,
         },
         {
+          path: '/api/v1/customer-onboarding/company-verification/webhook',
+          method: RequestMethod.POST,
+        },
+        {
           path: '/api/v1/credits/authz/:appId',
           method: RequestMethod.GET,
         },

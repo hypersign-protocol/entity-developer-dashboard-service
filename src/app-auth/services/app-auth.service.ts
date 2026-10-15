@@ -30,6 +30,7 @@ import { UserRole } from 'src/user/schema/user.schema';
 import { WebPageConfigRepository } from 'src/webpage-config/repositories/webpage-config.repository';
 import { InjectModel } from '@nestjs/mongoose';
 import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
+import { KybVerificationEnum } from 'src/customer-onboarding/constants/identifier-types';
 import { Model, Types } from 'mongoose';
 import {
   DNS_RESOLVER_URL,
@@ -566,6 +567,30 @@ export class AppAuthService {
 
     // Env restrictions
     if (env === APP_ENVIRONMENT.prod) {
+      const [user, onboarding] = await Promise.all([
+        this.userRepository.findOne({ userId }),
+        this.onboardModel.findOne({ userId }).lean(),
+      ]);
+      const mfaIsEnabled = user?.authenticators?.some(
+        (authenticator) =>
+          String(authenticator.isTwoFactorAuthenticated) === 'true',
+      );
+      if (!mfaIsEnabled) {
+        throw new BadRequestException([
+          'Enable MFA before moving to production',
+        ]);
+      }
+
+      if (
+        ![KybVerificationEnum.Completed, KybVerificationEnum.Approved].includes(
+          onboarding?.companyVerificationStatus as KybVerificationEnum,
+        )
+      ) {
+        throw new BadRequestException([
+          'Customer onboarding verification must be completed or approved before moving to production',
+        ]);
+      }
+
       if (!(domain && hasDomainVerified)) {
         throw new BadRequestException([
           'You must verify your domain before going to production',
@@ -1156,6 +1181,7 @@ export class AppAuthService {
       ),
     );
   }
+
   private async updateAppRedis(
     appId: string,
     userId,

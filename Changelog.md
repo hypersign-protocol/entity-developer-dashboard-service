@@ -3,9 +3,11 @@
 ## [Unreleased]
 ## [3.17.0] - 2026-10-07
 ### Added
-- Added new access for `/oauth` api for access kyb apis by thirdparty customer.
-- Added `businessId` as optional query parameter in `/oauth` api.
 
+- Added new access to the /oauth API for third-party customers to access KYB APIs.
+- Added businessId as an optional query parameter to the /oauth API.
+- Implemented PATCH /customer-onboarding to verify the company when moving an app to production.
+- Implemented checks for MFA setup and company verification when moving an app to production.
 ## [3.16.5] - 2026-10-06
 
 ### Updated

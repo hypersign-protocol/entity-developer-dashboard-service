@@ -139,26 +139,37 @@ export class PeopleService {
         TENANT_INVITE_ERRORS.INVALID_OR_UNAUTHORIZED_INVITE,
       ]);
     }
-    const expiry = new Date(adminPeople.invitationValidTill);
+    // Checked before expiry: accepted invites outlive invitationValidTill and
+    // must never be treated as expired (and deleted).
+    if (adminPeople.accepted) {
+      throw new BadRequestException([TENANT_INVITE_ERRORS.ALREADY_ACCEPTED]);
+    }
+
     const now = new Date();
-
-    if (expiry < now) {
-      throw new BadRequestException(['The invitation code has expired.']);
+    if (new Date(adminPeople.invitationValidTill) < now) {
+      // Conditional delete so an invite accepted or extended concurrently is kept.
+      await this.adminPeopleService.findOneAndDelete({
+        ...inviteFilter,
+        accepted: false,
+        invitationValidTill: { $lt: now },
+      });
+      Logger.log(`Removed expired invitation ${inviteCode}`, 'PeopleService');
+      throw new BadRequestException([TENANT_INVITE_ERRORS.INVITE_EXPIRED]);
     }
 
-    if (adminPeople?.accepted) {
-      throw new BadRequestException([
-        'This invitation has already been accepted.',
-      ]);
-    }
     const acceptedInvite = await this.adminPeopleService.findOneAndUpdate(
-      inviteFilter,
+      { ...inviteFilter, accepted: false, invitationValidTill: { $gte: now } },
       {
         userId: userDetails?.userId,
         accepted: true,
-        acceptedAt: new Date().toISOString(),
+        acceptedAt: now.toISOString(),
       },
     );
+    if (!acceptedInvite) {
+      throw new BadRequestException([
+        TENANT_INVITE_ERRORS.INVALID_OR_UNAUTHORIZED_INVITE,
+      ]);
+    }
 
     return acceptedInvite;
   }

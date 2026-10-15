@@ -1,7 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+## [3.17.0] - 2026-10-07
+### Added
 
+- Added new access to the /oauth API for third-party customers to access KYB APIs.
+- Added businessId as an optional query parameter to the /oauth API.
+- Implemented PATCH /customer-onboarding to verify the company when moving an app to production.
+- Implemented checks for MFA setup and company verification when moving an app to production.
 ## [3.16.5] - 2026-10-06
 
 ### Updated
@@ -63,8 +69,7 @@
 ## [3.14.0] - 2026-07-14
 
 ### Changed
-
-- Added a way to track credit issuer.
+- Added a way to trak credit issuer.
 
 ## [3.13.1] - 2026-07-06
 

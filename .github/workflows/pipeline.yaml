@@ -167,5 +167,13 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__CREDIT_USAGE_THRESHOLDS__#${{ secrets.CREDIT_USAGE_THRESHOLDS }}#" {} \;
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__CREDIT_EXPIRY_THRESHOLDS__#${{ secrets.CREDIT_EXPIRY_THRESHOLDS }}#" {} \;
+    - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i ''s/__CUSTOMER_ONBOARDING_WEBHOOK_SECRET__/${{ secrets.CUSTOMER_ONBOARDING_WEBHOOK_SECRET }}/g'' {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__SUPPORTED_FILE_TYPES__#${{ secrets.SUPPORTED_FILE_TYPES }}#" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__FILE_MAX_SIZE__#${{ secrets.FILE_MAX_SIZE }}#" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYB_APP_ID__#${{ secrets.KYB_APP_ID }}#" {} \;      
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

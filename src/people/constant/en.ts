@@ -16,6 +16,9 @@ export const TENANT_INVITE_ERRORS = {
   ROLE_NOT_FOUND: (roleId: string) =>
     `No role exists for the provided role ID: ${roleId}.`,
   NO_ROLE_ASSIGNED: 'A role must be assigned before inviting a member.',
+  INVITE_EXPIRED:
+    'The invitation code has expired. Please ask the administrator to invite you again.',
+  ALREADY_ACCEPTED: 'This invitation has already been accepted.',
 };
 export const TENANT_MESSAGES = {
   SWITCH_SUCCESS: 'Switched to the tenant successfully.',

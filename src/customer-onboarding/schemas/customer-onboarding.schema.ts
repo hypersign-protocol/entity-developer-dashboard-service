@@ -8,6 +8,7 @@ import {
   StepStatus,
   MonthlyVolume,
 } from '../constants/enum';
+import { KybVerificationEnum } from '../constants/identifier-types';
 export type CustomerOnboardingDocument = CustomerOnboarding & Document;
 
 export class LogDetail {
@@ -76,6 +77,18 @@ export class CustomerOnboarding {
   ssiServiceId?: string;
   @Prop({ type: String, required: false })
   kycServiceId?: string;
+  @Prop({ type: String, required: false })
+  companyId?: string;
+  @Prop({ type: String, required: false })
+  companyIDPAppId?: string;
+  @Prop({
+    type: String,
+    enum: KybVerificationEnum,
+    // default: KybVerificationEnum.Completed,
+  })
+  companyVerificationStatus?: string;
+  @Prop({ type: String, required: false })
+  companyStatusReason?: string;
   @Prop({ type: String, required: true })
   userId: string;
 }

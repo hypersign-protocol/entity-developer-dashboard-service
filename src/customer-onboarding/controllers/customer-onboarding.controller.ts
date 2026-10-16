@@ -3,13 +3,22 @@ import {
   Get,
   Post,
   Body,
+  BadRequestException,
   Param,
+  Patch,
   Logger,
   Req,
   ValidationPipe,
   UsePipes,
   ForbiddenException,
+  UploadedFiles,
+  UseInterceptors,
+  Headers,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
 } from '@nestjs/common';
+import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import {
   CreateCustomerOnboardingDto,
   CreateCustomerOnboardingRespDto,
@@ -20,13 +29,22 @@ import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
+  ApiConsumes,
+  ApiBody,
+  ApiHeader,
+  ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
 import { CustomerOnboardingService } from '../services/customer-onboarding.service';
 import { Request } from 'express';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
-import { ProcessCustomerOnboardingRespDto } from '../dto/customer-onboarding-process.dto';
 import { UserRole } from 'src/user/schema/user.schema';
+import { SubmitKybCompanyMultipartDto } from '../dto/submit-kyb-company.dto';
+import {
+  CustomerOnboardingProcessDto,
+  ProcessCustomerOnboardingRespDto,
+} from '../dto/customer-onboarding-process.dto';
+import { CompanyVerificationWebhookDto } from '../dto/company-verification-webhook.dto';
 @ApiTags('Customer-Onboarding')
 @Controller('api/v1/customer-onboarding')
 export class CustomerOnboardingController {
@@ -77,6 +95,19 @@ export class CustomerOnboardingController {
   findUserOnboardingDetail(@Req() req: Request) {
     return this.customerOnboardingService.findUserOnboardingDetail(req.user);
   }
+
+  @Post('webhook')
+  @ApiHeader({ name: 'x-dashboard-webhook-secret', required: true })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  updateCompanyVerificationStatus(
+    @Headers('x-dashboard-webhook-secret') secret: string,
+    @Body() payload: CompanyVerificationWebhookDto,
+  ) {
+    return this.customerOnboardingService.updateCompanyVerificationStatus(
+      payload,
+      secret,
+    );
+  }
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({
     description: 'Customer Onboarding detail fetched successfully',
@@ -114,6 +145,74 @@ export class CustomerOnboardingController {
     return this.customerOnboardingService.processCustomerOnboarding(
       id,
       req.user.userId,
+    );
+  }
+
+  @ApiBearerAuth('Authorization')
+  @ApiOkResponse({
+    description: 'KYB company created and linked to onboarding successfully',
+    type: FetchCustomerOnboardingRespDto,
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID of the customer onboarding record',
+    example: '6ac8924307fcca51e5da07e4',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    type: SubmitKybCompanyMultipartDto,
+  })
+  @UseInterceptors(
+    AnyFilesInterceptor({
+      limits: {
+        files: 4,
+        fileSize: Number.parseInt(process.env.FILE_MAX_SIZE || '5242880', 10),
+      },
+    }),
+  )
+  @Patch(':id')
+  async submitKybCompany(
+    @Param('id') id: string,
+    @Body() body: Record<string, any>,
+    @UploadedFiles() files: any[],
+    @Req() req: Request,
+  ) {
+    const fileValidationPipe = new ParseFilePipe({
+      validators: [
+        new MaxFileSizeValidator({
+          maxSize: Number.parseInt(process.env.FILE_MAX_SIZE || '5242880', 10),
+        }),
+        new FileTypeValidator({
+          fileType: new RegExp(
+            `^(?:${(
+              process.env.SUPPORTED_FILE_TYPES ||
+              'image/jpeg,image/png,image/gif,application/pdf'
+            )
+              .split(',')
+              .map((fileType) =>
+                fileType.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+              )
+              .join('|')})$`,
+            'i',
+          ),
+        }),
+      ],
+      exceptionFactory: (error) =>
+        new BadRequestException([
+          typeof error === 'string' && error
+            ? error
+            : 'Invalid file. Only PDF or image files (jpg, jpeg, png, gif) are allowed.',
+        ]),
+    });
+    await Promise.all(
+      (files || []).map((file) => fileValidationPipe.transform(file)),
+    );
+
+    return this.customerOnboardingService.submitKybCompany(
+      id,
+      body,
+      files || [],
+      req.user,
     );
   }
 }

@@ -132,7 +132,15 @@ spec:
         - name: CREDIT_USAGE_THRESHOLDS
           value: '__CREDIT_USAGE_THRESHOLDS__' 
         - name: CREDIT_EXPIRY_THRESHOLDS
-          value: '__CREDIT_EXPIRY_THRESHOLDS__'        
+          value: '__CREDIT_EXPIRY_THRESHOLDS__'
+        - name: CUSTOMER_ONBOARDING_WEBHOOK_SECRET
+          value: __CUSTOMER_ONBOARDING_WEBHOOK_SECRET__
+        - name: SUPPORTED_FILE_TYPES
+          value: '__SUPPORTED_FILE_TYPES__'
+        - name: FILE_MAX_SIZE
+          value: '__FILE_MAX_SIZE__'
+        - name: KYB_APP_ID
+          value: __KYB_APP_ID__
         volumeMounts:
         - name: mongo
           mountPath: "/data"

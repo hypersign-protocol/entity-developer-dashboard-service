@@ -46,13 +46,35 @@ import { CreditModule } from 'src/credits/credits.module';
 })
 export class CustomerOnboardingModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    const companyWebhook = {
+      path: 'api/v1/customer-onboarding/webhook',
+      method: RequestMethod.POST,
+    };
     consumer.apply(TrimMiddleware).forRoutes(CustomerOnboardingController);
     consumer
       .apply(JWTAuthorizeMiddleware)
+      .exclude(companyWebhook)
+      .forRoutes(CustomerOnboardingController);
+    consumer
+      .apply(SuperAdminMiddleware)
+      .exclude(
+        { path: 'api/v1/customer-onboarding/:id', method: RequestMethod.GET },
+        { path: 'api/v1/customer-onboarding', method: RequestMethod.POST },
+        { path: 'api/v1/customer-onboarding', method: RequestMethod.GET },
+        {
+          path: 'api/v1/customer-onboarding/:id',
+          method: RequestMethod.PATCH,
+        },
+        companyWebhook,
+      )
       .forRoutes(CustomerOnboardingController);
     consumer
       .apply(JWTAccessAccountMiddleware)
+      .exclude(companyWebhook)
       .forRoutes(CustomerOnboardingController);
-    consumer.apply(RateLimitMiddleware).forRoutes(CustomerOnboardingController);
+    consumer
+      .apply(RateLimitMiddleware)
+      .exclude(companyWebhook)
+      .forRoutes(CustomerOnboardingController);
   }
 }

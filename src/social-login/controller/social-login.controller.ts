@@ -141,6 +141,14 @@ export class SocialLoginController {
       userDetail.authenticators = authenticator;
       userDetail.role = userDetail.role || UserRole.ADMIN;
     }
+    // After switching into a team account, the permissions that apply are the team role's,
+    // stored on the session at switch time (the same list JWTAccessAccountMiddleware enforces
+    // on the app routes). That middleware doesn't run on this route, so without this the
+    // dashboard would get the member's own permissions and show the wrong pages.
+    const session = req.session;
+    if (userDetail && session?.tenantId) {
+      userDetail.accessList = session.tenantUserPermissions || [];
+    }
     return {
       status: 200,
       message: userDetail,

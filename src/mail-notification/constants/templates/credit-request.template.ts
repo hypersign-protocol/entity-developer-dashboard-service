@@ -86,7 +86,7 @@ export default function getCreditRequestNotificationMail(customer: {
       <li style="margin:4px 0;"><strong>Interested Services:</strong> ${customer.interestedService.join(
         ', ',
       )}</li>
-      <li style="margin:4px 0;"><strong>Yearly Volume:</strong> ${
+      <li style="margin:4px 0;"><strong>Monthly Volume:</strong> ${
         customer.yearlyVolume
       }</li>
       <li style="margin:4px 0;"><strong>Business Fields:</strong> ${customer.businessField.join(

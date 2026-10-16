@@ -110,10 +110,11 @@ export class CustomerOnboardingService {
       throw new BadRequestException(['Company onboarding detail not found']);
     }
 
+    const isCompleted = status === KybVerificationEnum.Completed;
     const reason = statusReason?.join(', ') || '';
     const isUnchanged =
       onboarding.companyVerificationStatus === status &&
-      (onboarding.companyStatusReason || '') === reason;
+      (isCompleted || (onboarding.companyStatusReason || '') === reason);
     if (isUnchanged) return onboarding;
 
     const updated =
@@ -122,7 +123,7 @@ export class CustomerOnboardingService {
         {
           $set: {
             companyVerificationStatus: status,
-            companyStatusReason: reason,
+            ...(!isCompleted && { companyStatusReason: reason }),
           },
         },
       );
@@ -446,6 +447,7 @@ export class CustomerOnboardingService {
       );
     }
     const statusReason = companyData.statusReason;
+    const isCompleted = companyData.status === KybVerificationEnum.Completed;
     const updatedOnboarding =
       await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
         { _id: onboardingId, userId: user.userId },
@@ -458,12 +460,12 @@ export class CustomerOnboardingService {
             ...(company.registrationNumber !== undefined && {
               registrationNumber: company.registrationNumber,
             }),
-            ...(statusReason !== undefined && {
+            ...(!isCompleted && statusReason !== undefined && {
               companyStatusReason: Array.isArray(statusReason)
                 ? statusReason.map(String).join(', ')
                 : String(statusReason),
             }),
-            ...(isRejectedRetry &&
+            ...(isRejectedRetry && !isCompleted &&
               statusReason === undefined && {
                 companyStatusReason: '',
               }),

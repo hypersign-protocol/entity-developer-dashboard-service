@@ -540,6 +540,7 @@ export class CreditService {
     superAdminUserId: string,
     source: CreditSourceEnum,
     grantReferenceId?: string,
+    exactOnChainAllowanceAmount?: string,
   ) {
     try {
       const appDetail = await this.appRepository.findOne({ appId });
@@ -555,6 +556,27 @@ export class CreditService {
       const serviceType = serviceInfo.id as SERVICE_TYPES;
       const isSsiService = serviceInfo.id === SERVICE_TYPES.SSI_API;
       const { amount, validityPeriod, validityPeriodUnit } = creditDto;
+
+      let onChainAllowanceAmount: string | undefined;
+      if (exactOnChainAllowanceAmount !== undefined) {
+        if (!isSsiService) {
+          throw new BadRequestException([
+            'onChainAllowanceAmount can only be set for SSI services',
+          ]);
+        }
+        if (!/^[1-9]\d*$/.test(exactOnChainAllowanceAmount)) {
+          throw new BadRequestException([
+            'onChainAllowanceAmount must be a positive integer',
+          ]);
+        }
+        const parsedAllowance = BigInt(exactOnChainAllowanceAmount);
+        if (parsedAllowance > BigInt(Number.MAX_SAFE_INTEGER)) {
+          throw new BadRequestException([
+            'onChainAllowanceAmount exceeds the maximum safe integer',
+          ]);
+        }
+        onChainAllowanceAmount = parsedAllowance.toString();
+      }
 
       const totalCredit = Number(amount);
       if (!Number.isSafeInteger(totalCredit) || totalCredit <= 0) {
@@ -580,7 +602,10 @@ export class CreditService {
           existingCredit.apiCredit.total !== totalCredit ||
           existingCredit.criticalBalance !== criticalBalance ||
           existingCredit.validityDays !== validity.validityDays ||
-          existingCredit.source !== source
+          existingCredit.source !== source ||
+          (onChainAllowanceAmount !== undefined &&
+            String(existingCredit.onChainAllowance?.amount) !==
+              onChainAllowanceAmount)
         ) {
           throw new BadRequestException([
             'referenceId was reused with different credit semantics',
@@ -637,7 +662,7 @@ export class CreditService {
         );
         const authzCreditDetail = await this.grantSSIAllowance(
           appId,
-          this.ssiOnChainAllowance(totalCredit),
+          onChainAllowanceAmount ?? this.ssiOnChainAllowance(totalCredit),
           periodInYears,
         );
         onChainAllowance = {

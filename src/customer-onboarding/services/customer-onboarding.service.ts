@@ -460,12 +460,14 @@ export class CustomerOnboardingService {
             ...(company.registrationNumber !== undefined && {
               registrationNumber: company.registrationNumber,
             }),
-            ...(!isCompleted && statusReason !== undefined && {
-              companyStatusReason: Array.isArray(statusReason)
-                ? statusReason.map(String).join(', ')
-                : String(statusReason),
-            }),
-            ...(isRejectedRetry && !isCompleted &&
+            ...(!isCompleted &&
+              statusReason !== undefined && {
+                companyStatusReason: Array.isArray(statusReason)
+                  ? statusReason.map(String).join(', ')
+                  : String(statusReason),
+              }),
+            ...(isRejectedRetry &&
+              !isCompleted &&
               statusReason === undefined && {
                 companyStatusReason: '',
               }),

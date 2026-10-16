@@ -40,10 +40,7 @@ import { Request } from 'express';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
 import { UserRole } from 'src/user/schema/user.schema';
 import { SubmitKybCompanyMultipartDto } from '../dto/submit-kyb-company.dto';
-import {
-  CustomerOnboardingProcessDto,
-  ProcessCustomerOnboardingRespDto,
-} from '../dto/customer-onboarding-process.dto';
+import { ProcessCustomerOnboardingRespDto } from '../dto/customer-onboarding-process.dto';
 import { CompanyVerificationWebhookDto } from '../dto/company-verification-webhook.dto';
 @ApiTags('Customer-Onboarding')
 @Controller('api/v1/customer-onboarding')

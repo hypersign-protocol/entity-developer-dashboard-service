@@ -2306,16 +2306,14 @@ export class CustomerOnboardingService {
           `No onboarding detail found for user with id: ${user.userId}`,
         ]);
       }
-      let result =
+      let result: Record<string, any> =
         typeof userOnboardingDetail.toObject === 'function'
           ? userOnboardingDetail.toObject()
-          : userOnboardingDetail;
+          : { ...userOnboardingDetail };
       if (
         result.companyId &&
-        result.companyVerificationStatus !==
-          KybVerificationEnum.Approved &&
-        result.companyVerificationStatus !==
-          KybVerificationEnum.Completed
+        result.companyVerificationStatus !== KybVerificationEnum.Approved &&
+        result.companyVerificationStatus !== KybVerificationEnum.Completed
       ) {
         const kybAppId =
           result.companyIDPAppId ||

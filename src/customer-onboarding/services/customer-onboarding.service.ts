@@ -713,7 +713,7 @@ export class CustomerOnboardingService {
             userId: user.userId,
           });
         if (existingOnboarding) {
-          throw new ConflictException('You can only create onboarding once');
+          throw new ConflictException['You can only create onboarding once'];
         }
       }
       const {

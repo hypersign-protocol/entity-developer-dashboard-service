@@ -21,9 +21,14 @@ export default function getOnboardingFailureNotificationMail(
   const detailItems = Object.entries(onboardingDetails)
     .filter(
       ([key, value]) =>
-        !['__v', 'logs', 'createdAt', 'updatedAt', 'onboardingStatus'].includes(
-          key,
-        ) && value !== undefined,
+        ![
+          '_id',
+          '__v',
+          'logs',
+          'createdAt',
+          'updatedAt',
+          'onboardingStatus',
+        ].includes(key) && value !== undefined,
     )
     .map(([key, value]) => {
       let displayValue: string;
@@ -53,6 +58,9 @@ export default function getOnboardingFailureNotificationMail(
     <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px;">Dear <strong style="color:#111827;">Super Admin</strong>,</p>
     <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px;">Customer onboarding has stopped after a failure. </p>
     <ul style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#374151; margin:0 0 16px; padding-left:18px;">
+      <li style="margin:4px 0;"><strong>Onboarding ID:</strong> ${escapeHtml(
+        onboardingDetails._id,
+      )}</li>
       <li style="margin:4px 0;"><strong>Failed Step:</strong> ${escapeHtml(
         failedStep,
       )}</li>

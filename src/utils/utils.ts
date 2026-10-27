@@ -39,8 +39,7 @@ export const SERVICE_ENDPOINTS = {
   ID_KYB_COMPANY_VERIFICATION: 'api/v1/e-kyb/verification/company',
 } as const;
 
-export const ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS =
-  TIME.MINUTE * 1000;
+export const ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS = TIME.MINUTE * 1000;
 
 export const existDir = (dirPath) => {
   if (!dirPath) throw new Error('Directory path undefined');

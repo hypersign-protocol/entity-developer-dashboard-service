@@ -57,7 +57,7 @@ export class CustomerOnboardingController {
     description: 'Error occured while storing onboarding detail',
     type: AppError,
   })
-  @UsePipes(new ValidationPipe())
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @Post()
   create(
     @Body() createCustomerOnboardingDto: CreateCustomerOnboardingDto,

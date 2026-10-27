@@ -2732,12 +2732,9 @@ export class CustomerOnboardingService {
     );
     try {
       const userOnboardingDetail =
-        await this.customerOnboardingRepository.findCustomerOnboardingById({
-          userId: user.userId,
-          sort: {
-            createdAt: -1,
-          },
-        });
+        await this.customerOnboardingRepository.findLatestCustomerOnboardingByUserId(
+          user.userId,
+        );
       if (!userOnboardingDetail) {
         throw new BadRequestException([
           `No onboarding detail found for user with id: ${user.userId}`,
@@ -2830,9 +2827,9 @@ export class CustomerOnboardingService {
       'CustomerOnboardingService',
     );
     const customerOnboardingData =
-      await this.customerOnboardingRepository.findCustomerOnboardingById({
+      await this.customerOnboardingRepository.findLatestCustomerOnboardingByUserId(
         userId,
-      });
+      );
     if (!customerOnboardingData) {
       throw new BadRequestException([
         `No customer onboarding detail found for userId: ${userId}`,

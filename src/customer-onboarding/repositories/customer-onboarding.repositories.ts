@@ -30,6 +30,15 @@ export class CustomerOnboardingRepository {
     );
     return this.customerOnboardingModel.findOne(customerFilterQuery);
   }
+  findLatestCustomerOnboardingByUserId(userId: string) {
+    Logger.log(
+      'Finding latest customer onboarding details for user',
+      'CustomerOnboardingRepository',
+    );
+    return this.customerOnboardingModel
+      .findOne({ userId })
+      .sort({ createdAt: -1, _id: -1 });
+  }
   updateCustomerOnboardingDetails(
     customerFilterQuery: FilterQuery<CustomerOnboarding>,
     updateData: UpdateQuery<CustomerOnboarding>,

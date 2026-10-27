@@ -1186,6 +1186,15 @@ export class CustomerOnboardingService {
     }
     const onboardingLogs: LogDetail[] = [];
     const onboardingUpdateData: Partial<CustomerOnboarding> = {};
+    const processingExecutionId = uuidv4();
+    const processingLockKey = `${REDIS_KEYS.CUSTOMER_ONBOARDING_LOCK}${id}`;
+    const processingLeaseMs = 2 * 60 * 1000;
+    const processingHeartbeatMs = 30 * 1000;
+    let processingClaimed = false;
+    let processingLeaseLost = false;
+    let processingVersion: number | undefined;
+    let processingHeartbeat: ReturnType<typeof setInterval> | undefined;
+    let heartbeatInFlight = false;
     let ssiService: any,
       widgetConfigDetail: any,
       kycAccessToken: any,
@@ -1195,16 +1204,97 @@ export class CustomerOnboardingService {
       didDocument: any;
 
     try {
-      // Validate and fetch customer onboarding details
-      const customerOnboardingData =
-        await this.customerOnboardingRepository.findCustomerOnboardingById({
-          _id: id,
-        });
-      if (!customerOnboardingData) {
-        throw new BadRequestException([
-          `Customer onboarding detail not found for id: ${id}`,
+      // A dedicated Redis key serializes processing across service instances.
+      // Keep it separate from the progress snapshot, which has its own TTL.
+      processingClaimed = await this.acquireOnboardingProcessingLock(
+        processingLockKey,
+        processingExecutionId,
+        processingLeaseMs,
+      );
+      if (!processingClaimed) {
+        const currentOnboarding =
+          await this.customerOnboardingRepository.findCustomerOnboardingById({
+            _id: id,
+          });
+        if (!currentOnboarding) {
+          throw new BadRequestException([
+            `Customer onboarding detail not found for id: ${id}`,
+          ]);
+        }
+        if (currentOnboarding.onboardingStatus === CreditStatus.APPROVED) {
+          return { message: 'Customer onboarding completed successfully' };
+        }
+        throw new ConflictException([
+          'Customer onboarding is already being processed. Retry after the active attempt finishes.',
         ]);
       }
+
+      const customerOnboardingData =
+        await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+          { _id: id, onboardingStatus: { $ne: CreditStatus.APPROVED } },
+          {
+            $set: { onboardingStatus: CreditStatus.PROCESSING },
+            // Use Mongoose's existing version key as a final-write fencing token.
+            $inc: { __v: 1 },
+          } as any,
+        );
+      if (!customerOnboardingData) {
+        const currentOnboarding =
+          await this.customerOnboardingRepository.findCustomerOnboardingById({
+            _id: id,
+          });
+        if (currentOnboarding?.onboardingStatus === CreditStatus.APPROVED) {
+          processingClaimed = false;
+          await this.releaseOnboardingProcessingLock(
+            processingLockKey,
+            processingExecutionId,
+          );
+          return { message: 'Customer onboarding completed successfully' };
+        }
+        if (!currentOnboarding) {
+          throw new BadRequestException([
+            `Customer onboarding detail not found for id: ${id}`,
+          ]);
+        }
+        throw new ConflictException([
+          'Customer onboarding changed while processing was being claimed. Retry the request.',
+        ]);
+      }
+      processingVersion = Number((customerOnboardingData as any).__v || 0);
+
+      processingHeartbeat = setInterval(async () => {
+        if (heartbeatInFlight || !processingClaimed) return;
+        heartbeatInFlight = true;
+        try {
+          const renewed = await this.renewOnboardingProcessingLock(
+            processingLockKey,
+            processingExecutionId,
+            processingLeaseMs,
+          );
+          if (!renewed) {
+            processingLeaseLost = true;
+            clearInterval(processingHeartbeat);
+            Logger.error(
+              `Lost processing lease for onboarding ${id}`,
+              'CustomerOnboardingService',
+            );
+          }
+        } catch (error: any) {
+          processingLeaseLost = true;
+          clearInterval(processingHeartbeat);
+          Logger.error(
+            `Could not renew processing lease for onboarding ${id}: ${
+              error?.message || error
+            }`,
+            error?.stack,
+            'CustomerOnboardingService',
+          );
+        } finally {
+          heartbeatInFlight = false;
+        }
+      }, processingHeartbeatMs);
+      (processingHeartbeat as any).unref?.();
+
       const {
         kycCreditAmount,
         ssiCreditAmount,
@@ -1288,13 +1378,33 @@ export class CustomerOnboardingService {
         : -1;
       const remainingSteps = filteredSteps.slice(lastStepIndex + 1);
       if (redisProgress?.completed === true && remainingSteps.length === 0) {
-        await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
-          { _id: id },
-          {
-            ...persistedOutputs,
-            onboardingStatus: CreditStatus.APPROVED,
-            logs: resumeLogs,
-          },
+        await this.assertOnboardingProcessingLock(
+          processingLockKey,
+          processingExecutionId,
+        );
+        const completed =
+          await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+            { _id: id, __v: processingVersion } as any,
+            {
+              $set: {
+                ...persistedOutputs,
+                onboardingStatus: CreditStatus.APPROVED,
+                logs: resumeLogs,
+              },
+              $inc: { __v: 1 },
+            } as any,
+          );
+        if (!completed) {
+          throw new ConflictException([
+            'Onboarding state changed before completion could be committed.',
+          ]);
+        }
+        processingVersion = undefined;
+        processingClaimed = false;
+        clearInterval(processingHeartbeat);
+        await this.releaseOnboardingProcessingLock(
+          processingLockKey,
+          processingExecutionId,
         );
         await redisClient.del(progressKey);
         return { message: 'Customer onboarding completed successfully' };
@@ -1304,6 +1414,10 @@ export class CustomerOnboardingService {
       }
       let onboardingStatus;
       let userDetail = await this.userRepository.findOne({ userId });
+      await this.assertOnboardingProcessingLock(
+        processingLockKey,
+        processingExecutionId,
+      );
       await this.storeOnboardingProgress(
         progressKey,
         customerOnboardingData,
@@ -1311,9 +1425,22 @@ export class CustomerOnboardingService {
         CreditStatus.PROCESSING,
         onboardingUpdateData,
         progressExpiresAt,
+        { lockKey: processingLockKey, executionId: processingExecutionId },
       );
       // Process each step
       for (const step of remainingSteps) {
+        if (
+          processingLeaseLost ||
+          !(await this.ownsOnboardingProcessingLock(
+            processingLockKey,
+            processingExecutionId,
+          ))
+        ) {
+          processingLeaseLost = true;
+          throw new ConflictException([
+            'Onboarding processing lease was lost. Retry the onboarding.',
+          ]);
+        }
         try {
           switch (step) {
             case OnboardingStep.GIVE_DASHBOARD_ACCESS: {
@@ -2028,6 +2155,18 @@ export class CustomerOnboardingService {
               break;
             }
           }
+          if (
+            processingLeaseLost ||
+            !(await this.ownsOnboardingProcessingLock(
+              processingLockKey,
+              processingExecutionId,
+            ))
+          ) {
+            processingLeaseLost = true;
+            throw new ConflictException([
+              'Onboarding processing lease was lost. Retry the onboarding.',
+            ]);
+          }
           this.logStepSuccess(onboardingLogs, step as OnboardingStep);
           await this.storeOnboardingProgress(
             progressKey,
@@ -2036,8 +2175,12 @@ export class CustomerOnboardingService {
             onboardingStatus || CreditStatus.PROCESSING,
             onboardingUpdateData,
             progressExpiresAt,
+            { lockKey: processingLockKey, executionId: processingExecutionId },
           );
         } catch (error: any) {
+          if (processingLeaseLost || error instanceof ConflictException) {
+            throw error;
+          }
           Logger.error(error, error?.stack, 'CustomerOnboardingService');
           this.logStepFailure(onboardingLogs, step as OnboardingStep, error);
           onboardingStatus = CreditStatus.FAILED;
@@ -2048,22 +2191,51 @@ export class CustomerOnboardingService {
             onboardingStatus,
             onboardingUpdateData,
             progressExpiresAt,
+            { lockKey: processingLockKey, executionId: processingExecutionId },
           );
           break;
         }
       }
 
-      // Update onboarding details
-      await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
-        { _id: id },
-        {
-          ...onboardingUpdateData,
-          onboardingStatus,
-          logs: this.mergeLogs(
-            customerOnboardingData.logs || [],
-            onboardingLogs,
-          ),
-        },
+      if (
+        processingLeaseLost ||
+        !(await this.ownsOnboardingProcessingLock(
+          processingLockKey,
+          processingExecutionId,
+        ))
+      ) {
+        processingLeaseLost = true;
+        throw new ConflictException([
+          'Onboarding processing lease was lost. Retry the onboarding.',
+        ]);
+      }
+      // Verify ownership immediately before committing the final result.
+      const finalized =
+        await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+          { _id: id, __v: processingVersion } as any,
+          {
+            $set: {
+              ...onboardingUpdateData,
+              onboardingStatus,
+              logs: this.mergeLogs(
+                customerOnboardingData.logs || [],
+                onboardingLogs,
+              ),
+            },
+            $inc: { __v: 1 },
+          } as any,
+        );
+      if (!finalized) {
+        throw new ConflictException([
+          'Onboarding state changed before the final result could be committed.',
+        ]);
+      }
+      processingVersion = undefined;
+      processingClaimed = false;
+      clearInterval(processingHeartbeat);
+      await this.releaseOnboardingProcessingLock(
+        processingLockKey,
+        processingExecutionId,
       );
       try {
         await redisClient.del(progressKey);
@@ -2102,9 +2274,113 @@ export class CustomerOnboardingService {
       }
       return { message: 'Customer onboarding completed successfully' };
     } catch (e: any) {
+      if (processingClaimed) {
+        try {
+          if (
+            await this.ownsOnboardingProcessingLock(
+              processingLockKey,
+              processingExecutionId,
+            )
+          ) {
+            await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+              { _id: id, __v: processingVersion } as any,
+              {
+                $set: { onboardingStatus: CreditStatus.FAILED },
+                $inc: { __v: 1 },
+              } as any,
+            );
+          }
+          await this.releaseOnboardingProcessingLock(
+            processingLockKey,
+            processingExecutionId,
+          );
+          processingClaimed = false;
+        } catch (releaseError: any) {
+          Logger.error(
+            `Could not release onboarding processing lock ${id}: ${
+              releaseError?.message || releaseError
+            }`,
+            releaseError?.stack,
+            'CustomerOnboardingService',
+          );
+        }
+      }
+      clearInterval(processingHeartbeat);
       Logger.error(e, 'CustomerOnboardingService');
       if (e instanceof HttpException) throw e;
       throw new InternalServerErrorException([e.message]);
+    }
+  }
+
+  private async acquireOnboardingProcessingLock(
+    key: string,
+    executionId: string,
+    leaseMs: number,
+  ): Promise<boolean> {
+    const result = await redisClient.set(key, executionId, 'PX', leaseMs, 'NX');
+    return result === 'OK';
+  }
+
+  private async renewOnboardingProcessingLock(
+    key: string,
+    executionId: string,
+    leaseMs: number,
+  ): Promise<boolean> {
+    const result = await redisClient.eval(
+      `if redis.call('get', KEYS[1]) == ARGV[1] then
+        return redis.call('pexpire', KEYS[1], ARGV[2])
+      end
+      return 0`,
+      1,
+      key,
+      executionId,
+      String(leaseMs),
+    );
+    return Number(result) === 1;
+  }
+
+  private async releaseOnboardingProcessingLock(
+    key: string,
+    executionId: string,
+  ): Promise<boolean> {
+    const result = await redisClient.eval(
+      `if redis.call('get', KEYS[1]) == ARGV[1] then
+        return redis.call('del', KEYS[1])
+      end
+      return 0`,
+      1,
+      key,
+      executionId,
+    );
+    return Number(result) === 1;
+  }
+
+  private async ownsOnboardingProcessingLock(
+    key: string,
+    executionId: string,
+  ): Promise<boolean> {
+    try {
+      return (await redisClient.get(key)) === executionId;
+    } catch (error: any) {
+      Logger.error(
+        `Could not verify onboarding processing lock: ${
+          error?.message || error
+        }`,
+        error?.stack,
+        'CustomerOnboardingService',
+      );
+      return false;
+    }
+  }
+
+  private async assertOnboardingProcessingLock(
+    key: string,
+    executionId: string,
+  ): Promise<void> {
+    if (!(await this.ownsOnboardingProcessingLock(key, executionId))) {
+      throw new ConflictException([
+        'Onboarding processing lease was lost. Retry the onboarding.',
+      ]);
     }
   }
 
@@ -2132,6 +2408,7 @@ export class CustomerOnboardingService {
     onboardingStatus: CreditStatus,
     outputs: Partial<CustomerOnboarding>,
     expiresAt: number,
+    processingLock?: { lockKey: string; executionId: string },
   ): Promise<void> {
     try {
       const remainingTtlMs = expiresAt - Date.now();
@@ -2162,13 +2439,30 @@ export class CustomerOnboardingService {
         expiresAt: new Date(expiresAt).toISOString(),
       };
       // Keep a fixed deadline for this attempt; step updates do not extend it.
-      await redisClient.set(
-        key,
-        JSON.stringify(progress),
-        'PX',
-        remainingTtlMs,
-      );
+      const progressJson = JSON.stringify(progress);
+      if (processingLock) {
+        const stored = await redisClient.eval(
+          `if redis.call('get', KEYS[1]) == ARGV[1] then
+            return redis.call('set', KEYS[2], ARGV[2], 'PX', ARGV[3])
+          end
+          return 0`,
+          2,
+          processingLock.lockKey,
+          key,
+          processingLock.executionId,
+          progressJson,
+          String(remainingTtlMs),
+        );
+        if (stored !== 'OK') {
+          throw new ConflictException([
+            'Onboarding processing lease was lost before progress could be saved.',
+          ]);
+        }
+      } else {
+        await redisClient.set(key, progressJson, 'PX', remainingTtlMs);
+      }
     } catch (error: any) {
+      if (error instanceof ConflictException) throw error;
       Logger.warn(
         `Could not store live onboarding progress: ${error?.message || error}`,
         'CustomerOnboardingService',

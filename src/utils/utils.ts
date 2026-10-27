@@ -196,6 +196,7 @@ export const REDIS_KEYS = {
   REFRESH_TOKEN: 'refreshToken:',
   VERIFIER_PAGE_TOKEN: 'verifierPageToken:',
   CUSTOMER_ONBOARDING_PROGRESS: 'customer-onboarding:progress:',
+  CUSTOMER_ONBOARDING_LOCK: 'customer-onboarding:lock:',
 };
 export function getAccessListForModule(
   module: TokenModule,

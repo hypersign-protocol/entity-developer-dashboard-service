@@ -1321,45 +1321,62 @@ export class CustomerOnboardingService {
                 'GIVE_DASHBOARD_ACCESS step started',
                 'CustomerOnboardingService',
               );
+              const requiredAccess = [
+                {
+                  serviceType: SERVICE_TYPES.CAVACH_API,
+                  access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
+                  expiryDate: null,
+                },
+                {
+                  serviceType: SERVICE_TYPES.SSI_API,
+                  access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
+                  expiryDate: null,
+                },
+                {
+                  serviceType: SERVICE_TYPES.DASHBOARD,
+                  access: SERVICES.DASHBOARD.ACCESS_TYPES.ALL,
+                  expiryDate: null,
+                },
+              ];
               userDetail = await this.userRepository.findOneUpdate({ userId }, [
                 {
                   $set: {
                     accessList: {
                       $concatArrays: [
-                        '$accessList',
+                        { $ifNull: ['$accessList', []] },
                         {
                           $filter: {
-                            input: [
-                              {
-                                serviceType: SERVICE_TYPES.CAVACH_API,
-                                access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
-                                expiryDate: null,
-                              },
-                              {
-                                serviceType: SERVICE_TYPES.SSI_API,
-                                access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
-                                expiryDate: null,
-                              },
-                              {
-                                serviceType: SERVICE_TYPES.DASHBOARD,
-                                access: SERVICES.DASHBOARD.ACCESS_TYPES.ALL,
-                                expiryDate: null,
-                              },
-                            ],
-                            as: 'newAccess',
+                            input: { $literal: requiredAccess },
+                            as: 'required',
                             cond: {
-                              $not: {
-                                $in: [
-                                  '$$newAccess.serviceType',
-                                  {
-                                    $map: {
-                                      input: '$accessList',
-                                      as: 'existing',
-                                      in: '$$existing.serviceType',
+                              $not: [
+                                {
+                                  $in: [
+                                    {
+                                      $concat: [
+                                        '$$required.serviceType',
+                                        ':',
+                                        '$$required.access',
+                                      ],
                                     },
-                                  },
-                                ],
-                              },
+                                    {
+                                      $map: {
+                                        input: {
+                                          $ifNull: ['$accessList', []],
+                                        },
+                                        as: 'existing',
+                                        in: {
+                                          $concat: [
+                                            '$$existing.serviceType',
+                                            ':',
+                                            '$$existing.access',
+                                          ],
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              ],
                             },
                           },
                         },

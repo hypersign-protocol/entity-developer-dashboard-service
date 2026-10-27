@@ -89,7 +89,7 @@ export class CustomerOnboardingBasicDto {
     description: 'domain of the company',
     example: 'hypermine.in',
   })
-  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
+  @ValidateIf((o) => o.type === CustomerType[CustomerType.BUSINESS])
   @IsNotEmpty()
   @IsString()
   @Matches(/^(?!:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/, {
@@ -113,7 +113,7 @@ export class CustomerOnboardingBasicDto {
       'Country where the company is located (ISO Alpha-2 code preferred)',
     enum: CountryCode,
   })
-  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
+  @ValidateIf((o) => o.type === CustomerType[CustomerType.BUSINESS])
   @IsNotEmpty()
   @IsString()
   @IsIn(CountryCode)
@@ -122,9 +122,9 @@ export class CustomerOnboardingBasicDto {
     name: 'registrationNumber',
     description: 'registration number of the company',
     example: '1234567890',
+    required: false,
   })
-  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
   registrationNumber?: string;
   @ApiProperty({
@@ -200,12 +200,18 @@ export class CustomerOnboardingBasicDto {
     name: 'phoneNumber',
     description: 'Contact phone number of the company',
     example: '6234572090',
+    required: false,
   })
-  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
-  @IsNotEmpty()
+  @ValidateIf(
+    (o, value) =>
+      o.type === CustomerType[CustomerType.BUSINESS] &&
+      value !== undefined &&
+      value !== null &&
+      value !== '',
+  )
   @IsString()
   @IsPhoneNumberByCountry()
-  phoneNumber: string;
+  phoneNumber?: string;
   @ApiProperty({
     name: 'interestedService',
     description: 'Services interested by customer',

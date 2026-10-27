@@ -1245,15 +1245,28 @@ export class CustomerOnboardingService {
         `${customerOnboardingData?.kycServiceId}_${Context.idDashboard}`,
       );
 
-      // Get remaining steps
-      const lastStep =
-        customerOnboardingData.logs
-          ?.filter((log) => log.status === StepStatus.SUCCESS)
-          .pop()?.step ?? null;
+      const progressKey = `${REDIS_KEYS.CUSTOMER_ONBOARDING_PROGRESS}${id}`;
+      const redisProgress = await this.loadOnboardingProgress(progressKey);
+      const existingProgressTtlMs = await redisClient.pttl(progressKey);
+      const progressExpiresAt =
+        Date.now() +
+        (existingProgressTtlMs > 0
+          ? existingProgressTtlMs
+          : EXPIRY_CONFIG.ONBOARDING_PROGRESS.redisExpiryTime * 1000);
+      const persistedOutputs = {
+        ssiSubdomain: customerOnboardingData.ssiSubdomain,
+        ssiServiceId: customerOnboardingData.ssiServiceId,
+        kycSubdomain: customerOnboardingData.kycSubdomain,
+        kycServiceId: customerOnboardingData.kycServiceId,
+        businessId: customerOnboardingData.businessId,
+        ...(redisProgress?.outputs || {}),
+      };
+      Object.assign(onboardingUpdateData, persistedOutputs);
+      const resumeLogs =
+        redisProgress?.logs || customerOnboardingData.logs || [];
+      onboardingLogs.splice(0, onboardingLogs.length, ...resumeLogs);
 
-      const startIndex = lastStep
-        ? Object.values(OnboardingStep).indexOf(lastStep) + 1
-        : 0;
+      // Resume from the latest successful step in Redis, falling back to MongoDB.
       const allSteps = Object.values(OnboardingStep);
       const filteredSteps = allSteps.filter((step) => {
         if (
@@ -1266,18 +1279,37 @@ export class CustomerOnboardingService {
         }
         return true;
       });
-      const remainingSteps = filteredSteps.slice(startIndex);
+      const lastSuccessfulStep = [...resumeLogs]
+        .reverse()
+        .find((log) => log.status === StepStatus.SUCCESS)?.step;
+      const lastStepIndex = lastSuccessfulStep
+        ? filteredSteps.indexOf(lastSuccessfulStep)
+        : -1;
+      const remainingSteps = filteredSteps.slice(lastStepIndex + 1);
+      if (redisProgress?.completed === true && remainingSteps.length === 0) {
+        await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+          { _id: id },
+          {
+            ...persistedOutputs,
+            onboardingStatus: CreditStatus.APPROVED,
+            logs: resumeLogs,
+          },
+        );
+        await redisClient.del(progressKey);
+        return { message: 'Customer onboarding completed successfully' };
+      }
       if (remainingSteps.length === 0) {
         throw new BadRequestException(['Customer onboarding is already done']);
       }
       let onboardingStatus;
       let userDetail = await this.userRepository.findOne({ userId });
-      const progressKey = `customer-onboarding:progress:${id}`;
       await this.storeOnboardingProgress(
         progressKey,
         customerOnboardingData,
-        onboardingLogs,
+        resumeLogs,
         CreditStatus.PROCESSING,
+        onboardingUpdateData,
+        progressExpiresAt,
       );
       // Process each step
       for (const step of remainingSteps) {
@@ -1984,6 +2016,8 @@ export class CustomerOnboardingService {
             customerOnboardingData,
             onboardingLogs,
             onboardingStatus || CreditStatus.PROCESSING,
+            onboardingUpdateData,
+            progressExpiresAt,
           );
         } catch (error: any) {
           Logger.error(error, error?.stack, 'CustomerOnboardingService');
@@ -1994,6 +2028,8 @@ export class CustomerOnboardingService {
             customerOnboardingData,
             onboardingLogs,
             onboardingStatus,
+            onboardingUpdateData,
+            progressExpiresAt,
           );
           break;
         }
@@ -2076,25 +2112,88 @@ export class CustomerOnboardingService {
     onboardingData: CustomerOnboarding,
     logs: LogDetail[],
     onboardingStatus: CreditStatus,
+    outputs: Partial<CustomerOnboarding>,
+    expiresAt: number,
   ): Promise<void> {
     try {
-      // The database is authoritative after approval; never retain an
-      // approved snapshot in Redis.
-      if (onboardingStatus === CreditStatus.APPROVED) {
-        await redisClient.del(key);
+      const remainingTtlMs = expiresAt - Date.now();
+      if (remainingTtlMs <= 0) {
+        Logger.warn(
+          `Onboarding progress snapshot expired before it could be updated: ${key}`,
+          'CustomerOnboardingService',
+        );
         return;
       }
-      const progress = {
-        onboardingStatus,
-        logs: this.mergeLogs((onboardingData.logs || []) as LogDetail[], logs),
+      const savedOutputs = {
+        ssiSubdomain: outputs.ssiSubdomain || onboardingData.ssiSubdomain,
+        ssiServiceId: outputs.ssiServiceId || onboardingData.ssiServiceId,
+        kycSubdomain: outputs.kycSubdomain || onboardingData.kycSubdomain,
+        kycServiceId: outputs.kycServiceId || onboardingData.kycServiceId,
+        businessId: outputs.businessId || onboardingData.businessId,
       };
-      // Expire abandoned snapshots after 30 minutes so stale progress cannot mask the database.
-      await redisClient.set(key, JSON.stringify(progress), 'EX', 60 * 30);
+      const progress = {
+        version: 1,
+        onboardingStatus:
+          onboardingStatus === CreditStatus.APPROVED
+            ? CreditStatus.PROCESSING
+            : onboardingStatus,
+        completed: onboardingStatus === CreditStatus.APPROVED,
+        logs: this.mergeLogs((onboardingData.logs || []) as LogDetail[], logs),
+        outputs: savedOutputs,
+        updatedAt: new Date().toISOString(),
+        expiresAt: new Date(expiresAt).toISOString(),
+      };
+      // Keep a fixed deadline for this attempt; step updates do not extend it.
+      await redisClient.set(
+        key,
+        JSON.stringify(progress),
+        'PX',
+        remainingTtlMs,
+      );
     } catch (error: any) {
       Logger.warn(
         `Could not store live onboarding progress: ${error?.message || error}`,
         'CustomerOnboardingService',
       );
+      throw error;
+    }
+  }
+
+  private async loadOnboardingProgress(key: string): Promise<{
+    onboardingStatus: CreditStatus;
+    completed: boolean;
+    logs: LogDetail[];
+    outputs: Partial<CustomerOnboarding>;
+  } | null> {
+    try {
+      const progressJson = await redisClient.get(key);
+      if (!progressJson) return null;
+      const progress = JSON.parse(progressJson);
+      const validStatuses = Object.values(CreditStatus);
+      if (
+        progress?.version !== 1 ||
+        !validStatuses.includes(progress.onboardingStatus) ||
+        !Array.isArray(progress.logs) ||
+        !progress.outputs ||
+        typeof progress.outputs !== 'object'
+      ) {
+        await redisClient.del(key);
+        return null;
+      }
+      return progress;
+    } catch (error: any) {
+      try {
+        await redisClient.del(key);
+      } catch {
+        // Best-effort cleanup; processing falls back to MongoDB state.
+      }
+      Logger.warn(
+        `Could not read onboarding recovery snapshot: ${
+          error?.message || error
+        }`,
+        'CustomerOnboardingService',
+      );
+      return null;
     }
   }
 
@@ -2108,23 +2207,21 @@ export class CustomerOnboardingService {
     const id = (data as any)._id?.toString();
     if (!id) return onboardingData;
 
-    const progressKey = `customer-onboarding:progress:${id}`;
+    const progressKey = `${REDIS_KEYS.CUSTOMER_ONBOARDING_PROGRESS}${id}`;
     try {
       if ((data as any).onboardingStatus === CreditStatus.APPROVED) {
         await redisClient.del(progressKey);
         return data as T;
       }
-      const progressJson = await redisClient.get(progressKey);
-      if (!progressJson) return data as T;
-      const progress = JSON.parse(progressJson);
-      if (progress.onboardingStatus === CreditStatus.APPROVED) {
-        await redisClient.del(progressKey);
-        return data as T;
-      }
+      const progress = await this.loadOnboardingProgress(progressKey);
+      if (!progress) return data as T;
       return {
         ...(data as any),
-        onboardingStatus: progress.onboardingStatus,
+        onboardingStatus: progress.completed
+          ? CreditStatus.PROCESSING
+          : progress.onboardingStatus,
         logs: progress.logs,
+        ...(progress.outputs || {}),
       } as T;
     } catch (error: any) {
       Logger.warn(

@@ -48,6 +48,7 @@ import {
   generateHash,
   getAccessListForModule,
   ONBOARDING_CONFIG,
+  ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS,
   SERVICE_ENDPOINTS,
   REDIS_KEYS,
   sanitizeUrl,
@@ -879,9 +880,18 @@ export class CustomerOnboardingService {
     handleKybErrors = false,
   ) {
     Logger.log('Inside makeExternalRequest()', 'CustomerOnboardingService');
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS,
+    );
     try {
       Logger.log(`Making request to ${url}`, 'CustomerOnboardingService');
-      const response = await fetch(url, options);
+      // Keep the deadline active through response body parsing as well as fetch.
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
       Logger.log(
         `Received response with status ${response.status}`,
         'CustomerOnboardingService',
@@ -963,6 +973,22 @@ export class CustomerOnboardingService {
       }
       return detail;
     } catch (error: any) {
+      if (controller.signal.aborted) {
+        const timeoutError = new Error(
+          `External request timed out after ${ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS}ms: ${errorMessage}`,
+        );
+        Logger.error(
+          timeoutError,
+          timeoutError.stack,
+          'CustomerOnboardingService',
+        );
+        if (handleKybErrors) {
+          throw new InternalServerErrorException([
+            `${errorMessage}: upstream service timed out`,
+          ]);
+        }
+        throw timeoutError;
+      }
       if (handleKybErrors && error instanceof HttpException) {
         throw error;
       }
@@ -978,6 +1004,8 @@ export class CustomerOnboardingService {
       }
       Logger.error(error, error?.stack, 'CustomerOnboardingService');
       throw error;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

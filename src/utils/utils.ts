@@ -29,6 +29,7 @@ import {
 import { createHash } from 'crypto';
 import { IsMongoId } from 'class-validator';
 import type { CreditCatalog } from '@hypersign-protocol/credit-middleware';
+import { TIME } from './time-constant';
 
 export const SERVICE_ENDPOINTS = {
   SSI_ISSUE_DID_JWT: 'api/v1/did/auth/issue-jwt',
@@ -37,6 +38,9 @@ export const SERVICE_ENDPOINTS = {
   ID_DOCUMENT: 'api/v1/document',
   ID_KYB_COMPANY_VERIFICATION: 'api/v1/e-kyb/verification/company',
 } as const;
+
+export const ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS =
+  TIME.MINUTE * 1000;
 
 export const existDir = (dirPath) => {
   if (!dirPath) throw new Error('Directory path undefined');

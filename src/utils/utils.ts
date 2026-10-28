@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import {
   ClassSerializerInterceptor,
   InternalServerErrorException,
+  Logger,
   PlainLiteralObject,
   Type,
 } from '@nestjs/common';
@@ -26,10 +27,15 @@ import {
   SSI_ACCESS_MATRIX,
   TokenModule,
 } from 'src/config/access-matrix';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { IsMongoId } from 'class-validator';
 import type { CreditCatalog } from '@hypersign-protocol/credit-middleware';
 import { TIME } from './time-constant';
+import {
+  DownstreamServiceException,
+  PublicErrorCode,
+  sanitizeDiagnosticText,
+} from 'src/error-handling/downstream-error';
 
 export const SERVICE_ENDPOINTS = {
   SSI_ISSUE_DID_JWT: 'api/v1/did/auth/issue-jwt',
@@ -102,34 +108,96 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse();
     const request = ctx.getRequest();
 
-    let status;
-    let message;
-    if (exception instanceof HttpException) {
+    const requestId = request['requestId'] || randomUUID();
+    let status: number;
+    let message: any;
+    if (exception instanceof DownstreamServiceException) {
       status = exception.getStatus();
       message = exception.getResponse();
+    } else if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+        const errorResponse = exception.getResponse();
+        const diagnosticMessage =
+          typeof errorResponse === 'string'
+            ? errorResponse
+            : this.stringifyDiagnostic(errorResponse);
+        Logger.error(
+          JSON.stringify({
+            event: 'unhandled_application_error',
+            requestId,
+            status,
+            path: sanitizeDiagnosticText(request.originalUrl || request.url),
+            errorName: exception.name,
+            errorMessage: sanitizeDiagnosticText(diagnosticMessage),
+          }),
+          undefined,
+          'AllExceptionsFilter',
+        );
+        message = {
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: [
+            'The request could not be completed due to an unexpected error.',
+          ],
+          error: 'Internal Server Error',
+          code: PublicErrorCode.INTERNAL_ERROR,
+          requestId,
+        };
+        status = HttpStatus.INTERNAL_SERVER_ERROR;
+      } else {
+        const errorResponse = exception.getResponse();
+        message =
+          typeof errorResponse === 'object' && errorResponse !== null
+            ? { ...errorResponse, requestId }
+            : {
+                statusCode: status,
+                message: [String(errorResponse)],
+                error: HttpStatus[status] || 'Error',
+                requestId,
+              };
+      }
     } else {
-      const msg = [];
       const error: Error = exception as Error;
-      if (error.name) {
-        msg.push(error.name);
-      }
-      if (error.message) {
-        msg.push(error.message);
-      }
-
       status = HttpStatus.INTERNAL_SERVER_ERROR;
-
-      msg.push('Internal server error');
-
+      Logger.error(
+        JSON.stringify({
+          event: 'unhandled_application_error',
+          requestId,
+          status,
+          path: sanitizeDiagnosticText(request.originalUrl || request.url),
+          errorName: error?.name,
+          errorMessage: sanitizeDiagnosticText(error?.message),
+        }),
+        sanitizeDiagnosticText(error?.stack),
+        'AllExceptionsFilter',
+      );
       message = {
         statusCode: status,
-        timestamp: new Date().toISOString(),
-        path: request.url,
-        message: msg,
+        message: [
+          'The request could not be completed due to an unexpected error.',
+        ],
+        error: 'Internal Server Error',
+        code: PublicErrorCode.INTERNAL_ERROR,
+        requestId,
       };
     }
 
+    if (
+      typeof message === 'object' &&
+      message !== null &&
+      message.requestId === undefined
+    ) {
+      message = { ...message, requestId };
+    }
     response.status(status).json(message);
+  }
+
+  private stringifyDiagnostic(value: unknown): string {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
   }
 }
 

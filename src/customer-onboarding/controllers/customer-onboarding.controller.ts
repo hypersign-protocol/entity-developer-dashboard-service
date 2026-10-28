@@ -77,6 +77,7 @@ export class CustomerOnboardingController {
       createCustomerOnboardingDto,
       req.user,
       req.user['email'],
+      req['requestId'],
     );
   }
   @ApiBearerAuth('Authorization')
@@ -90,7 +91,10 @@ export class CustomerOnboardingController {
   })
   @Get()
   findUserOnboardingDetail(@Req() req: Request) {
-    return this.customerOnboardingService.findUserOnboardingDetail(req.user);
+    return this.customerOnboardingService.findUserOnboardingDetail(
+      req.user,
+      req['requestId'],
+    );
   }
 
   @Post('webhook')
@@ -142,6 +146,7 @@ export class CustomerOnboardingController {
     return this.customerOnboardingService.processCustomerOnboarding(
       id,
       req.user.userId,
+      req['requestId'],
     );
   }
 
@@ -210,6 +215,7 @@ export class CustomerOnboardingController {
       body,
       files || [],
       req.user,
+      req['requestId'],
     );
   }
 }

@@ -80,6 +80,16 @@ import { plainToInstance } from 'class-transformer';
 import { KybCompanyFieldsDto } from '../dto/submit-kyb-company.dto';
 import { KybVerificationEnum } from '../constants/identifier-types';
 import { CompanyVerificationWebhookDto } from '../dto/company-verification-webhook.dto';
+import {
+  DownstreamOperation,
+  DownstreamService,
+  DownstreamServiceException,
+  sanitizeDiagnosticText,
+} from 'src/error-handling/downstream-error';
+import {
+  DownstreamRequestOptions,
+  requestDownstreamJson,
+} from 'src/error-handling/downstream-http-client';
 
 @Injectable()
 export class CustomerOnboardingService {
@@ -162,6 +172,7 @@ export class CustomerOnboardingService {
     body: Record<string, any>,
     files: any[],
     user: any,
+    requestId?: string,
   ) {
     if (!Types.ObjectId.isValid(onboardingId)) {
       throw new BadRequestException(['Invalid customer onboarding ID']);
@@ -298,8 +309,14 @@ export class CustomerOnboardingService {
           ttlSeconds: 3600,
         }),
       },
-      'Failed to issue KYB onboarding DID JWT',
-      true,
+      {
+        service: DownstreamService.ENTITY_API,
+        operation: DownstreamOperation.SSI_ISSUE_DID_JWT,
+        requestId,
+        validateResponse: (response: any) =>
+          typeof (response?.accessToken || response?.data?.accessToken) ===
+          'string',
+      },
     );
     const didJwt = jwtResult?.accessToken || jwtResult?.data?.accessToken;
     if (!didJwt) {
@@ -320,8 +337,16 @@ export class CustomerOnboardingService {
         },
         body: JSON.stringify({ provider: 'client_auth' }),
       },
-      'Failed to exchange the KYB onboarding identity',
-      true,
+      {
+        service: DownstreamService.KYC_SERVICE,
+        operation: DownstreamOperation.KYC_AUTH_EXCHANGE,
+        requestId,
+        validateResponse: (response: any) =>
+          typeof (
+            response?.data?.kycServiceUserAccessToken ||
+            response?.kycServiceUserAccessToken
+          ) === 'string',
+      },
     );
     const userAccessToken =
       exchangeResult?.data?.kycServiceUserAccessToken ||
@@ -345,8 +370,13 @@ export class CustomerOnboardingService {
               SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
             }/${encodeURIComponent(existingCompanyId)}`,
             { method: 'GET', headers: idServiceHeaders },
-            'Failed to fetch the existing KYB company',
-            true,
+            {
+              service: DownstreamService.KYC_SERVICE,
+              operation: DownstreamOperation.KYC_COMPANY_FETCH,
+              requestId,
+              validateResponse: (response: any) =>
+                Boolean(response?.data || response?._id || response?.id),
+            },
           ).then((companyResult) => {
             const existingCompany = companyResult?.data || companyResult;
             return Array.isArray(existingCompany?.documents)
@@ -369,8 +399,13 @@ export class CustomerOnboardingService {
               SERVICE_ENDPOINTS.ID_DOCUMENT_UPLOAD
             }`,
             { method: 'POST', headers: idServiceHeaders, body: formData },
-            `Failed to upload KYB document ${index + 1}`,
-            true,
+            {
+              service: DownstreamService.KYC_SERVICE,
+              operation: DownstreamOperation.KYC_DOCUMENT_UPLOAD,
+              requestId,
+              validateResponse: (response: any) =>
+                typeof (response?.data?.id || response?.id) === 'string',
+            },
           );
           const documentId = uploadResult?.data?.id || uploadResult?.id;
           if (!documentId) {
@@ -421,8 +456,15 @@ export class CustomerOnboardingService {
             : documentIds,
         }),
       },
-      'Failed to create the KYB company',
-      true,
+      {
+        service: DownstreamService.KYC_SERVICE,
+        operation: DownstreamOperation.KYC_COMPANY_UPSERT,
+        requestId,
+        validateResponse: (response: any) => {
+          const company = response?.data || response;
+          return typeof (company?._id || company?.id) === 'string';
+        },
+      },
     );
     const companyData = companyResult?.data || companyResult || {};
     const companyId = companyData._id || companyData.id || existingCompanyId;
@@ -442,15 +484,27 @@ export class CustomerOnboardingService {
           method: 'DELETE',
           headers: idServiceHeaders,
         },
-        `Failed to delete replaced KYB document ${document.id}`,
-        true,
-      ).catch((error) =>
-        Logger.error(
-          `Failed to delete replaced KYB document ${document.id} of company ${companyId}: ${error?.message}`,
-          error?.stack,
-          'CustomerOnboardingService',
-        ),
-      );
+        {
+          service: DownstreamService.KYC_SERVICE,
+          operation: DownstreamOperation.KYC_DOCUMENT_DELETE,
+          requestId,
+          validateResponse: (response: any) => Boolean(response),
+        },
+      ).catch((error) => {
+        // Normalized downstream failures are already logged once by the
+        // centralized client with service, operation and request ID context.
+        if (!(error instanceof DownstreamServiceException)) {
+          Logger.error(
+            JSON.stringify({
+              event: 'kyb_replaced_document_cleanup_failed',
+              requestId,
+              errorMessage: sanitizeDiagnosticText(error?.message),
+            }),
+            sanitizeDiagnosticText(error?.stack),
+            'CustomerOnboardingService',
+          );
+        }
+      });
     }
     const statusReason = companyData.statusReason;
     const isCompleted = companyData.status === KybVerificationEnum.Completed;
@@ -703,6 +757,7 @@ export class CustomerOnboardingService {
     createCustomerOnboardingDto: CreateCustomerOnboardingDto,
     user,
     loggedInUserEmail,
+    requestId?: string,
   ) {
     try {
       Logger.log(
@@ -743,10 +798,16 @@ export class CustomerOnboardingService {
       void this.processCustomerOnboarding(
         onboardingData['_id'].toString(),
         user.userId,
+        requestId,
       ).catch((processingError: any) => {
         Logger.error(
-          `Automatic onboarding processing failed for ${onboardingData['_id']}: ${processingError.message}`,
-          processingError.stack,
+          JSON.stringify({
+            event: 'automatic_customer_onboarding_processing_failed',
+            requestId,
+            onboardingId: onboardingData['_id'].toString(),
+            errorMessage: sanitizeDiagnosticText(processingError?.message),
+          }),
+          sanitizeDiagnosticText(processingError?.stack),
           'CustomerOnboardingService',
         );
       });
@@ -791,12 +852,13 @@ export class CustomerOnboardingService {
 
       return onboardingData;
     } catch (e: any) {
+      if (e instanceof HttpException) throw e;
       if (e.code === 11000) {
-        const field = Object.keys(e.keyValue || {})[0];
-        const value = e.keyValue ? e.keyValue[field] : '';
-        throw new ConflictException([`${field} '${value}' already exists`]);
+        throw new ConflictException([
+          'An onboarding request with the same details already exists.',
+        ]);
       }
-      throw new BadRequestException([e.message]);
+      throw e;
     }
   }
 
@@ -831,12 +893,8 @@ export class CustomerOnboardingService {
       }
       return this.withLiveOnboardingProgress(customerOnboardingData);
     } catch (e: any) {
-      Logger.error(
-        'Error occured while fetching onboarding detail',
-        'CustomerOnboardingService',
-      );
       if (e instanceof HttpException) throw e;
-      else throw new BadRequestException([`${e.message}`]);
+      throw e;
     }
   }
 
@@ -869,144 +927,18 @@ export class CustomerOnboardingService {
       'send-credit-request-notification-mail',
     );
   }
-  /**
-   * Makes an external HTTP request. KYB calls opt in to the tailored HTTP error
-   * response; other onboarding calls keep the existing error behavior.
-   */
-  private async makeExternalRequest(
+  /** All SSI/KYC calls pass through one service-aware, sanitizing boundary. */
+  private makeExternalRequest<T = any>(
     url: string,
-    options: RequestInit,
-    errorMessage: string,
-    handleKybErrors = false,
-  ) {
-    Logger.log('Inside makeExternalRequest()', 'CustomerOnboardingService');
-    const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS,
-    );
-    try {
-      Logger.log(`Making request to ${url}`, 'CustomerOnboardingService');
-      // Keep the deadline active through response body parsing as well as fetch.
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-      });
-      Logger.log(
-        `Received response with status ${response.status}`,
-        'CustomerOnboardingService',
-      );
-      const text = await response.text();
-      let detail: any = null;
-      if (text) {
-        if (handleKybErrors) {
-          try {
-            detail = JSON.parse(text);
-          } catch {
-            detail = { message: text };
-          }
-        } else {
-          detail = JSON.parse(text);
-        }
-      }
-      if (!response.ok) {
-        if (handleKybErrors) {
-          Logger.error(
-            `KYB upstream request failed: ${JSON.stringify({
-              request: errorMessage,
-              method: options.method || 'GET',
-              url,
-              status: response.status,
-              responseBody: text.slice(0, 4000),
-            })}`,
-            undefined,
-            'CustomerOnboardingService',
-          );
-          const upstreamDetails =
-            detail?.error?.details || detail?.message || detail?.error;
-          const messages = Array.isArray(upstreamDetails)
-            ? upstreamDetails.map(String)
-            : typeof upstreamDetails === 'string'
-            ? [upstreamDetails]
-            : upstreamDetails
-            ? [JSON.stringify(upstreamDetails)]
-            : [];
-          const usefulMessages = messages.filter(
-            (message) =>
-              !['error', 'internal server error'].includes(
-                message.trim().toLowerCase(),
-              ),
-          );
-          const readableMessage =
-            usefulMessages.join(', ') ||
-            `Upstream service returned ${response.status}`;
-
-          if (
-            response.status >= 500 ||
-            response.status === 401 ||
-            response.status === 403
-          ) {
-            throw new InternalServerErrorException([
-              `${errorMessage}: ${readableMessage}`,
-            ]);
-          }
-          throw new HttpException(
-            {
-              statusCode: response.status,
-              message: usefulMessages.length ? usefulMessages : messages,
-              error:
-                typeof detail?.message === 'string'
-                  ? detail.message
-                  : 'Upstream request rejected',
-            },
-            response.status,
-          );
-        }
-        const serverError =
-          detail?.error?.details ||
-          (Array.isArray(detail?.message)
-            ? detail.message.join(', ')
-            : detail?.message) ||
-          JSON.stringify(detail) ||
-          'Unknown error from external service';
-        throw new Error(`${errorMessage}: ${serverError}`);
-      }
-      return detail;
-    } catch (error: any) {
-      if (controller.signal.aborted) {
-        const timeoutError = new Error(
-          `External request timed out after ${ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS}ms: ${errorMessage}`,
-        );
-        Logger.error(
-          timeoutError,
-          timeoutError.stack,
-          'CustomerOnboardingService',
-        );
-        if (handleKybErrors) {
-          throw new InternalServerErrorException([
-            `${errorMessage}: upstream service timed out`,
-          ]);
-        }
-        throw timeoutError;
-      }
-      if (handleKybErrors && error instanceof HttpException) {
-        throw error;
-      }
-      if (handleKybErrors) {
-        Logger.error(
-          `KYB upstream request error: ${error?.message || String(error)}`,
-          error?.stack,
-          'CustomerOnboardingService',
-        );
-        throw new InternalServerErrorException([
-          `${errorMessage}: upstream service request failed`,
-        ]);
-      }
-      Logger.error(error, error?.stack, 'CustomerOnboardingService');
-      throw error;
-    } finally {
-      clearTimeout(timeout);
-    }
+    init: RequestInit,
+    context: Omit<DownstreamRequestOptions, 'url' | 'init' | 'timeoutMs'>,
+  ): Promise<T> {
+    return requestDownstreamJson<T>({
+      url,
+      init,
+      timeoutMs: ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS,
+      ...context,
+    });
   }
 
   /**
@@ -1204,7 +1136,11 @@ export class CustomerOnboardingService {
    * @returns Success message upon completion
    * @throws BadRequestException if any step fails or validation errors occur
    */
-  async processCustomerOnboarding(id: string, superAdminUserId) {
+  async processCustomerOnboarding(
+    id: string,
+    superAdminUserId,
+    requestId?: string,
+  ) {
     Logger.log(
       'Inside processCustomerOnboarding() to approve customer onboarding request',
       'CustomerOnboardingService',
@@ -1223,6 +1159,7 @@ export class CustomerOnboardingService {
     let processingVersion: number | undefined;
     let processingHeartbeat: ReturnType<typeof setInterval> | undefined;
     let heartbeatInFlight = false;
+    let stepFailure: unknown;
     let ssiService: any,
       widgetConfigDetail: any,
       kycAccessToken: any,
@@ -1720,7 +1657,14 @@ export class CustomerOnboardingService {
                   },
                   body: JSON.stringify(didCreateBody),
                 },
-                'Failed to create DID',
+                {
+                  service: DownstreamService.ENTITY_API,
+                  operation: DownstreamOperation.SSI_DID_CREATE,
+                  requestId,
+                  validateResponse: (response: any) =>
+                    typeof response?.did === 'string' &&
+                    Boolean(response?.metaData?.didDocument),
+                },
               );
 
               issuerDidData = didData;
@@ -1796,7 +1740,13 @@ export class CustomerOnboardingService {
                       origin: ssiService?.whitelistedCors[0],
                     },
                   },
-                  'Failed to resolve DID',
+                  {
+                    service: DownstreamService.ENTITY_API,
+                    operation: DownstreamOperation.SSI_DID_RESOLVE,
+                    requestId,
+                    validateResponse: (response: any) =>
+                      Boolean(response?.didDocument),
+                  },
                 );
                 didDocument = resolvedDidData.didDocument;
               }
@@ -1817,7 +1767,14 @@ export class CustomerOnboardingService {
                     ),
                   }),
                 },
-                'Failed to register DID',
+                {
+                  service: DownstreamService.ENTITY_API,
+                  operation: DownstreamOperation.SSI_DID_REGISTER,
+                  requestId,
+                  validateResponse: (response: any) =>
+                    typeof response?.did === 'string' &&
+                    typeof response?.registrationStatus === 'string',
+                },
               );
               Logger.debug(
                 'REGISTER_DID step ends',
@@ -2022,7 +1979,13 @@ export class CustomerOnboardingService {
                   },
                   body: JSON.stringify(requestBody),
                 },
-                'Failed to set up widget configuration',
+                {
+                  service: DownstreamService.KYC_SERVICE,
+                  operation: DownstreamOperation.KYC_WIDGET_CREATE,
+                  requestId,
+                  validateResponse: (response: any) =>
+                    typeof response?.data?._id === 'string',
+                },
               );
               Logger.debug(
                 'SETUP_KYC_WIDGET step ends',
@@ -2146,7 +2109,13 @@ export class CustomerOnboardingService {
                   },
                   body: JSON.stringify(requestBody),
                 },
-                'Failed to set up widget configuration',
+                {
+                  service: DownstreamService.KYC_SERVICE,
+                  operation: DownstreamOperation.KYB_WIDGET_CREATE,
+                  requestId,
+                  validateResponse: (response: any) =>
+                    typeof response?.data?._id === 'string',
+                },
               );
               Logger.debug(
                 'SETUP_KYC_WIDGET step ends',
@@ -2209,8 +2178,8 @@ export class CustomerOnboardingService {
           if (processingLeaseLost || error instanceof ConflictException) {
             throw error;
           }
-          Logger.error(error, error?.stack, 'CustomerOnboardingService');
           this.logStepFailure(onboardingLogs, step as OnboardingStep, error);
+          stepFailure = error;
           onboardingStatus = CreditStatus.FAILED;
           await this.storeOnboardingProgress(
             progressKey,
@@ -2283,6 +2252,9 @@ export class CustomerOnboardingService {
           failed.step,
           failed.failureReason || 'Failure reason not recorded',
         );
+        if (stepFailure instanceof DownstreamServiceException) {
+          throw stepFailure;
+        }
         throw new InternalServerErrorException([
           `Step ${failed.step} failed: ${failed.failureReason}`,
         ]);
@@ -2334,9 +2306,8 @@ export class CustomerOnboardingService {
         }
       }
       clearInterval(processingHeartbeat);
-      Logger.error(e, 'CustomerOnboardingService');
       if (e instanceof HttpException) throw e;
-      throw new InternalServerErrorException([e.message]);
+      throw e;
     }
   }
 
@@ -2662,11 +2633,15 @@ export class CustomerOnboardingService {
   private logStepFailure(logs: LogDetail[], step: OnboardingStep, error: any) {
     Logger.log('Inside logStepFailure()', 'CustomerOnboardingService');
 
+    const isDownstreamError = error instanceof DownstreamServiceException;
+    const failureReason = isDownstreamError
+      ? error.publicMessage
+      : 'Workspace setup could not be completed. Please try again later.';
     logs.push({
       step,
       status: StepStatus.FAILED,
       time: new Date(),
-      failureReason: error.message,
+      failureReason,
     });
   }
 
@@ -2725,7 +2700,7 @@ export class CustomerOnboardingService {
     };
   }
 
-  async findUserOnboardingDetail(user) {
+  async findUserOnboardingDetail(user, requestId?: string) {
     Logger.log(
       'Inside findUserOnboardingDetail() method start:: to get onboarding detail of particular user',
       'CustomerOnboardingService',
@@ -2794,8 +2769,13 @@ export class CustomerOnboardingService {
               ),
             },
           },
-          'Failed to refresh the KYB company verification status',
-          true,
+          {
+            service: DownstreamService.KYC_SERVICE,
+            operation: DownstreamOperation.KYC_COMPANY_FETCH,
+            requestId,
+            validateResponse: (response: any) =>
+              Boolean(response?.data || response?._id || response?.id),
+          },
         );
 
         const companyData = companyResult?.data || companyResult;
@@ -2808,13 +2788,8 @@ export class CustomerOnboardingService {
 
       return this.withLiveOnboardingProgress(result);
     } catch (e: any) {
-      Logger.error(
-        'Issue while fetching userOnboardingDetail',
-        e,
-        'CustomerOnboardingService',
-      );
       if (e instanceof HttpException) throw e;
-      throw new BadRequestException([e.message]);
+      throw e;
     }
   }
 

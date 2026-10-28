@@ -24,6 +24,7 @@ import { AllowedOriginMiddleware } from './utils/middleware/allowedOrigin.middle
 import { IpResolverModule } from './ip-resolver/ip-resolver.module';
 import { WebpageConfigModule } from './webpage-config/webpage-config.module';
 import { CustomerOnboardingModule } from './customer-onboarding/customer-onboarding.module';
+import { RequestIdMiddleware } from './utils/middleware/request-id.middleware';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { CustomerOnboardingModule } from './customer-onboarding/customer-onboard
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
     consumer
       .apply(AllowedOriginMiddleware)
       .exclude(

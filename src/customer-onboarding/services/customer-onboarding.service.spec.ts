@@ -1,4 +1,5 @@
 import { KybVerificationEnum } from '../constants/identifier-types';
+import { OnboardingStep, StepStatus } from '../constants/enum';
 import { WebhookVerificationType } from '../dto/company-verification-webhook.dto';
 import { CustomerOnboardingService } from './customer-onboarding.service';
 
@@ -117,5 +118,54 @@ describe('CustomerOnboardingService company verification webhook', () => {
     expect(
       onboardingRepository.updateCustomerOnboardingDetails,
     ).not.toHaveBeenCalled();
+  });
+
+  it('does not expose raw failure reasons loaded from legacy progress', () => {
+    const logs = (service as any).sanitizeOnboardingLogs([
+      {
+        step: OnboardingStep.CREATE_KYC_SERVICE,
+        status: StepStatus.FAILED,
+        time: new Date(),
+        failureReason: 'issuerDid must be a string: fetch failed',
+      },
+    ]);
+
+    expect(logs[0].failureReason).toBe(
+      'We could not finish setting up identity verification. Please try again later.',
+    );
+  });
+
+  it('restarts at DID creation when its success marker has no persisted DID', () => {
+    const steps = Object.values(OnboardingStep);
+    const createDidIndex = steps.indexOf(OnboardingStep.CREATE_DID);
+    const resumeIndex = (service as any).getSafeResumeStepIndex(
+      steps,
+      [
+        {
+          step: OnboardingStep.CREATE_DID,
+          status: StepStatus.SUCCESS,
+          time: new Date(),
+        },
+      ],
+      { ssiServiceId: 'ssi-app-1' },
+    );
+
+    expect(resumeIndex).toBe(createDidIndex - 1);
+  });
+
+  it('rejects a missing issuer DID before passing it to an SDK', () => {
+    expect(() => (service as any).getIssuerDetails(undefined, false)).toThrow(
+      'Onboarding issuer DID is unavailable',
+    );
+  });
+
+  it('uses only high-level customer language for every onboarding step', () => {
+    for (const step of Object.values(OnboardingStep)) {
+      const reason = (service as any).getOnboardingFailureReason(step);
+      expect(reason).not.toMatch(
+        /\b(ssi|did|issuer|token|fetch|redis|sdk|kyc|kyb|api)\b/i,
+      );
+      expect(reason).toMatch(/Please try again later\.$/);
+    }
   });
 });

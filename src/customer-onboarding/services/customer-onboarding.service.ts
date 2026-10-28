@@ -91,6 +91,36 @@ import {
   requestDownstreamJson,
 } from 'src/error-handling/downstream-http-client';
 
+const ONBOARDING_GENERIC_FAILURE_REASON =
+  'Workspace setup could not be completed. Please try again later.';
+
+const ONBOARDING_FAILURE_REASONS: Partial<Record<OnboardingStep, string>> = {
+  [OnboardingStep.GIVE_DASHBOARD_ACCESS]:
+    'We could not finish setting up your workspace access. Please try again later.',
+  [OnboardingStep.CREATE_TEAM_ROLE]:
+    'We could not finish setting up your workspace access. Please try again later.',
+  [OnboardingStep.CREATE_SSI_SERVICE]:
+    'We could not complete your business identity setup. Please try again later.',
+  [OnboardingStep.CREDIT_SSI_SERVICE]:
+    'We could not complete your business identity setup. Please try again later.',
+  [OnboardingStep.CREATE_DID]:
+    'We could not complete your business identity setup. Please try again later.',
+  [OnboardingStep.REGISTER_DID]:
+    'We could not complete your business identity setup. Please try again later.',
+  [OnboardingStep.CREATE_KYC_SERVICE]:
+    'We could not finish setting up identity verification. Please try again later.',
+  [OnboardingStep.CREDIT_KYC_SERVICE]:
+    'We could not finish setting up identity verification. Please try again later.',
+  [OnboardingStep.SETUP_KYC_WIDGET]:
+    'We could not finish setting up identity verification. Please try again later.',
+  [OnboardingStep.CONFIGURE_KYC_VERIFIER_PAGE]:
+    'We could not finish setting up identity verification. Please try again later.',
+  [OnboardingStep.SETUP_KYB_WIDGET]:
+    'We could not finish setting up business verification. Please try again later.',
+  [OnboardingStep.CONFIGURE_KYB_VERIFIER_PAGE]:
+    'We could not finish setting up business verification. Please try again later.',
+};
+
 @Injectable()
 export class CustomerOnboardingService {
   constructor(
@@ -1095,12 +1125,16 @@ export class CustomerOnboardingService {
   }
 
   private getIssuerDetails(
-    did: string,
+    did: unknown,
     useBabyJubJubIssuer: boolean,
   ): { issuerDid: string; issuerVerificationMethodId: string } {
+    if (typeof did !== 'string' || !did.trim()) {
+      throw new Error('Onboarding issuer DID is unavailable');
+    }
+    const issuerDid = did.trim();
     return {
-      issuerDid: did,
-      issuerVerificationMethodId: `${did}#${
+      issuerDid,
+      issuerVerificationMethodId: `${issuerDid}#${
         useBabyJubJubIssuer ? 'key-2' : 'key-1'
       }`,
     };
@@ -1318,8 +1352,17 @@ export class CustomerOnboardingService {
         ...(redisProgress?.outputs || {}),
       };
       Object.assign(onboardingUpdateData, persistedOutputs);
-      const resumeLogs =
-        redisProgress?.logs || customerOnboardingData.logs || [];
+      // Redis may contain outputs that were written before the final MongoDB
+      // commit. Every resumed step must use this merged state.
+      ssiRedisKey = generateHash(
+        `${onboardingUpdateData.ssiServiceId}_${Context.idDashboard}`,
+      );
+      kycRedisKey = generateHash(
+        `${onboardingUpdateData.kycServiceId}_${Context.idDashboard}`,
+      );
+      const resumeLogs = this.sanitizeOnboardingLogs(
+        redisProgress?.logs || customerOnboardingData.logs || [],
+      );
       onboardingLogs.splice(0, onboardingLogs.length, ...resumeLogs);
 
       // Resume from the latest successful step in Redis, falling back to MongoDB.
@@ -1335,12 +1378,11 @@ export class CustomerOnboardingService {
         }
         return true;
       });
-      const lastSuccessfulStep = [...resumeLogs]
-        .reverse()
-        .find((log) => log.status === StepStatus.SUCCESS)?.step;
-      const lastStepIndex = lastSuccessfulStep
-        ? filteredSteps.indexOf(lastSuccessfulStep)
-        : -1;
+      const lastStepIndex = this.getSafeResumeStepIndex(
+        filteredSteps,
+        resumeLogs,
+        onboardingUpdateData,
+      );
       const remainingSteps = filteredSteps.slice(lastStepIndex + 1);
       if (redisProgress?.completed === true && remainingSteps.length === 0) {
         await this.assertOnboardingProcessingLock(
@@ -1569,11 +1611,9 @@ export class CustomerOnboardingService {
               await this.handleCreditService(
                 ssiCreditDetail,
                 {
-                  appId:
-                    ssiService?.appId || customerOnboardingData.ssiServiceId,
+                  appId: ssiService?.appId || onboardingUpdateData.ssiServiceId,
                   subdomain:
-                    ssiService?.subdomain ||
-                    customerOnboardingData.ssiSubdomain,
+                    ssiService?.subdomain || onboardingUpdateData.ssiSubdomain,
                 },
                 superAdminUserId,
                 `customer-onboarding:${id}:ssi`,
@@ -1591,9 +1631,9 @@ export class CustomerOnboardingService {
                 'CREATE_DID step started',
                 'CustomerOnboardingService',
               );
-              if (!ssiService && customerOnboardingData.ssiServiceId) {
+              if (!ssiService && onboardingUpdateData.ssiServiceId) {
                 ssiService = await this.appAuthRepository.findOne({
-                  appId: customerOnboardingData.ssiServiceId,
+                  appId: onboardingUpdateData.ssiServiceId,
                 });
               }
               const ssiServiceDetail = await redisClient.get(ssiRedisKey);
@@ -1617,13 +1657,11 @@ export class CustomerOnboardingService {
               }
               ssiAccessToken = await this.appAuthService.getAccessToken(
                 {
-                  appId:
-                    ssiService?.appId || customerOnboardingData.ssiServiceId,
+                  appId: ssiService?.appId || onboardingUpdateData.ssiServiceId,
                   grantType: GRANT_TYPES.access_service_ssi,
                   appname: ssiService?.appName,
                   subdomain:
-                    ssiService?.subdomain ||
-                    customerOnboardingData.ssiSubdomain,
+                    ssiService?.subdomain || onboardingUpdateData.ssiSubdomain,
                   sessionId: ssiRedisKey,
                 },
                 EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
@@ -1679,9 +1717,9 @@ export class CustomerOnboardingService {
                 'REGISTER_DID step started',
                 'CustomerOnboardingService',
               );
-              if (!ssiService && customerOnboardingData.ssiServiceId) {
+              if (!ssiService && onboardingUpdateData.ssiServiceId) {
                 ssiService = await this.appAuthRepository.findOne({
-                  appId: customerOnboardingData.ssiServiceId,
+                  appId: onboardingUpdateData.ssiServiceId,
                 });
               }
 
@@ -1711,12 +1749,12 @@ export class CustomerOnboardingService {
                 (await this.appAuthService.getAccessToken(
                   {
                     appId:
-                      ssiService?.appId || customerOnboardingData.ssiServiceId,
+                      ssiService?.appId || onboardingUpdateData.ssiServiceId,
                     grantType: GRANT_TYPES.access_service_ssi,
                     appname: ssiService?.appName,
                     subdomain:
                       ssiService?.subdomain ||
-                      customerOnboardingData.ssiSubdomain,
+                      onboardingUpdateData.ssiSubdomain,
                     sessionId: ssiRedisKey,
                   },
                   EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
@@ -1724,7 +1762,7 @@ export class CustomerOnboardingService {
                 ));
 
               const didToRegister =
-                issuerDidData?.did || customerOnboardingData.businessId;
+                issuerDidData?.did || onboardingUpdateData.businessId;
 
               if (!didDocument) {
                 const resolvedDidData = await this.makeExternalRequest(
@@ -1789,7 +1827,7 @@ export class CustomerOnboardingService {
                 'CustomerOnboardingService',
               );
               const issuerDetails = this.getIssuerDetails(
-                issuerDidData?.did || customerOnboardingData.businessId,
+                issuerDidData?.did || onboardingUpdateData.businessId,
                 useBabyJubJubIssuer,
               );
               kycService = await this.appAuthService.createAnApp(
@@ -1822,7 +1860,7 @@ export class CustomerOnboardingService {
                   env: APP_ENVIRONMENT.dev,
                   hasDomainVerified: false,
                   dependentServices: [
-                    ssiService?.appId || customerOnboardingData.ssiServiceId,
+                    ssiService?.appId || onboardingUpdateData.ssiServiceId,
                   ],
                   logoUrl: companyLogo,
                   issuerDid: issuerDetails.issuerDid,
@@ -1851,9 +1889,9 @@ export class CustomerOnboardingService {
                 'CustomerOnboardingService',
               );
 
-              if (!kycService && customerOnboardingData.kycServiceId) {
+              if (!kycService && onboardingUpdateData.kycServiceId) {
                 kycService = await this.appAuthRepository.findOne({
-                  appId: customerOnboardingData.kycServiceId,
+                  appId: onboardingUpdateData.kycServiceId,
                 });
               }
 
@@ -1863,8 +1901,7 @@ export class CustomerOnboardingService {
                   appId:
                     kycService?.appId || customerOnboardingData?.kycServiceId,
                   subdomain:
-                    kycService?.subdomain ||
-                    customerOnboardingData.kycSubdomain,
+                    kycService?.subdomain || onboardingUpdateData.kycSubdomain,
                 },
                 superAdminUserId,
                 `customer-onboarding:${id}:kyc`,
@@ -1880,9 +1917,9 @@ export class CustomerOnboardingService {
                 'SETUP_KYC_WIDGET step started',
                 'CustomerOnboardingService',
               );
-              if (!kycService && customerOnboardingData.kycServiceId) {
+              if (!kycService && onboardingUpdateData.kycServiceId) {
                 kycService = await this.appAuthRepository.findOne({
-                  appId: customerOnboardingData.kycServiceId,
+                  appId: onboardingUpdateData.kycServiceId,
                 });
               }
               const defaultAccessList = getAccessListForModule(
@@ -1906,20 +1943,18 @@ export class CustomerOnboardingService {
               }
               kycAccessToken = await this.appAuthService.getAccessToken(
                 {
-                  appId:
-                    kycService?.appId || customerOnboardingData.kycServiceId,
+                  appId: kycService?.appId || onboardingUpdateData.kycServiceId,
                   appName: kycService.appName,
                   grantType: GRANT_TYPES.access_service_kyc,
                   subdomain:
-                    kycService?.subdomain ||
-                    customerOnboardingData.kycSubdomain,
+                    kycService?.subdomain || onboardingUpdateData.kycSubdomain,
                   sessionId: kycRedisKey,
                 },
                 EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
                 EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
               );
               const issuerDetails = this.getIssuerDetails(
-                issuerDidData?.did || customerOnboardingData.businessId,
+                issuerDidData?.did || onboardingUpdateData.businessId,
                 useBabyJubJubIssuer,
               );
               const enableProofOfAge = this.shouldEnableProofOfAge(
@@ -2000,7 +2035,7 @@ export class CustomerOnboardingService {
               );
 
               const serviceId =
-                kycService?.appId || customerOnboardingData.kycServiceId;
+                kycService?.appId || onboardingUpdateData.kycServiceId;
               await this.webPageConfig.storeWebPageConfigDetial(serviceId, {
                 pageTitle: 'KYC Verification',
                 pageDescription: 'Complete your KYC verification to proceed',
@@ -2031,9 +2066,9 @@ export class CustomerOnboardingService {
                 break;
               }
 
-              if (!kycService && customerOnboardingData.kycServiceId) {
+              if (!kycService && onboardingUpdateData.kycServiceId) {
                 kycService = await this.appAuthRepository.findOne({
-                  appId: customerOnboardingData.kycServiceId,
+                  appId: onboardingUpdateData.kycServiceId,
                 });
               }
               const defaultAccessList = getAccessListForModule(
@@ -2057,20 +2092,18 @@ export class CustomerOnboardingService {
               }
               kycAccessToken = await this.appAuthService.getAccessToken(
                 {
-                  appId:
-                    kycService?.appId || customerOnboardingData.kycServiceId,
+                  appId: kycService?.appId || onboardingUpdateData.kycServiceId,
                   appName: kycService.appName,
                   grantType: GRANT_TYPES.access_service_kyb,
                   subdomain:
-                    kycService?.subdomain ||
-                    customerOnboardingData.kycSubdomain,
+                    kycService?.subdomain || onboardingUpdateData.kycSubdomain,
                   sessionId: kycRedisKey,
                 },
                 EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
                 EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
               );
               const issuerDetails = this.getIssuerDetails(
-                issuerDidData?.did || customerOnboardingData.businessId,
+                issuerDidData?.did || onboardingUpdateData.businessId,
                 useBabyJubJubIssuer,
               );
               const requestBody = {
@@ -2133,7 +2166,7 @@ export class CustomerOnboardingService {
               }
               Logger.log('CONFIGURE_KYB_VERIFIER_PAGE started');
               const serviceId =
-                kycService?.appId || customerOnboardingData.kycServiceId;
+                kycService?.appId || onboardingUpdateData.kycServiceId;
               await this.webPageConfig.storeWebPageConfigDetial(serviceId, {
                 pageTitle: 'KYB Verification',
                 pageDescription: 'Complete your KYB verification to proceed',
@@ -2178,7 +2211,7 @@ export class CustomerOnboardingService {
           if (processingLeaseLost || error instanceof ConflictException) {
             throw error;
           }
-          this.logStepFailure(onboardingLogs, step as OnboardingStep, error);
+          this.logStepFailure(onboardingLogs, step as OnboardingStep);
           stepFailure = error;
           onboardingStatus = CreditStatus.FAILED;
           await this.storeOnboardingProgress(
@@ -2515,23 +2548,27 @@ export class CustomerOnboardingService {
       typeof (onboardingData as any).toObject === 'function'
         ? (onboardingData as any).toObject()
         : onboardingData;
-    const id = (data as any)._id?.toString();
-    if (!id) return onboardingData;
+    const safeData = {
+      ...(data as any),
+      logs: this.sanitizeOnboardingLogs((data as any).logs || []),
+    };
+    const id = safeData._id?.toString();
+    if (!id) return safeData as T;
 
     const progressKey = `${REDIS_KEYS.CUSTOMER_ONBOARDING_PROGRESS}${id}`;
     try {
-      if ((data as any).onboardingStatus === CreditStatus.APPROVED) {
+      if (safeData.onboardingStatus === CreditStatus.APPROVED) {
         await redisClient.del(progressKey);
-        return data as T;
+        return safeData as T;
       }
       const progress = await this.loadOnboardingProgress(progressKey);
-      if (!progress) return data as T;
+      if (!progress) return safeData as T;
       return {
-        ...(data as any),
+        ...safeData,
         onboardingStatus: progress.completed
           ? CreditStatus.PROCESSING
           : progress.onboardingStatus,
-        logs: progress.logs,
+        logs: this.sanitizeOnboardingLogs(progress.logs),
         ...(progress.outputs || {}),
       } as T;
     } catch (error: any) {
@@ -2541,7 +2578,7 @@ export class CustomerOnboardingService {
         }`,
         'CustomerOnboardingService',
       );
-      return data as T;
+      return safeData as T;
     }
   }
 
@@ -2613,6 +2650,72 @@ export class CustomerOnboardingService {
     );
   }
 
+  /** Prevents legacy raw exception text in MongoDB/Redis from reaching clients. */
+  private sanitizeOnboardingLogs(logs: LogDetail[]): LogDetail[] {
+    if (!Array.isArray(logs)) return [];
+    return logs.map((log) => {
+      const safeLog =
+        typeof (log as any)?.toObject === 'function'
+          ? (log as any).toObject()
+          : { ...(log as any) };
+      if (safeLog.status === StepStatus.FAILED) {
+        safeLog.failureReason = this.getOnboardingFailureReason(safeLog.step);
+      }
+      return safeLog as LogDetail;
+    });
+  }
+
+  private getOnboardingFailureReason(step: OnboardingStep): string {
+    return (
+      ONBOARDING_FAILURE_REASONS[step] || ONBOARDING_GENERIC_FAILURE_REASON
+    );
+  }
+
+  /**
+   * A success marker is usable only when the output required by later steps
+   * was persisted. Otherwise resume from the producing step instead of passing
+   * undefined IDs into SDKs or downstream requests.
+   */
+  private getSafeResumeStepIndex(
+    steps: OnboardingStep[],
+    logs: LogDetail[],
+    outputs: Partial<CustomerOnboarding>,
+  ): number {
+    const lastSuccessfulStep = [...logs]
+      .reverse()
+      .find((log) => log.status === StepStatus.SUCCESS)?.step;
+    let resumeIndex = lastSuccessfulStep
+      ? steps.indexOf(lastSuccessfulStep as OnboardingStep)
+      : -1;
+
+    const requiredOutputs: Array<{
+      step: OnboardingStep;
+      value: unknown;
+    }> = [
+      {
+        step: OnboardingStep.CREATE_SSI_SERVICE,
+        value: outputs.ssiServiceId,
+      },
+      { step: OnboardingStep.CREATE_DID, value: outputs.businessId },
+      {
+        step: OnboardingStep.CREATE_KYC_SERVICE,
+        value: outputs.kycServiceId,
+      },
+    ];
+
+    for (const requirement of requiredOutputs) {
+      const producingStepIndex = steps.indexOf(requirement.step);
+      if (
+        producingStepIndex !== -1 &&
+        producingStepIndex <= resumeIndex &&
+        (typeof requirement.value !== 'string' || !requirement.value.trim())
+      ) {
+        resumeIndex = Math.min(resumeIndex, producingStepIndex - 1);
+      }
+    }
+    return resumeIndex;
+  }
+
   /**
    * Logs a successful step completion in the onboarding process
    * @param logs - Array of log details to append to
@@ -2628,20 +2731,15 @@ export class CustomerOnboardingService {
    * Logs a failed step in the onboarding process with error details
    * @param logs - Array of log details to append to
    * @param step - The onboarding step that failed
-   * @param error - The error object containing failure details
    */
-  private logStepFailure(logs: LogDetail[], step: OnboardingStep, error: any) {
+  private logStepFailure(logs: LogDetail[], step: OnboardingStep) {
     Logger.log('Inside logStepFailure()', 'CustomerOnboardingService');
 
-    const isDownstreamError = error instanceof DownstreamServiceException;
-    const failureReason = isDownstreamError
-      ? error.publicMessage
-      : 'Workspace setup could not be completed. Please try again later.';
     logs.push({
       step,
       status: StepStatus.FAILED,
       time: new Date(),
-      failureReason,
+      failureReason: this.getOnboardingFailureReason(step),
     });
   }
 
@@ -2813,9 +2911,16 @@ export class CustomerOnboardingService {
     if (customerOnboardingData.onboardingStatus === CreditStatus.APPROVED) {
       throw new BadRequestException(['Customer onboarding is already done']);
     }
+    const safeOnboardingData =
+      typeof (customerOnboardingData as any).toObject === 'function'
+        ? (customerOnboardingData as any).toObject()
+        : { ...(customerOnboardingData as any) };
+    safeOnboardingData.logs = this.sanitizeOnboardingLogs(
+      safeOnboardingData.logs || [],
+    );
     const failedLogs =
-      customerOnboardingData.onboardingStatus === CreditStatus.FAILED
-        ? customerOnboardingData.logs.filter(
+      safeOnboardingData.onboardingStatus === CreditStatus.FAILED
+        ? safeOnboardingData.logs.filter(
             (log) => log.status === StepStatus.FAILED,
           )
         : [];
@@ -2827,7 +2932,7 @@ export class CustomerOnboardingService {
       createCustomerOnboardingDto.customerEmail,
       failedStep,
       failureReason,
-      customerOnboardingData._id.toString(),
+      safeOnboardingData._id.toString(),
     );
     const superAdminDetails = await this.userRepository.find({
       role: UserRole.SUPER_ADMIN,
@@ -2843,6 +2948,6 @@ export class CustomerOnboardingService {
       `Re-onboarding notification sent to ${superAdminEmails.length} super admin(s)`,
       'CustomerOnboardingService',
     );
-    return customerOnboardingData;
+    return safeOnboardingData;
   }
 }

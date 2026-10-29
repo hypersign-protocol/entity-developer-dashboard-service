@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import {
   ClassSerializerInterceptor,
+  InternalServerErrorException,
   PlainLiteralObject,
   Type,
 } from '@nestjs/common';
@@ -27,6 +28,8 @@ import {
 } from 'src/config/access-matrix';
 import { createHash } from 'crypto';
 import { IsMongoId } from 'class-validator';
+import type { CreditCatalog } from '@hypersign-protocol/credit-middleware';
+import { TIME } from './time-constant';
 
 export const SERVICE_ENDPOINTS = {
   SSI_ISSUE_DID_JWT: 'api/v1/did/auth/issue-jwt',
@@ -35,6 +38,8 @@ export const SERVICE_ENDPOINTS = {
   ID_DOCUMENT: 'api/v1/document',
   ID_KYB_COMPANY_VERIFICATION: 'api/v1/e-kyb/verification/company',
 } as const;
+
+export const ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS = TIME.MINUTE * 1000;
 
 export const existDir = (dirPath) => {
   if (!dirPath) throw new Error('Directory path undefined');
@@ -193,6 +198,8 @@ export const REDIS_KEYS = {
   SESSION: 'session:',
   REFRESH_TOKEN: 'refreshToken:',
   VERIFIER_PAGE_TOKEN: 'verifierPageToken:',
+  CUSTOMER_ONBOARDING_PROGRESS: 'customer-onboarding:progress:',
+  CUSTOMER_ONBOARDING_LOCK: 'customer-onboarding:lock:',
 };
 export function getAccessListForModule(
   module: TokenModule,
@@ -250,4 +257,64 @@ export const DNS_RESOLVER_URL = 'https://dns.google/resolve';
 export class VerifierParamsDto {
   @IsMongoId({ message: 'Invalid verifier id' })
   id: string;
+}
+
+export const ONBOARDING_CONFIG = {
+  TOTAL_VERIFICATION: 50,
+  EXPIRY: 15, // in days
+  AADHAAR_VERIFICATION_ROUTES: [
+    '/api/v1/aadhaar/otp/verify',
+    '/api/v1/aadhaar/otp/generate',
+    '/api/v1/aadhaar/face/match',
+  ],
+  KYC_VERIFICATION_ROUTES: [
+    '/api/v1/e-kyc/verification/session',
+    '/api/v1/e-kyc/verification/user-consent',
+    '/api/v1/e-kyc/verification/passive-liveliness',
+    '/api/v2/documents/extract',
+    '/api/v2/biometrics/verify',
+    '/api/v1/e-kyc/verification/auth',
+  ],
+  SSI_CREDENTIAL_ISSUE_ROUTES: ['/api/v1/credential/issue'],
+  SSI_DID_ROUTES: ['/api/v1/did/create', '/api/v1/did/register/v2'],
+};
+
+export function sumCatalogCreditCost(
+  catalog: CreditCatalog,
+  method: string,
+  routePaths: string[],
+  creditType: string,
+): number {
+  return routePaths.reduce((total, routePath) => {
+    const route = catalog.routes.find(
+      (catalogRoute) =>
+        catalogRoute.method.toUpperCase() === method.toUpperCase() &&
+        catalogRoute.path === routePath,
+    );
+    if (!route) {
+      throw new InternalServerErrorException(
+        `Credit catalog ${catalog.serviceType}@${
+          catalog.version
+        } is missing ${method.toUpperCase()} ${routePath}`,
+      );
+    }
+
+    const routeCharges = route.charges.filter(
+      (charge) => charge.creditType === creditType,
+    );
+    if (routeCharges.length === 0) return total;
+
+    const routeCost = routeCharges.reduce(
+      (amount, charge) => amount + charge.amount,
+      0,
+    );
+    if (!Number.isSafeInteger(routeCost) || routeCost < 0) {
+      throw new InternalServerErrorException(
+        `Credit catalog ${catalog.serviceType}@${
+          catalog.version
+        } has an invalid ${creditType} amount for ${method.toUpperCase()} ${routePath}`,
+      );
+    }
+    return total + routeCost;
+  }, 0);
 }

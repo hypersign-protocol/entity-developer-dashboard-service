@@ -10,6 +10,7 @@ import {
   Req,
   ValidationPipe,
   UsePipes,
+  ForbiddenException,
   UploadedFiles,
   UseInterceptors,
   Headers,
@@ -37,11 +38,9 @@ import {
 import { CustomerOnboardingService } from '../services/customer-onboarding.service';
 import { Request } from 'express';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
+import { UserRole } from 'src/user/schema/user.schema';
 import { SubmitKybCompanyMultipartDto } from '../dto/submit-kyb-company.dto';
-import {
-  CustomerOnboardingProcessDto,
-  ProcessCustomerOnboardingRespDto,
-} from '../dto/customer-onboarding-process.dto';
+import { ProcessCustomerOnboardingRespDto } from '../dto/customer-onboarding-process.dto';
 import { CompanyVerificationWebhookDto } from '../dto/company-verification-webhook.dto';
 @ApiTags('Customer-Onboarding')
 @Controller('api/v1/customer-onboarding')
@@ -58,7 +57,7 @@ export class CustomerOnboardingController {
     description: 'Error occured while storing onboarding detail',
     type: AppError,
   })
-  @UsePipes(new ValidationPipe())
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @Post()
   create(
     @Body() createCustomerOnboardingDto: CreateCustomerOnboardingDto,
@@ -119,7 +118,6 @@ export class CustomerOnboardingController {
   findOne(@Param('id') id: string, @Req() req: Request) {
     return this.customerOnboardingService.findOne(id, req.user);
   }
-  @UsePipes(new ValidationPipe())
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({
     description: 'Customer Onboarding detail updated successfully',
@@ -130,14 +128,19 @@ export class CustomerOnboardingController {
     type: AppError,
   })
   @Post(':id/process')
-  processCustomerOnboarding(
-    @Param('id') id: string,
-    @Body() customerOnboardingProcessDto: CustomerOnboardingProcessDto,
-    @Req() req: any,
-  ) {
+  async processCustomerOnboarding(@Param('id') id: string, @Req() req: any) {
+    const { user } = req;
+    if (user.role !== UserRole.SUPER_ADMIN) {
+      const onboarding = await this.customerOnboardingService.findOne(id, user);
+
+      if (onboarding.userId !== user.userId) {
+        throw new ForbiddenException([
+          'You are not authorized to access this resource',
+        ]);
+      }
+    }
     return this.customerOnboardingService.processCustomerOnboarding(
       id,
-      customerOnboardingProcessDto,
       req.user.userId,
     );
   }

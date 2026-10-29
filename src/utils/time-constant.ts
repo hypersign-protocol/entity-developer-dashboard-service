@@ -70,6 +70,9 @@ export const EXPIRY_CONFIG = {
     jwtTime: 10,
     jwtUnit: TIME_UNIT.MINUTE,
   },
+  ONBOARDING_PROGRESS: {
+    redisExpiryTime: 30 * TIME.MINUTE,
+  },
 
   // KYC and SSI tokens for context - ID and SSI Dashboard
   DASHBOARD_ACCESS: {

@@ -2237,6 +2237,10 @@ export class CustomerOnboardingService {
           'Onboarding processing lease was lost. Retry the onboarding.',
         ]);
       }
+      const finalizedLogs = this.mergeLogs(
+        customerOnboardingData.logs || [],
+        onboardingLogs,
+      );
       // Verify ownership immediately before committing the final result.
       const finalized =
         await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
@@ -2245,10 +2249,7 @@ export class CustomerOnboardingService {
             $set: {
               ...onboardingUpdateData,
               onboardingStatus,
-              logs: this.mergeLogs(
-                customerOnboardingData.logs || [],
-                onboardingLogs,
-              ),
+              logs: finalizedLogs,
             },
             $inc: { __v: 1 },
           } as any,
@@ -2276,7 +2277,9 @@ export class CustomerOnboardingService {
         );
       }
       // Check for failures
-      const failed = onboardingLogs.find((l) => l.status === StepStatus.FAILED);
+      const failed = finalizedLogs.find(
+        (log) => log.status === StepStatus.FAILED,
+      );
       if (failed) {
         await this.notifySuperAdminsOnOnboardingFailure(
           customerOnboardingData,

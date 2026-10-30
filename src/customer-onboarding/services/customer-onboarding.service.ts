@@ -703,14 +703,13 @@ export class CustomerOnboardingService {
         'Inside createCustomerOnboardingDetail() to store new onbparding request detail',
         'CustomerOnboardingService',
       );
-      if (user.role === UserRole.ADMIN) {
-        const existingOnboarding =
-          await this.customerOnboardingRepository.findCustomerOnboardingById({
-            userId: user.userId,
-          });
-        if (existingOnboarding) {
-          throw new ConflictException['You can only create onboarding once'];
-        }
+      // One onboarding (organisation) per owner, for every role.
+      const existingOnboarding =
+        await this.customerOnboardingRepository.findCustomerOnboardingById({
+          userId: user.userId,
+        });
+      if (existingOnboarding) {
+        throw new ConflictException(['You can only create onboarding once']);
       }
       const {
         interestedService,
@@ -774,6 +773,9 @@ export class CustomerOnboardingService {
 
       return onboardingData;
     } catch (e: any) {
+      if (e instanceof ConflictException) {
+        throw e;
+      }
       if (e.code === 11000) {
         const field = Object.keys(e.keyValue || {})[0];
         const value = e.keyValue ? e.keyValue[field] : '';
@@ -2060,12 +2062,10 @@ export class CustomerOnboardingService {
     );
     try {
       const userOnboardingDetail =
-        await this.customerOnboardingRepository.findCustomerOnboardingById({
-          userId: user.userId,
-          sort: {
-            createdAt: -1,
-          },
-        });
+        await this.customerOnboardingRepository.findCustomerOnboardingById(
+          { userId: user.userId },
+          { sort: { createdAt: -1 } },
+        );
       if (!userOnboardingDetail) {
         throw new BadRequestException([
           `No onboarding detail found for user with id: ${user.userId}`,

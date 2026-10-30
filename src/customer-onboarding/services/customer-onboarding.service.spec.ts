@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { KybVerificationEnum } from '../constants/identifier-types';
 import { WebhookVerificationType } from '../dto/company-verification-webhook.dto';
 import { CustomerOnboardingService } from './customer-onboarding.service';
@@ -22,6 +23,7 @@ describe('CustomerOnboardingService company verification webhook', () => {
   const onboardingRepository = {
     findCustomerOnboardingById: jest.fn(),
     updateCustomerOnboardingDetails: jest.fn(),
+    createCustomerOnboarding: jest.fn(),
   };
   const userRepository = { findOne: jest.fn() };
   const mailService = { addAJob: jest.fn() };
@@ -117,5 +119,44 @@ describe('CustomerOnboardingService company verification webhook', () => {
     expect(
       onboardingRepository.updateCustomerOnboardingDetails,
     ).not.toHaveBeenCalled();
+  });
+
+  describe('createCustomerOnboardingDetail', () => {
+    it.each(['ADMIN', 'SUPER_ADMIN'])(
+      'rejects a second onboarding for a %s with 409',
+      async (role) => {
+        onboardingRepository.findCustomerOnboardingById.mockResolvedValue({
+          _id: 'existing',
+          userId: 'user-1',
+        });
+
+        await expect(
+          service.createCustomerOnboardingDetail(
+            { companyName: 'Acme' } as any,
+            { userId: 'user-1', role },
+            'owner@acme.test',
+          ),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(
+          onboardingRepository.createCustomerOnboarding,
+        ).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe('findUserOnboardingDetail', () => {
+    it('sorts by newest instead of filtering on a sort field', async () => {
+      const onboarding = { userId: 'user-1', companyName: 'Acme' };
+      onboardingRepository.findCustomerOnboardingById.mockResolvedValue(
+        onboarding,
+      );
+
+      await expect(
+        service.findUserOnboardingDetail({ userId: 'user-1' }),
+      ).resolves.toBe(onboarding);
+      expect(
+        onboardingRepository.findCustomerOnboardingById,
+      ).toHaveBeenCalledWith({ userId: 'user-1' }, { sort: { createdAt: -1 } });
+    });
   });
 });

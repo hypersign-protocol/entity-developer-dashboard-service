@@ -73,7 +73,10 @@ export class PeopleService {
     const { roleId } = createPersonDto;
     let roleDetail;
     if (roleId) {
-      roleDetail = await this.roleRepository.findOne({ _id: roleId });
+      roleDetail = await this.roleRepository.findOne({
+        _id: roleId,
+        userId: adminUserData.userId,
+      });
       if (!roleDetail) {
         throw new BadRequestException([
           TENANT_INVITE_ERRORS.ROLE_NOT_FOUND(roleId),

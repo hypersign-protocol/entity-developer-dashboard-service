@@ -62,17 +62,17 @@ jobs:
       with:
         credentials_json: "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}"
         project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
-    - name: install gcloud cli tools
-      uses: google-github-actions/setup-gcloud@v3.0.1
-      with:
-        # See the build job above. Do not float to the regressed 590.x SDK.
-        version: "588.0.0"
-        project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
-        install_components: "gke-gcloud-auth-plugin"
-    - name: "Verify Google authentication"
-      run: gcloud auth print-access-token > /dev/null
+    # This action writes a short-lived access token into kubeconfig by default.
+    # It deliberately avoids gke-gcloud-auth-plugin and its crashing
+    # `gcloud config config-helper` credential path.
     - name: "Configure kubectl"
-      run: gcloud container clusters get-credentials hypermine-gke-manual --region=asia-south1 --project=${{ secrets.GOOGLE_PROJECT_ID }}
+      uses: google-github-actions/get-gke-credentials@v3.0.0
+      with:
+        cluster_name: hypermine-gke-manual
+        location: asia-south1
+        project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
+        namespace: hypermine-development
+        use_auth_provider: false
     - name: Replace tags
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__LATEST_RELEASE_TAG__#${{ env.LATEST_RELEASE_TAG }}#" {} \;
 

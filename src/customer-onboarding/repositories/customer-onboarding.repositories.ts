@@ -3,7 +3,7 @@ import {
   CustomerOnboarding,
   CustomerOnboardingDocument,
 } from '../schemas/customer-onboarding.schema';
-import { Model, FilterQuery, UpdateQuery } from 'mongoose';
+import { Model, FilterQuery, QueryOptions, UpdateQuery } from 'mongoose';
 import { Logger } from '@nestjs/common';
 
 export class CustomerOnboardingRepository {
@@ -23,12 +23,17 @@ export class CustomerOnboardingRepository {
   }
   findCustomerOnboardingById(
     customerFilterQuery: FilterQuery<CustomerOnboarding>,
+    options?: QueryOptions<CustomerOnboarding>,
   ) {
     Logger.log(
       'Finding customer onboarding details,',
       'CustomerOnboardingRepository',
     );
-    return this.customerOnboardingModel.findOne(customerFilterQuery);
+    return this.customerOnboardingModel.findOne(
+      customerFilterQuery,
+      null,
+      options,
+    );
   }
   updateCustomerOnboardingDetails(
     customerFilterQuery: FilterQuery<CustomerOnboarding>,

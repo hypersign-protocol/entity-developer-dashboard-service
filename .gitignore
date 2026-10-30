@@ -39,3 +39,6 @@ lerna-debug.log*
 
 
 .api-edv-config/*
+
+# Generated temporarily by google-github-actions/auth.
+gha-creds-*.json

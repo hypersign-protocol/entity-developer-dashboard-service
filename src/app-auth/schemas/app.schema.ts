@@ -184,3 +184,4 @@ export const AppSchema = SchemaFactory.createForClass(App);
 AppSchema.index({ apiKeyPrefix: 1, apiKeySecret: 1 }, { unique: true });
 AppSchema.index({ appId: 1 }, { unique: true });
 AppSchema.index({ appId: 1, walletAddress: 1, edvId: 1 }, { unique: true });
+AppSchema.index({ userId: 1 });

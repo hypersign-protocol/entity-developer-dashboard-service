@@ -35,7 +35,7 @@ describe('AppAuthService deleteApp', () => {
     findAndDeleteServiceDB: jest.fn(),
     findOneAndDelete: jest.fn(),
   };
-  const onboardModel = { deleteOne: jest.fn() };
+  const onboardModel = { deleteOne: jest.fn(), updateMany: jest.fn() };
   const webpageConfigRepo = {
     deleteMany: jest.fn(),
     findOneAndDelete: jest.fn(),
@@ -51,6 +51,7 @@ describe('AppAuthService deleteApp', () => {
     appRepository.findOne.mockResolvedValue(kycApp);
     appRepository.findAppsByPipeline.mockResolvedValue([]);
     appRepository.findOneAndDelete.mockResolvedValue(kycApp);
+    appRepository.findAndDeleteServiceDB.mockResolvedValue(true);
     service = new AppAuthService(
       {} as any,
       appRepository as any,
@@ -75,5 +76,82 @@ describe('AppAuthService deleteApp', () => {
       serviceId: 'kyc-app-1',
     });
     expect(webpageConfigRepo.findOneAndDelete).not.toHaveBeenCalled();
+  });
+
+  it('keeps the organisation and only unlinks the deleted KYC app', async () => {
+    await service.deleteApp('kyc-app-1', {
+      userId: 'owner-1',
+      role: UserRole.ADMIN,
+    });
+
+    expect(onboardModel.deleteOne).not.toHaveBeenCalled();
+    expect(onboardModel.updateMany).toHaveBeenCalledWith(
+      { kycServiceId: 'kyc-app-1' },
+      { $unset: { kycServiceId: '', kycSubdomain: '' } },
+    );
+  });
+
+  it('keeps the linked SSI app when an admin deletes a KYC app', async () => {
+    appRepository.findOne.mockResolvedValue({
+      ...kycApp,
+      dependentServices: ['ssi-app-1'],
+    });
+
+    await service.deleteApp('kyc-app-1', {
+      userId: 'owner-1',
+      role: UserRole.ADMIN,
+    });
+
+    expect(appRepository.findOneAndDelete).toHaveBeenCalledTimes(1);
+    expect(appRepository.findOneAndDelete).toHaveBeenCalledWith({
+      appId: 'kyc-app-1',
+      userId: 'owner-1',
+    });
+    expect(appRepository.findOne).not.toHaveBeenCalledWith(
+      expect.objectContaining({ appId: 'ssi-app-1' }),
+    );
+  });
+
+  it('unlinks a deleted SSI app from its organisation', async () => {
+    const ssiApp = {
+      ...kycApp,
+      appId: 'ssi-app-1',
+      services: [{ id: SERVICE_TYPES.SSI_API, dBSuffix: 'ssiDB' }],
+    };
+    appRepository.findOne.mockResolvedValue(ssiApp);
+    appRepository.findOneAndDelete.mockResolvedValue(ssiApp);
+
+    await service.deleteApp('ssi-app-1', {
+      userId: 'owner-1',
+      role: UserRole.ADMIN,
+    });
+
+    expect(onboardModel.updateMany).toHaveBeenCalledWith(
+      { ssiServiceId: 'ssi-app-1' },
+      { $unset: { ssiServiceId: '', ssiSubdomain: '' } },
+    );
+    expect(webpageConfigRepo.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('reports a service database that could not be dropped', async () => {
+    appRepository.findAndDeleteServiceDB.mockResolvedValue(false);
+
+    const result = await service.deleteApp('kyc-app-1', {
+      userId: 'owner-1',
+      role: UserRole.ADMIN,
+    });
+
+    expect(result.warnings).toEqual([
+      expect.stringContaining('service:cavachDB:acme'),
+    ]);
+  });
+
+  it('returns no warnings when every clean-up step succeeds', async () => {
+    const result = await service.deleteApp('kyc-app-1', {
+      userId: 'owner-1',
+      role: UserRole.ADMIN,
+    });
+
+    expect(result).toEqual({ appId: 'kyc-app-1' });
   });
 });

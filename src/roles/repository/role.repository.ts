@@ -34,6 +34,17 @@ export class RoleRepository {
     });
   }
 
+  async attachOrganisation(userId: string, orgId: string) {
+    Logger.log(
+      'Inside attachOrganisation() to set orgId on the owner roles',
+      'RoleRepository',
+    );
+    return this.roleModel.updateMany(
+      { userId, orgId: { $exists: false } },
+      { $set: { orgId } },
+    );
+  }
+
   async findOneAndDelete(roleFilterQuery: FilterQuery<Role>) {
     Logger.log('Inside findOneAndDelete to delete role', 'RoleRepository');
     return this.roleModel.findOneAndDelete(roleFilterQuery);

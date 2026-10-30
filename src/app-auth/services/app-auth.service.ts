@@ -164,6 +164,12 @@ export class AppAuthService {
       'AppAuthService',
     );
 
+    // The owner's organisation, if they have onboarded. Set after the spread so
+    // a client can never choose it.
+    const organisation = await this.onboardModel
+      .findOne({ userId }, { _id: 1 })
+      .lean();
+
     // Finally stroring application in db
     // const txns = {
     //   transactionHash: '',
@@ -173,6 +179,7 @@ export class AppAuthService {
       services: [service],
       authzTxnHash: '',
       userId,
+      orgId: organisation?._id?.toString(),
       appId: appId, // generate app id
       apiKeySecret: apiSecret, // TODO: generate app secret and should be handled like password by hashing and all...
       edvId, // generate edvId  by called hypersign edv service
@@ -631,8 +638,6 @@ export class AppAuthService {
   async deleteApp(appId: string, user): Promise<DeleteAppResponse> {
     Logger.log('deleteApp() method: starts....', 'AppAuthService');
     const { userId } = user;
-    const role = user?.role || UserRole.ADMIN;
-    let linkedSSIServiceId;
     let appDetail = await this.appRepository.findOne({ appId, userId });
     if (!appDetail) {
       Logger.error('deleteApp() method: Error: no app found', 'AppAuthService');
@@ -693,18 +698,34 @@ export class AppAuthService {
       throw new BadRequestException(['The app is invalid.']);
     }
     const appDbConnectionSuffix = `service:${appDetail.services[0].dBSuffix}:${appDetail.subdomain}`;
-    await this.appRepository.findAndDeleteServiceDB(appDbConnectionSuffix);
+    const warnings: string[] = [];
+    const serviceDbDropped = await this.appRepository.findAndDeleteServiceDB(
+      appDbConnectionSuffix,
+    );
+    if (!serviceDbDropped) {
+      warnings.push(
+        `The app's service database ${appDbConnectionSuffix} could not be deleted; it needs manual clean-up.`,
+      );
+    }
+    // The organisation (onboarding record) stays: only unlink this app from it.
+    if (appDetail.services[0].id === SERVICE_TYPES.SSI_API) {
+      await this.onboardModel.updateMany(
+        { ssiServiceId: appId },
+        { $unset: { ssiServiceId: '', ssiSubdomain: '' } },
+      );
+    }
     if (
       appDetail?.services?.length > 0 &&
       appDetail.services[0].id === SERVICE_TYPES.CAVACH_API
     ) {
-      // delete onboarding data
-      await this.onboardModel.deleteOne({ kycServiceId: appId });
+      await this.onboardModel.updateMany(
+        { kycServiceId: appId },
+        { $unset: { kycServiceId: '', kycSubdomain: '' } },
+      );
       // delete webpage config data of that service (KYC and KYB pages).
       // WebPageConfig stores the app id as serviceId; filtering on appId was
       // stripped by strictQuery and deleted an unrelated config.
       await this.webpageConfigRepo.deleteMany({ serviceId: appId });
-      linkedSSIServiceId = appDetail.dependentServices[0];
     }
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });
     // delete from redis
@@ -739,20 +760,9 @@ export class AppAuthService {
         generateHash(`${appId}_${GRANT_TYPES.access_service_kyb}`),
       ),
     ]);
-    // delete linked ssi service for admin role
-    if (
-      appDetail.services[0].id === SERVICE_TYPES.CAVACH_API &&
-      role === UserRole.ADMIN &&
-      linkedSSIServiceId
-    ) {
-      Logger.log(
-        `Deleting linked SSI service for Cavach app: ${linkedSSIServiceId}`,
-        'AppAuthService',
-      );
-      await this.deleteLinkedService(linkedSSIServiceId, user);
-    }
+    // The linked SSI app is kept: it holds the organisation's DID and keys.
     Logger.debug(`Redis cache cleaned for appId: ${appId}`);
-    return { appId: appDetail.appId };
+    return { appId: appDetail.appId, ...(warnings.length && { warnings }) };
   }
 
   public checkIfDateExpired(expiryDate: Date | null) {
@@ -1328,13 +1338,5 @@ export class AppAuthService {
     if (updates.length) {
       await Promise.all(updates);
     }
-  }
-  private async deleteLinkedService(appId: string, user) {
-    Logger.log(
-      `Inside deleteLinkedService() for appId: ${appId}`,
-      'AppAuthService',
-    );
-
-    await this.deleteApp(appId, user);
   }
 }

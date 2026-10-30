@@ -53,6 +53,7 @@ import {
   SERVICE_ENDPOINTS,
 } from 'src/utils/utils';
 import { RoleRepository } from 'src/roles/repository/role.repository';
+import { AdminPeopleRepository } from 'src/people/repository/people.repository';
 import { ONBORDING_CONSTANT_DATA } from '../constants/en';
 import { WebpageConfigService } from 'src/webpage-config/services/webpage-config.service';
 import {
@@ -88,6 +89,7 @@ export class CustomerOnboardingService {
     private readonly roleRepository: RoleRepository,
     private readonly webPageConfig: WebpageConfigService,
     private readonly creditService: CreditService,
+    private readonly adminPeopleRepository: AdminPeopleRepository,
   ) {}
 
   async updateCompanyVerificationStatus(
@@ -462,9 +464,7 @@ export class CustomerOnboardingService {
             }),
             ...(!isCompleted &&
               statusReason !== undefined && {
-                companyStatusReason: Array.isArray(statusReason)
-                  ? statusReason.map(String).join(', ')
-                  : String(statusReason),
+                companyStatusReason: this.formatStatusReason(statusReason),
               }),
             ...(isRejectedRetry &&
               !isCompleted &&
@@ -732,6 +732,10 @@ export class CustomerOnboardingService {
           ...createCustomerOnboardingDto,
           userId: user.userId,
         });
+      await this.attachOrganisation(
+        user.userId,
+        onboardingData['_id'].toString(),
+      );
 
       const customerName =
         user?.name || loggedInUserEmail?.split('@')[0] || 'User';
@@ -783,6 +787,22 @@ export class CustomerOnboardingService {
       }
       throw new BadRequestException([e.message]);
     }
+  }
+
+  /**
+   * Links the owner's existing apps, roles and team rows to their new
+   * organisation. Only records without an orgId are touched.
+   */
+  private async attachOrganisation(userId: string, orgId: string) {
+    const [apps, roles, team] = await Promise.all([
+      this.appAuthRepository.attachOrganisation(userId, orgId),
+      this.roleRepository.attachOrganisation(userId, orgId),
+      this.adminPeopleRepository.attachOrganisation(userId, orgId),
+    ]);
+    Logger.log(
+      `Attached organisation ${orgId}: ${apps} apps, ${roles.modifiedCount} roles, ${team.modifiedCount} team rows`,
+      'CustomerOnboardingService',
+    );
   }
 
   /**
@@ -1264,6 +1284,7 @@ export class CustomerOnboardingService {
               if (!existingRole) {
                 await this.roleRepository.create({
                   userId,
+                  orgId: customerOnboardingData._id.toString(),
                   roleName: ONBORDING_CONSTANT_DATA.TEAM_ROLE_NAME,
                   roleDescription: ONBORDING_CONSTANT_DATA.ROLE_DESCRIPTION,
                   permissions: ONBORDING_CONSTANT_DATA.ROLE_PERMISSIONS,
@@ -2041,18 +2062,40 @@ export class CustomerOnboardingService {
         .map((key) => [key, fields[key]]),
     );
     const documents = Array.isArray(company.documents) ? company.documents : [];
-    const rawStatusReason = company.statusReason;
     return {
       id: company._id || company.id,
       ...companyFields,
       status: company.status,
-      statusReason: Array.isArray(rawStatusReason)
-        ? rawStatusReason.map(String).join(', ')
-        : rawStatusReason == null
-        ? ''
-        : String(rawStatusReason),
+      statusReason: this.formatStatusReason(company.statusReason),
       documents,
     };
+  }
+
+  /**
+   * Turns the KYB service's status reason (a string, an object or an array
+   * of either) into readable text. String() would store "[object Object]".
+   */
+  private formatStatusReason(reason: unknown): string {
+    if (reason == null) return '';
+    if (Array.isArray(reason)) {
+      return reason
+        .map((item) => this.formatStatusReason(item))
+        .filter(Boolean)
+        .join(', ');
+    }
+    if (typeof reason === 'object') {
+      const {
+        message,
+        reason: text,
+        description,
+        code,
+      } = reason as Record<string, unknown>;
+      const readable = [message, text, description, code].find(
+        (value) => typeof value === 'string' && value,
+      );
+      return (readable as string) ?? JSON.stringify(reason);
+    }
+    return String(reason);
   }
 
   async findUserOnboardingDetail(user) {

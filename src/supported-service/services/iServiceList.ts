@@ -132,6 +132,8 @@ export namespace SERVICES {
       WRITE_SERVICE = 'WRITE_SERVICE',
       UPDATE_SERVICE = 'UPDATE_SERVICE',
       DELETE_SERVICE = 'DELETE_SERVICE',
+      READ_BILLING = 'READ_BILLING',
+      WRITE_BILLING = 'WRITE_BILLING',
     }
   }
   // eslint-disable-next-line

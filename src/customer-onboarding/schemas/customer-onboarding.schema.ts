@@ -11,6 +11,23 @@ import {
 import { KybVerificationEnum } from '../constants/identifier-types';
 export type CustomerOnboardingDocument = CustomerOnboarding & Document;
 
+// The organisation's billing profile (ADR §4.1). Region and currency come
+// first (price book selection); address and tax ids follow with quotes.
+@Schema({ _id: false })
+export class BillingDetails {
+  @Prop({ type: String, enum: ['IN', 'GLOBAL'], required: true })
+  region: 'IN' | 'GLOBAL';
+  @Prop({ type: String, enum: ['INR', 'USD'], required: true })
+  currency: 'INR' | 'USD';
+  @Prop({
+    type: [{ _id: false, type: { type: String }, number: { type: String } }],
+    required: false,
+  })
+  taxIds?: { type: string; number: string }[];
+}
+export const BillingDetailsSchema =
+  SchemaFactory.createForClass(BillingDetails);
+
 export class LogDetail {
   @Prop({ Type: String, required: true })
   step: OnboardingStep;
@@ -89,8 +106,14 @@ export class CustomerOnboarding {
   companyVerificationStatus?: string;
   @Prop({ type: String, required: false })
   companyStatusReason?: string;
+  // Set by the KYB webhook on the first move to Approved. Coupons use it.
+  @Prop({ type: Date, required: false })
+  companyVerificationApprovedAt?: Date;
   @Prop({ type: String, required: true })
   userId: string;
+  // Billing profile. Written only by the billing module (its own $set path).
+  @Prop({ type: BillingDetailsSchema, required: false })
+  billing?: BillingDetails;
 }
 
 export const CustomerOnboardingSchema =

@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -7,7 +9,6 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { Types } from 'mongoose';
-import { randomUUID } from 'node:crypto';
 import { CreditPlan, CreditSourceEnum, scope } from '../schemas/credit.schema';
 import { ConfigService } from '@nestjs/config';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
@@ -35,10 +36,22 @@ import {
   MSG_UPDATE_DID_TYPEURL,
 } from 'src/utils/authz';
 import { CreditRequestDto } from '../dtos/credits.dto';
-import { TimeUnit } from 'src/customer-onboarding/constants/enum';
+import {
+  CreditStatus as OnboardingStatus,
+  InterestedService,
+  TimeUnit,
+} from 'src/customer-onboarding/constants/enum';
 import { CreditRepository } from '../repositories/credit.repository';
 import { CreditStatus } from '../schemas/credit.schema';
 import { CreditCommandService } from './credit-command.service';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
+import { UserRole } from 'src/user/schema/user.schema';
+import { calculateFreeCreditAmounts } from 'src/credits/utils/credit-amounts';
+import { CREDIT_REFERENCE_PREFIXES, ONBOARDING_CONFIG } from 'src/utils/utils';
+import { redisClient } from 'src/utils/redis.provider';
+import { randomUUID } from 'node:crypto';
 
 const SSI_ON_CHAIN_ALLOWANCE_MULTIPLIER = BigInt(2000);
 
@@ -55,7 +68,177 @@ export class CreditService {
     private readonly creditRepository: CreditRepository,
     private readonly creditCommandService: CreditCommandService,
     private readonly moduleRef: ModuleRef,
+    @InjectModel(CustomerOnboarding.name)
+    private readonly customerOnboardingModel: Model<CustomerOnboarding> = null as any,
   ) {}
+
+  async grantFreeCredit(
+    appId: string,
+    user: { userId: string; role: UserRole },
+  ) {
+    const appDetail = await this.appRepository.findOne({ appId });
+    if (!appDetail) {
+      throw new BadRequestException([`No app found for appId ${appId}`]);
+    }
+    if (appDetail.userId !== user.userId) {
+      throw new ForbiddenException([
+        'Free credits can only be requested by app owner',
+      ]);
+    }
+    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException([
+        'Caller is not eligible to request credits',
+      ]);
+    }
+
+    const serviceType = appDetail.services?.[0]?.id as SERVICE_TYPES;
+    if (
+      serviceType !== SERVICE_TYPES.SSI_API &&
+      serviceType !== SERVICE_TYPES.CAVACH_API
+    ) {
+      throw new BadRequestException([
+        'Free credits are only available for SSI and KYC services',
+      ]);
+    }
+
+    const onboarding = await this.customerOnboardingModel
+      .findOne({
+        userId: appDetail.userId,
+        onboardingStatus: OnboardingStatus.APPROVED,
+        ...(serviceType === SERVICE_TYPES.SSI_API
+          ? { ssiServiceId: appId }
+          : { kycServiceId: appId }),
+      })
+      .lean()
+      .exec();
+    if (!onboarding) {
+      throw new BadRequestException([
+        'No completed onboarding is associated with this app',
+      ]);
+    }
+
+    let referenceId = `${CREDIT_REFERENCE_PREFIXES.FREE_CREDIT}${onboarding._id}:${appId}`;
+    const lockKey = `FREE_CREDIT_GRANT_LOCK:${appId}`;
+    const lockToken = randomUUID();
+    const acquired = await redisClient.set(lockKey, lockToken, 'EX', 600, 'NX');
+    if (acquired !== 'OK') {
+      throw new ConflictException([
+        'A free-credit request is already being processed for this service',
+      ]);
+    }
+
+    const statusField =
+      serviceType === SERVICE_TYPES.SSI_API
+        ? 'ssiFreeCreditStatus'
+        : 'kycFreeCreditStatus';
+    let claimStarted = false;
+
+    try {
+      const claim = await this.customerOnboardingModel
+        .findOneAndUpdate(
+          {
+            _id: onboarding._id,
+            [statusField]: {
+              $nin: [OnboardingStatus.PROCESSING, OnboardingStatus.APPROVED],
+            },
+          },
+          {
+            $set: {
+              [statusField]: OnboardingStatus.PROCESSING,
+            },
+          },
+          { new: true },
+        )
+        .lean()
+        .exec();
+      if (!claim) {
+        const current = await this.customerOnboardingModel
+          .findById(onboarding._id)
+          .lean()
+          .exec();
+        const currentStatus = current?.[statusField];
+        if (currentStatus === OnboardingStatus.APPROVED) {
+          return { message: 'Free credit has already been claimed' };
+        }
+        throw new ConflictException([
+          'A free-credit request is already being processed for this service',
+        ]);
+      }
+      claimStarted = true;
+
+      const existingFreeCredit =
+        await this.creditRepository.findParticularCreditDetail({
+          serviceId: appId,
+          source: CreditSourceEnum.FREE_CREDIT,
+        });
+      if (
+        existingFreeCredit &&
+        existingFreeCredit.referenceId !== referenceId
+      ) {
+        const legacyReferenceId = `${CREDIT_REFERENCE_PREFIXES.LEGACY_FREE_CREDIT}${onboarding._id}:${appId}`;
+        if (existingFreeCredit.referenceId === legacyReferenceId) {
+          referenceId = existingFreeCredit.referenceId;
+        } else {
+          throw new ConflictException(['Free credit has already been claimed']);
+        }
+      }
+
+      const amounts = calculateFreeCreditAmounts(
+        ONBOARDING_CONFIG.TOTAL_VERIFICATION,
+        onboarding.interestedService as InterestedService[],
+        ONBOARDING_CONFIG.EXPIRY,
+      );
+      const isSsi = serviceType === SERVICE_TYPES.SSI_API;
+      const creditDetail: CreditRequestDto = {
+        amount: String(
+          isSsi ? amounts.ssiCreditAmount : amounts.kycCreditAmount,
+        ),
+        validityPeriod: amounts.validityPeriod,
+        validityPeriodUnit: TimeUnit.Days,
+        amountDenom: 'uhid',
+        source: CreditSourceEnum.FREE_CREDIT,
+      };
+      const result = await this.grantCredit(
+        appId,
+        creditDetail,
+        user.userId,
+        CreditSourceEnum.FREE_CREDIT,
+        referenceId,
+        isSsi ? String(amounts.ssiHidAllowanceAmount) : undefined,
+      );
+      await this.customerOnboardingModel.updateOne(
+        { _id: onboarding._id },
+        {
+          $set: { [statusField]: OnboardingStatus.APPROVED },
+        },
+      );
+      return result;
+    } catch (error) {
+      if (claimStarted) {
+        try {
+          await this.customerOnboardingModel.updateOne(
+            { _id: onboarding._id },
+            {
+              $set: { [statusField]: OnboardingStatus.FAILED },
+            },
+          );
+        } catch (statusError) {
+          Logger.error(
+            `Could not persist failed free-credit status for ${appId}: ${statusError}`,
+            'CreditService',
+          );
+        }
+      }
+      throw error;
+    } finally {
+      await redisClient.eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+        1,
+        lockKey,
+        lockToken,
+      );
+    }
+  }
 
   async fetchCreditDetails(appId: string, status?: CreditStatus) {
     Logger.log('Fetching credit plan list', 'CreditService');

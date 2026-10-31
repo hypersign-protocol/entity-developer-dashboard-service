@@ -20,6 +20,7 @@ export enum CreditStatus {
 export enum CreditSourceEnum {
   'MANUAL_RECHARGE' = 'MANUAL_RECHARGE',
   'CUSTOMER_ONBOARDING' = 'CUSTOMER_ONBOARDING',
+  'FREE_CREDIT' = 'FREE_CREDIT',
   'MIGRATION' = 'MIGRATION',
   'PAYMENT' = 'PAYMENT',
   'ADJUSTMENT' = 'ADJUSTMENT',
@@ -89,5 +90,12 @@ export const CreditsSchema = SchemaFactory.createForClass(CreditPlan);
 CreditsSchema.index({ serviceId: 1, status: 1 });
 CreditsSchema.index({ serviceId: 1, createdAt: 1 });
 CreditsSchema.index({ serviceId: 1, referenceId: 1 }, { unique: true });
+CreditsSchema.index(
+  { serviceId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { source: CreditSourceEnum.FREE_CREDIT },
+  },
+);
 CreditsSchema.index({ legacyCreditId: 1, migrationSource: 1 });
 CreditsSchema.index({ status: 1, expiresAt: 1 });

@@ -201,6 +201,12 @@ export const REDIS_KEYS = {
   CUSTOMER_ONBOARDING_PROGRESS: 'customer-onboarding:progress:',
   CUSTOMER_ONBOARDING_LOCK: 'customer-onboarding:lock:',
 };
+
+export const CREDIT_REFERENCE_PREFIXES = {
+  FREE_CREDIT: 'FREE_CREDIT:',
+  LEGACY_FREE_CREDIT: 'FREE_CREDIT_LEGACY:',
+};
+
 export function getAccessListForModule(
   module: TokenModule,
   serviceType: SERVICE_TYPES,

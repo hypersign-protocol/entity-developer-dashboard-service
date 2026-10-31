@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   UseFilters,
   Controller,
   Get,
@@ -9,6 +10,7 @@ import {
   UsePipes,
   ValidationPipe,
   Query,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -26,6 +28,7 @@ import {
   GetCreditsQueryDto,
 } from '../dtos/credits.dto';
 import { CreditSourceEnum } from '../schemas/credit.schema';
+import { UserRole } from 'src/user/schema/user.schema';
 
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Credits')
@@ -78,6 +81,20 @@ export class CreditsController {
     @Body() creditRequestDto: CreditRequestDto,
     @Req() req: any,
   ) {
+    const source = creditRequestDto.source ?? CreditSourceEnum.MANUAL_RECHARGE;
+    if (source === CreditSourceEnum.FREE_CREDIT) {
+      return this.creditService.grantFreeCredit(appId, req.user);
+    }
+    if (source !== CreditSourceEnum.MANUAL_RECHARGE) {
+      throw new BadRequestException([
+        'Only FREE_CREDIT and MANUAL_RECHARGE sources are supported by this endpoint',
+      ]);
+    }
+    if (req.user.role !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException([
+        'Only a super admin can grant manual credits',
+      ]);
+    }
     return this.creditService.grantCredit(
       appId,
       creditRequestDto,

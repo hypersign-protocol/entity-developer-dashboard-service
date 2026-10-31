@@ -1,13 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  IsInt,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsPositive,
   IsString,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { TimeUnit } from 'src/customer-onboarding/constants/enum';
@@ -190,33 +191,59 @@ export class GrantAllowanceResponseDto {
 }
 
 export class CreditRequestDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     name: 'amount',
     description: 'Amount of allowance provided',
     example: '15000',
   })
+  @ValidateIf(
+    (request: CreditRequestDto) =>
+      request.source !== CreditSourceEnum.FREE_CREDIT,
+  )
+  @IsString()
+  @IsNotEmpty()
   amount: string;
-  @ApiProperty({
+  @ApiPropertyOptional({
     name: 'validityPeriod',
     description: 'Time till credit will be valie',
     example: '60',
   })
+  @ValidateIf(
+    (request: CreditRequestDto) =>
+      request.source !== CreditSourceEnum.FREE_CREDIT,
+  )
   @Type(() => Number)
+  @IsInt()
+  @IsPositive()
   validityPeriod: number;
-  @ApiProperty({
+  @ApiPropertyOptional({
     name: 'validityPeriodUnit',
     description: 'unit for validity period',
     enum: TimeUnit,
   })
+  @ValidateIf(
+    (request: CreditRequestDto) =>
+      request.source !== CreditSourceEnum.FREE_CREDIT,
+  )
   @IsEnum(TimeUnit)
   validityPeriodUnit: TimeUnit;
-  @ApiProperty({
+  @ApiPropertyOptional({
     name: 'amountDenom',
     description: 'denom',
     example: 'uHid',
   })
+  @ValidateIf(
+    (request: CreditRequestDto) =>
+      request.source !== CreditSourceEnum.FREE_CREDIT,
+  )
   @IsString()
+  @IsNotEmpty()
   amountDenom: string;
+
+  @ApiPropertyOptional({ enum: CreditSourceEnum })
+  @IsOptional()
+  @IsEnum(CreditSourceEnum)
+  source?: CreditSourceEnum;
 }
 
 export class CreditResponseDto {

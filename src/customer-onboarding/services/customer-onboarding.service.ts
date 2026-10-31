@@ -69,7 +69,7 @@ import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { VerificationMethodTypes } from 'src/utils/generated/client/enums';
 import { Types } from 'mongoose';
 import { CreditSourceEnum } from 'src/credits/schemas/credit.schema';
-import { calculateDidOnboardingCreditAmounts } from '../utils/onboarding-credit-amounts';
+import { calculateDidOnboardingCreditAmounts } from 'src/credits/utils/credit-amounts';
 import { v4 as uuidv4 } from 'uuid';
 import { validate, ValidationError } from 'class-validator';
 import { plainToInstance } from 'class-transformer';

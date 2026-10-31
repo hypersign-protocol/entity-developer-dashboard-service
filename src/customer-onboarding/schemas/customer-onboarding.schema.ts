@@ -91,6 +91,18 @@ export class CustomerOnboarding {
   companyStatusReason?: string;
   @Prop({ type: String, required: true })
   userId: string;
+  @Prop({
+    type: String,
+    enum: CreditStatus,
+    default: CreditStatus.INITIATED,
+  })
+  ssiFreeCreditStatus?: CreditStatus;
+  @Prop({
+    type: String,
+    enum: CreditStatus,
+    default: CreditStatus.INITIATED,
+  })
+  kycFreeCreditStatus?: CreditStatus;
 }
 
 export const CustomerOnboardingSchema =

@@ -21,8 +21,8 @@ export class App {
 
   // Organisation (CustomerOnboarding._id) the app belongs to. Set by the server only.
   @ApiHideProperty()
-  @Prop({ required: false })
-  orgId?: string;
+  @Prop({ required: true })
+  orgId: string;
 
   @ApiProperty({
     description: 'Application name',

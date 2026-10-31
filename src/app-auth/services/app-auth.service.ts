@@ -5,6 +5,7 @@ import {
   Logger,
   InternalServerErrorException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { SigningStargateClient } from '@cosmjs/stargate';
 import { CreateAppDto, DeleteAppResponse } from '../dtos/create-app.dto';
@@ -90,6 +91,21 @@ export class AppAuthService {
       throw new Error('Invalid service ID: ' + serviceIds[0]);
     }
 
+    // Every app belongs to an organisation (the owner's onboarding record).
+    // Checked before any wallet, vault or key is created.
+    const organisation = await this.onboardModel
+      .findOne({ userId }, { _id: 1 })
+      .lean();
+    if (!organisation) {
+      Logger.warn(
+        `createAnApp() method: refused, user ${userId} has no organisation`,
+        'AppAuthService',
+      );
+      throw new ForbiddenException([
+        'Complete onboarding before creating an app.',
+      ]);
+    }
+
     if (!this.authzWalletInstance) {
       this.authzWalletInstance = await this.hidWalletService.generateWallet(
         this.config.get('MNEMONIC'),
@@ -164,12 +180,6 @@ export class AppAuthService {
       'AppAuthService',
     );
 
-    // The owner's organisation, if they have onboarded. Set after the spread so
-    // a client can never choose it.
-    const organisation = await this.onboardModel
-      .findOne({ userId }, { _id: 1 })
-      .lean();
-
     // Finally stroring application in db
     // const txns = {
     //   transactionHash: '',
@@ -179,7 +189,8 @@ export class AppAuthService {
       services: [service],
       authzTxnHash: '',
       userId,
-      orgId: organisation?._id?.toString(),
+      // Set after the spread so a client can never choose it.
+      orgId: organisation._id.toString(),
       appId: appId, // generate app id
       apiKeySecret: apiSecret, // TODO: generate app secret and should be handled like password by hashing and all...
       edvId, // generate edvId  by called hypersign edv service

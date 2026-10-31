@@ -15,15 +15,11 @@ import {
   REGION_CURRENCY,
 } from '../billing.constants';
 import { BillingException } from '../billing.exception';
-
-const INDIA = ['IN', 'IND', 'INDIA'];
-
-/** Onboarding country → billing region (ADR §4.0). `null` when unknown. */
-export function regionFromCountry(country?: string): BillingRegion | null {
-  const value = country?.trim().toUpperCase();
-  if (!value) return null;
-  return INDIA.includes(value) ? BillingRegion.IN : BillingRegion.GLOBAL;
-}
+import {
+  BillingProfile,
+  buildBillingProfile,
+  regionFromCountry,
+} from '../profile/billing-profile';
 
 export interface BillingAccount {
   orgId: string;
@@ -33,6 +29,7 @@ export interface BillingAccount {
   kybStatus?: string;
   kybApprovedAt?: Date;
   taxIdTypes: string[];
+  profile: BillingProfile;
 }
 
 @Injectable()
@@ -53,6 +50,8 @@ export class BillingAccountService {
       .findOne(
         { userId },
         {
+          companyName: 1,
+          customerEmail: 1,
           country: 1,
           billing: 1,
           companyVerificationStatus: 1,
@@ -71,7 +70,9 @@ export class BillingAccountService {
 
     let region = org.billing?.region as BillingRegion | undefined;
     if (!region) {
-      const derived = regionFromCountry(org.country);
+      const derived =
+        regionFromCountry(org.billing?.address?.country) ||
+        regionFromCountry(org.country);
       region = derived ?? BillingRegion.GLOBAL;
       // Stored once, and only from a known country: a missing country must not
       // lock an Indian customer into Global pricing. Billing's own $set path.
@@ -108,6 +109,10 @@ export class BillingAccountService {
       kybStatus: org.companyVerificationStatus,
       kybApprovedAt: org.companyVerificationApprovedAt,
       taxIdTypes: (org.billing?.taxIds || []).map((t) => t.type),
+      profile: buildBillingProfile({
+        ...org,
+        billing: { ...org.billing, region },
+      }),
     };
   }
 

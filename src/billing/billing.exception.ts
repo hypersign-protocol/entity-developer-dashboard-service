@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, ValidationPipe } from '@nestjs/common';
 import { ValidationError } from 'class-validator';
 import { BillingErrorCode } from './billing.constants';
+import { PricingError } from './pricing/pricing';
 
 const STATUS_TEXT: Partial<Record<HttpStatus, string>> = {
   [HttpStatus.BAD_REQUEST]: 'Bad Request',
@@ -8,6 +9,7 @@ const STATUS_TEXT: Partial<Record<HttpStatus, string>> = {
   [HttpStatus.NOT_FOUND]: 'Not Found',
   [HttpStatus.CONFLICT]: 'Conflict',
   [HttpStatus.UNPROCESSABLE_ENTITY]: 'Unprocessable Entity',
+  [HttpStatus.TOO_MANY_REQUESTS]: 'Too Many Requests',
   [HttpStatus.SERVICE_UNAVAILABLE]: 'Service Unavailable',
 };
 
@@ -63,3 +65,17 @@ export const billingValidationPipe = () =>
         { fields: collectFieldErrors(errors) },
       ),
   });
+
+/** 422 for a selection the price book can't price. */
+export const pricingException = (
+  error: PricingError,
+  custom: { minMinor: number; maxMinor: number },
+) =>
+  new BillingException(
+    HttpStatus.UNPROCESSABLE_ENTITY,
+    BillingErrorCode[error.code],
+    error.message,
+    error.code === 'AMOUNT_OUT_OF_RANGE'
+      ? { minMinor: custom.minMinor, maxMinor: custom.maxMinor }
+      : undefined,
+  );

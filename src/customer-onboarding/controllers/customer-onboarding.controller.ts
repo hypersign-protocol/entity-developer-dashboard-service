@@ -16,6 +16,8 @@ import {
   ParseFilePipe,
   MaxFileSizeValidator,
   FileTypeValidator,
+  Put,
+  UseGuards,
 } from '@nestjs/common';
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import {
@@ -43,11 +45,18 @@ import {
   ProcessCustomerOnboardingRespDto,
 } from '../dto/customer-onboarding-process.dto';
 import { CompanyVerificationWebhookDto } from '../dto/company-verification-webhook.dto';
+import { DashboardAccessGuard } from 'src/app-auth/guard/validate-dashboard-access.guard';
+import { RequireDashboardAccess } from 'src/app-auth/decorator/dashboard-access.decorator';
+import { SERVICES } from 'src/supported-service/services/iServiceList';
+import { BillingProfileService } from 'src/billing/services/billing-profile.service';
+import { UpdateBillingProfileDto } from 'src/billing/dto/update-billing-profile.dto';
+import { billingValidationPipe } from 'src/billing/billing.exception';
 @ApiTags('Customer-Onboarding')
 @Controller('api/v1/customer-onboarding')
 export class CustomerOnboardingController {
   constructor(
     private readonly customerOnboardingService: CustomerOnboardingService,
+    private readonly billingProfileService: BillingProfileService,
   ) {}
   @ApiBearerAuth('Authorization')
   @ApiCreatedResponse({
@@ -106,6 +115,28 @@ export class CustomerOnboardingController {
       secret,
     );
   }
+  // Billing profile (docs/payment/api-contract.md §2). Declared before ':id' so
+  // 'billing' isn't taken for an onboarding id.
+  @ApiOkResponse({ description: 'Billing profile, prefilled if never saved' })
+  @UseGuards(DashboardAccessGuard)
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.READ_BILLING)
+  @Get('billing')
+  getBillingProfile(@Req() req: Request) {
+    return this.billingProfileService.get(req.user['userId']);
+  }
+
+  @ApiOkResponse({ description: 'Billing profile saved' })
+  @UseGuards(DashboardAccessGuard)
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.WRITE_BILLING)
+  @UsePipes(billingValidationPipe())
+  @Put('billing')
+  saveBillingProfile(
+    @Body() dto: UpdateBillingProfileDto,
+    @Req() req: Request,
+  ) {
+    return this.billingProfileService.save(req.user['userId'], dto);
+  }
+
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({
     description: 'Customer Onboarding detail fetched successfully',

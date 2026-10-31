@@ -1,7 +1,10 @@
 import {
+  Body,
   Controller,
   Get,
+  HttpCode,
   HttpStatus,
+  Post,
   Query,
   Req,
   UseFilters,
@@ -15,11 +18,13 @@ import { SERVICES } from 'src/supported-service/services/iServiceList';
 import { AllExceptionsFilter } from 'src/utils/utils';
 import { BillingErrorCode } from './billing.constants';
 import { BillingException, billingValidationPipe } from './billing.exception';
+import { CreateQuoteDto } from './dto/create-quote.dto';
 import { GetCouponsQueryDto } from './dto/get-coupons-query.dto';
 import { PricingSelection } from './pricing/pricing';
 import { BillingAccountService } from './services/billing-account.service';
 import { CatalogService } from './services/catalog.service';
 import { CouponService } from './services/coupon.service';
+import { QuoteService } from './services/quote.service';
 
 // Formats: docs/payment/api-contract.md.
 @UseFilters(AllExceptionsFilter)
@@ -31,6 +36,7 @@ export class BillingController {
     private readonly accounts: BillingAccountService,
     private readonly catalog: CatalogService,
     private readonly coupons: CouponService,
+    private readonly quotes: QuoteService,
   ) {}
 
   @ApiOkResponse({ description: "Published prices for the caller's region" })
@@ -62,5 +68,28 @@ export class BillingController {
       ? { customAmountMinor: query.customAmountMinor }
       : undefined;
     return this.coupons.listEligible(account, selection);
+  }
+
+  @ApiOkResponse({ description: 'The selection priced by the server' })
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.READ_BILLING)
+  @UsePipes(billingValidationPipe())
+  @HttpCode(HttpStatus.OK)
+  @Post('quotes')
+  async createQuote(@Body() dto: CreateQuoteDto, @Req() req: any) {
+    if (
+      (dto.planCode === undefined) ===
+      (dto.customAmountMinor === undefined)
+    ) {
+      throw new BillingException(
+        HttpStatus.BAD_REQUEST,
+        BillingErrorCode.VALIDATION_FAILED,
+        'Send exactly one of planCode and customAmountMinor.',
+        { fields: { planCode: 'Send this or customAmountMinor' } },
+      );
+    }
+    const account = await this.accounts.resolve(req.user.userId);
+    await this.accounts.assertBillableApp(dto.appId, account);
+    // req.user.userId is the owner for team members; the email is the person.
+    return this.quotes.create(account, dto, req.user.email || req.user.userId);
   }
 }

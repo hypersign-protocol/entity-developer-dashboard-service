@@ -16,6 +16,7 @@ import getOnboardingRejectedNotificationMail from 'src/mail-notification/constan
 import { UserRepository } from 'src/user/repository/user.repository';
 import { UserRole } from 'src/user/schema/user.schema';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
+import { kybBillingDefaults } from 'src/billing/profile/billing-profile';
 import {
   CreditDetail,
   CustomerOnboardingProcessDto,
@@ -126,6 +127,11 @@ export class CustomerOnboardingService {
           $set: {
             companyVerificationStatus: status,
             ...(!isCompleted && { companyStatusReason: reason }),
+            // First approval only: FOUNDING coupons count 180 days from it.
+            ...(status === KybVerificationEnum.Approved &&
+              !onboarding.companyVerificationApprovedAt && {
+                companyVerificationApprovedAt: new Date(),
+              }),
           },
         },
       );
@@ -462,6 +468,8 @@ export class CustomerOnboardingService {
             ...(company.registrationNumber !== undefined && {
               registrationNumber: company.registrationNumber,
             }),
+            // Prefill an unconfirmed billing profile from the KYB company.
+            ...kybBillingDefaults(onboarding.billing, company),
             ...(!isCompleted &&
               statusReason !== undefined && {
                 companyStatusReason: this.formatStatusReason(statusReason),

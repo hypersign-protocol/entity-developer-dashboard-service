@@ -1,8 +1,7 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { BillingErrorCode } from '../billing.constants';
-import { BillingException } from '../billing.exception';
+import { pricingException } from '../billing.exception';
 import { checkCouponEligibility } from '../coupons/coupon-eligibility';
 import {
   priceSelection,
@@ -74,17 +73,7 @@ export class CouponService {
             .amountMinor;
         } catch (error) {
           if (!(error instanceof PricingError)) throw error;
-          throw new BillingException(
-            HttpStatus.UNPROCESSABLE_ENTITY,
-            BillingErrorCode[error.code],
-            error.message,
-            error.code === 'AMOUNT_OUT_OF_RANGE'
-              ? {
-                  minMinor: book.custom.minMinor,
-                  maxMinor: book.custom.maxMinor,
-                }
-              : undefined,
-          );
+          throw pricingException(error, book.custom);
         }
       }
 

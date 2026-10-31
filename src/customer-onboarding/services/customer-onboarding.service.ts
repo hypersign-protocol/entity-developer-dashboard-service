@@ -47,12 +47,10 @@ import {
   evaluateAccessPolicy,
   generateHash,
   getAccessListForModule,
-  ONBOARDING_CONFIG,
   ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS,
   SERVICE_ENDPOINTS,
   REDIS_KEYS,
   sanitizeUrl,
-  sumCatalogCreditCost,
 } from 'src/utils/utils';
 import { RoleRepository } from 'src/roles/repository/role.repository';
 import { ONBORDING_CONSTANT_DATA } from '../constants/en';
@@ -71,9 +69,7 @@ import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { VerificationMethodTypes } from 'src/utils/generated/client/enums';
 import { Types } from 'mongoose';
 import { CreditSourceEnum } from 'src/credits/schemas/credit.schema';
-import { catalog as kycCreditCatalog } from '@hypersign-protocol/credit-middleware';
-import { catalog as ssiCreditCatalog } from '@hypersign-protocol/credit-middleware-ssi';
-import type { OnboardingCreditAmounts } from '../dto/onboarding-credit-amounts.interface';
+import { calculateDidOnboardingCreditAmounts } from '../utils/onboarding-credit-amounts';
 import { v4 as uuidv4 } from 'uuid';
 import { validate, ValidationError } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
@@ -1067,95 +1063,6 @@ export class CustomerOnboardingService {
     ].some((service) => interestedService?.includes(service));
   }
 
-  private calculateOnboardingCreditAmounts(
-    numberOfVerifications: number,
-    interestedServices: InterestedService[],
-    validityPeriod: number,
-  ): OnboardingCreditAmounts {
-    if (
-      !Number.isSafeInteger(numberOfVerifications) ||
-      numberOfVerifications < 1
-    ) {
-      throw new BadRequestException([
-        'numberOfVerifications must be a positive integer',
-      ]);
-    }
-    if (!Number.isSafeInteger(validityPeriod) || validityPeriod < 1) {
-      throw new BadRequestException([
-        'validityPeriod must be a positive integer',
-      ]);
-    }
-
-    // Aadhaar is selected explicitly; other onboarding service combinations
-    // use the KYC verification route set, as requested.
-    const isAadhaar =
-      interestedServices?.includes(InterestedService.AADHAR_VERIFICATION) ??
-      false;
-    const verificationRoutes = isAadhaar
-      ? ONBOARDING_CONFIG.AADHAAR_VERIFICATION_ROUTES
-      : ONBOARDING_CONFIG.KYC_VERIFICATION_ROUTES;
-
-    const kycCostPerVerification = sumCatalogCreditCost(
-      kycCreditCatalog,
-      'POST',
-      verificationRoutes,
-      'API_CREDIT',
-    );
-
-    const credentialIssueApiCost = sumCatalogCreditCost(
-      ssiCreditCatalog,
-      'POST',
-      ONBOARDING_CONFIG.SSI_CREDENTIAL_ISSUE_ROUTES,
-      'API_CREDIT',
-    );
-    const credentialIssueHidCost = sumCatalogCreditCost(
-      ssiCreditCatalog,
-      'POST',
-      ONBOARDING_CONFIG.SSI_CREDENTIAL_ISSUE_ROUTES,
-      'BLOCKCHAIN_TXN_CREDIT',
-    );
-    const didApiCost = sumCatalogCreditCost(
-      ssiCreditCatalog,
-      'POST',
-      ONBOARDING_CONFIG.SSI_DID_ROUTES,
-      'API_CREDIT',
-    );
-    const didHidCost = sumCatalogCreditCost(
-      ssiCreditCatalog,
-      'POST',
-      ONBOARDING_CONFIG.SSI_DID_ROUTES,
-      'BLOCKCHAIN_TXN_CREDIT',
-    );
-
-    // Each verification API step issues one credential. DID creation and
-    // registration happen once for the onboarding, not once per verification.
-    const credentialIssueCount =
-      numberOfVerifications * verificationRoutes.length;
-    const ssiCreditAmount =
-      credentialIssueCount * credentialIssueApiCost + didApiCost;
-    const ssiHidAllowanceAmount =
-      credentialIssueCount * credentialIssueHidCost + didHidCost;
-    const kycCreditAmount = kycCostPerVerification * numberOfVerifications;
-
-    if (
-      !Number.isSafeInteger(credentialIssueCount) ||
-      !Number.isSafeInteger(kycCreditAmount) ||
-      !Number.isSafeInteger(ssiCreditAmount) ||
-      !Number.isSafeInteger(ssiHidAllowanceAmount)
-    ) {
-      throw new InternalServerErrorException(
-        'Calculated onboarding credit requirements exceed the maximum safe integer',
-      );
-    }
-
-    return {
-      kycCreditAmount,
-      ssiCreditAmount,
-      ssiHidAllowanceAmount,
-      validityPeriod,
-    };
-  }
-
   private shouldEnableProofOfAge(interestedService?: InterestedService[]) {
     return (
       interestedService?.includes(InterestedService.AGE_VERIFICATION) ?? false
@@ -1198,13 +1105,12 @@ export class CustomerOnboardingService {
    * 3. Creating and registering DID
    * 4. Creating KYC service
    * 5. Granting KYC dashboard access
-   * 6. Crediting KYC service
    * @param id - ID of the customer onboarding record to process
    * @param customerOnboardingProcessDto - DTO containing process details including credit information
    * @returns Success message upon completion
    * @throws BadRequestException if any step fails or validation errors occur
    */
-  async processCustomerOnboarding(id: string, superAdminUserId) {
+  async processCustomerOnboarding(id: string, superAdminUserId: string) {
     Logger.log(
       'Inside processCustomerOnboarding() to approve customer onboarding request',
       'CustomerOnboardingService',
@@ -1212,6 +1118,10 @@ export class CustomerOnboardingService {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException(['Invalid customer onboarding ID']);
     }
+    const retryableOptionalSteps: OnboardingStep[] = [
+      OnboardingStep.CREDIT_SSI_SERVICE,
+      OnboardingStep.REGISTER_DID,
+    ];
     const onboardingLogs: LogDetail[] = [];
     const onboardingUpdateData: Partial<CustomerOnboarding> = {};
     const processingExecutionId = uuidv4();
@@ -1223,6 +1133,8 @@ export class CustomerOnboardingService {
     let processingVersion: number | undefined;
     let processingHeartbeat: ReturnType<typeof setInterval> | undefined;
     let heartbeatInFlight = false;
+    let retryingOptionalSteps = false;
+    let failedOptionalStepsToRetry: OnboardingStep[] = [];
     let ssiService: any,
       widgetConfigDetail: any,
       kycAccessToken: any,
@@ -1240,28 +1152,49 @@ export class CustomerOnboardingService {
         processingLeaseMs,
       );
       if (!processingClaimed) {
-        const currentOnboarding =
-          await this.customerOnboardingRepository.findCustomerOnboardingById({
-            _id: id,
-          });
-        if (!currentOnboarding) {
-          throw new BadRequestException([
-            `Customer onboarding detail not found for id: ${id}`,
-          ]);
-        }
-        if (currentOnboarding.onboardingStatus === CreditStatus.APPROVED) {
-          return { message: 'Customer onboarding completed successfully' };
-        }
         throw new ConflictException([
           'Customer onboarding is already being processed. Retry after the active attempt finishes.',
         ]);
       }
 
+      const currentOnboarding =
+        await this.customerOnboardingRepository.findCustomerOnboardingById({
+          _id: id,
+        });
+      if (!currentOnboarding) {
+        throw new BadRequestException([
+          `Customer onboarding detail not found for id: ${id}`,
+        ]);
+      }
+      const alreadyApproved =
+        currentOnboarding.onboardingStatus === CreditStatus.APPROVED;
+      if (alreadyApproved) {
+        failedOptionalStepsToRetry = retryableOptionalSteps.filter((step) =>
+          this.isLatestStepFailure(currentOnboarding.logs || [], step),
+        );
+        if (failedOptionalStepsToRetry.length === 0) {
+          processingClaimed = false;
+          await this.releaseOnboardingProcessingLock(
+            processingLockKey,
+            processingExecutionId,
+          );
+          return { message: 'Customer onboarding completed successfully' };
+        }
+      }
+      retryingOptionalSteps = alreadyApproved;
       const customerOnboardingData =
         await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
-          { _id: id, onboardingStatus: { $ne: CreditStatus.APPROVED } },
+          alreadyApproved
+            ? {
+                _id: id,
+                __v: Number((currentOnboarding as any).__v || 0),
+                onboardingStatus: CreditStatus.APPROVED,
+              }
+            : { _id: id, onboardingStatus: { $ne: CreditStatus.APPROVED } },
           {
-            $set: { onboardingStatus: CreditStatus.PROCESSING },
+            ...(alreadyApproved
+              ? {}
+              : { $set: { onboardingStatus: CreditStatus.PROCESSING } }),
             // Use Mongoose's existing version key as a final-write fencing token.
             $inc: { __v: 1 },
           } as any,
@@ -1271,7 +1204,10 @@ export class CustomerOnboardingService {
           await this.customerOnboardingRepository.findCustomerOnboardingById({
             _id: id,
           });
-        if (currentOnboarding?.onboardingStatus === CreditStatus.APPROVED) {
+        if (
+          !retryingOptionalSteps &&
+          currentOnboarding?.onboardingStatus === CreditStatus.APPROVED
+        ) {
           processingClaimed = false;
           await this.releaseOnboardingProcessingLock(
             processingLockKey,
@@ -1323,24 +1259,10 @@ export class CustomerOnboardingService {
       }, processingHeartbeatMs);
       (processingHeartbeat as any).unref?.();
 
-      const {
-        kycCreditAmount,
-        ssiCreditAmount,
-        ssiHidAllowanceAmount,
-        validityPeriod,
-      } = this.calculateOnboardingCreditAmounts(
-        ONBOARDING_CONFIG.TOTAL_VERIFICATION,
-        customerOnboardingData.interestedService,
-        ONBOARDING_CONFIG.EXPIRY,
-      );
+      const { ssiCreditAmount, ssiHidAllowanceAmount, validityPeriod } =
+        calculateDidOnboardingCreditAmounts(1);
       const ssiCreditDetail = {
         amount: ssiCreditAmount,
-        validityPeriod,
-        validityPeriodUnit: TimeUnit.Days,
-        amountDenom: 'uhid',
-      };
-      const kycCreditDetail = {
-        amount: kycCreditAmount,
         validityPeriod,
         validityPeriodUnit: TimeUnit.Days,
         amountDenom: 'uhid',
@@ -1387,24 +1309,32 @@ export class CustomerOnboardingService {
 
       // Resume from the latest successful step in Redis, falling back to MongoDB.
       const allSteps = Object.values(OnboardingStep);
-      const filteredSteps = allSteps.filter((step) => {
-        if (
-          step === OnboardingStep.CONFIGURE_KYB_VERIFIER_PAGE ||
-          step === OnboardingStep.SETUP_KYB_WIDGET
-        ) {
-          return customerOnboardingData.interestedService?.includes(
-            InterestedService.KYB,
-          );
-        }
-        return true;
-      });
+      const filteredSteps = retryingOptionalSteps
+        ? failedOptionalStepsToRetry
+        : allSteps.filter((step) => {
+            if (
+              step === OnboardingStep.CONFIGURE_KYB_VERIFIER_PAGE ||
+              step === OnboardingStep.SETUP_KYB_WIDGET
+            ) {
+              return customerOnboardingData.interestedService?.includes(
+                InterestedService.KYB,
+              );
+            }
+            return true;
+          });
       const lastSuccessfulStep = [...resumeLogs]
         .reverse()
-        .find((log) => log.status === StepStatus.SUCCESS)?.step;
+        .find(
+          (log) =>
+            log.status === StepStatus.SUCCESS &&
+            filteredSteps.includes(log.step),
+        )?.step;
       const lastStepIndex = lastSuccessfulStep
         ? filteredSteps.indexOf(lastSuccessfulStep)
         : -1;
-      const remainingSteps = filteredSteps.slice(lastStepIndex + 1);
+      const remainingSteps = retryingOptionalSteps
+        ? filteredSteps
+        : filteredSteps.slice(lastStepIndex + 1);
       if (redisProgress?.completed === true && remainingSteps.length === 0) {
         await this.assertOnboardingProcessingLock(
           processingLockKey,
@@ -1440,7 +1370,9 @@ export class CustomerOnboardingService {
       if (remainingSteps.length === 0) {
         throw new BadRequestException(['Customer onboarding is already done']);
       }
-      let onboardingStatus;
+      let onboardingStatus = retryingOptionalSteps
+        ? CreditStatus.APPROVED
+        : undefined;
       let userDetail = await this.userRepository.findOne({ userId });
       await this.assertOnboardingProcessingLock(
         processingLockKey,
@@ -1888,36 +1820,6 @@ export class CustomerOnboardingService {
               );
               break;
             }
-            case OnboardingStep.CREDIT_KYC_SERVICE: {
-              Logger.log(
-                'CREDIT_KYC_SERVICE step started',
-                'CustomerOnboardingService',
-              );
-
-              if (!kycService && customerOnboardingData.kycServiceId) {
-                kycService = await this.appAuthRepository.findOne({
-                  appId: customerOnboardingData.kycServiceId,
-                });
-              }
-
-              await this.handleCreditService(
-                kycCreditDetail,
-                {
-                  appId:
-                    kycService?.appId || customerOnboardingData?.kycServiceId,
-                  subdomain:
-                    kycService?.subdomain ||
-                    customerOnboardingData.kycSubdomain,
-                },
-                superAdminUserId,
-                `customer-onboarding:${id}:kyc`,
-              );
-              Logger.debug(
-                'CREDIT_KYC_SERVICE step ends',
-                'CustomerOnboardingService',
-              );
-              break;
-            }
             case OnboardingStep.SETUP_KYC_WIDGET: {
               Logger.log(
                 'SETUP_KYC_WIDGET step started',
@@ -2211,7 +2113,14 @@ export class CustomerOnboardingService {
           }
           Logger.error(error, error?.stack, 'CustomerOnboardingService');
           this.logStepFailure(onboardingLogs, step as OnboardingStep, error);
-          onboardingStatus = CreditStatus.FAILED;
+          const isOptionalStep = retryableOptionalSteps.includes(
+            step as OnboardingStep,
+          );
+          onboardingStatus = retryingOptionalSteps
+            ? CreditStatus.APPROVED
+            : isOptionalStep
+            ? CreditStatus.PROCESSING
+            : CreditStatus.FAILED;
           await this.storeOnboardingProgress(
             progressKey,
             customerOnboardingData,
@@ -2221,7 +2130,7 @@ export class CustomerOnboardingService {
             progressExpiresAt,
             { lockKey: processingLockKey, executionId: processingExecutionId },
           );
-          break;
+          if (!isOptionalStep) break;
         }
       }
 
@@ -2276,22 +2185,42 @@ export class CustomerOnboardingService {
           'CustomerOnboardingService',
         );
       }
-      // Check for failures
-      const failed = finalizedLogs.find(
+      // Optional step failures are visible and emailed but do not fail onboarding.
+      const failedLogs = finalizedLogs.filter(
         (log) => log.status === StepStatus.FAILED,
       );
-      if (failed) {
+      const optionalFailures = failedLogs.filter(
+        (log) => retryableOptionalSteps.includes(log.step as OnboardingStep),
+      );
+      for (const failed of optionalFailures) {
         await this.notifySuperAdminsOnOnboardingFailure(
           customerOnboardingData,
           failed.step,
           failed.failureReason || 'Failure reason not recorded',
         );
+      }
+      const failed = failedLogs.find(
+        (log) => !retryableOptionalSteps.includes(log.step as OnboardingStep),
+      );
+      if (failed) {
+        if (
+          !retryableOptionalSteps.includes(failed.step as OnboardingStep)
+        ) {
+          await this.notifySuperAdminsOnOnboardingFailure(
+            customerOnboardingData,
+            failed.step,
+            failed.failureReason || 'Failure reason not recorded',
+          );
+        }
         throw new InternalServerErrorException([
           `Step ${failed.step} failed: ${failed.failureReason}`,
         ]);
       }
 
-      if (onboardingStatus === CreditStatus.APPROVED) {
+      if (
+        onboardingStatus === CreditStatus.APPROVED &&
+        !retryingOptionalSteps
+      ) {
         const userDetail = await this.userRepository.findOne({ userId });
         const { email, name } = userDetail;
         const message = getOnboardingApprovedNotificationMail(name);
@@ -2313,13 +2242,15 @@ export class CustomerOnboardingService {
               processingExecutionId,
             )
           ) {
-            await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
-              { _id: id, __v: processingVersion } as any,
-              {
-                $set: { onboardingStatus: CreditStatus.FAILED },
-                $inc: { __v: 1 },
-              } as any,
-            );
+            if (!retryingOptionalSteps) {
+              await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+                { _id: id, __v: processingVersion } as any,
+                {
+                  $set: { onboardingStatus: CreditStatus.FAILED },
+                  $inc: { __v: 1 },
+                } as any,
+              );
+            }
           }
           await this.releaseOnboardingProcessingLock(
             processingLockKey,
@@ -2548,7 +2479,7 @@ export class CustomerOnboardingService {
         ? (onboardingData as any).toObject()
         : onboardingData;
     const id = (data as any)._id?.toString();
-    if (!id) return onboardingData;
+    if (!id) return data as T;
 
     const progressKey = `${REDIS_KEYS.CUSTOMER_ONBOARDING_PROGRESS}${id}`;
     try {
@@ -2642,6 +2573,13 @@ export class CustomerOnboardingService {
     for (const log of newOnes) map.set(log.step, log);
     return Array.from(map.values()).sort(
       (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
+    );
+  }
+
+  private isLatestStepFailure(logs: LogDetail[], step: OnboardingStep): boolean {
+    return (
+      [...logs].reverse().find((log) => log.step === step)?.status ===
+      StepStatus.FAILED
     );
   }
 

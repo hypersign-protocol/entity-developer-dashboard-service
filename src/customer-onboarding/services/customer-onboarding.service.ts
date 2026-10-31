@@ -2189,8 +2189,8 @@ export class CustomerOnboardingService {
       const failedLogs = finalizedLogs.filter(
         (log) => log.status === StepStatus.FAILED,
       );
-      const optionalFailures = failedLogs.filter(
-        (log) => retryableOptionalSteps.includes(log.step as OnboardingStep),
+      const optionalFailures = failedLogs.filter((log) =>
+        retryableOptionalSteps.includes(log.step as OnboardingStep),
       );
       for (const failed of optionalFailures) {
         await this.notifySuperAdminsOnOnboardingFailure(
@@ -2203,9 +2203,7 @@ export class CustomerOnboardingService {
         (log) => !retryableOptionalSteps.includes(log.step as OnboardingStep),
       );
       if (failed) {
-        if (
-          !retryableOptionalSteps.includes(failed.step as OnboardingStep)
-        ) {
+        if (!retryableOptionalSteps.includes(failed.step as OnboardingStep)) {
           await this.notifySuperAdminsOnOnboardingFailure(
             customerOnboardingData,
             failed.step,
@@ -2576,7 +2574,10 @@ export class CustomerOnboardingService {
     );
   }
 
-  private isLatestStepFailure(logs: LogDetail[], step: OnboardingStep): boolean {
+  private isLatestStepFailure(
+    logs: LogDetail[],
+    step: OnboardingStep,
+  ): boolean {
     return (
       [...logs].reverse().find((log) => log.step === step)?.status ===
       StepStatus.FAILED

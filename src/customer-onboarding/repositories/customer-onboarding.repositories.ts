@@ -35,6 +35,13 @@ export class CustomerOnboardingRepository {
       options,
     );
   }
+  /** The owner's organisation id (their onboarding _id), if they have one. */
+  async findOrgIdByOwner(userId: string): Promise<string | undefined> {
+    const onboarding = await this.customerOnboardingModel
+      .findOne({ userId }, { _id: 1 })
+      .lean();
+    return onboarding?._id?.toString();
+  }
   updateCustomerOnboardingDetails(
     customerFilterQuery: FilterQuery<CustomerOnboarding>,
     updateData: UpdateQuery<CustomerOnboarding>,

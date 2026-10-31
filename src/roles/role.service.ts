@@ -2,16 +2,24 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { CreateRoleDTO } from './dto/create-role.dto';
 import { UpdateRoleDTO } from './dto/update-role.dto';
 import { RoleRepository } from './repository/role.repository';
+import { CustomerOnboardingRepository } from 'src/customer-onboarding/repositories/customer-onboarding.repositories';
 
 @Injectable()
 export class RoleService {
-  constructor(private readonly roleRepository: RoleRepository) {}
+  constructor(
+    private readonly roleRepository: RoleRepository,
+    private readonly customerOnboardingRepository: CustomerOnboardingRepository,
+  ) {}
   async create(createRole: CreateRoleDTO, user) {
     try {
       Logger.log('Inside create() function to create new role', 'RoleService');
+      const orgId = await this.customerOnboardingRepository.findOrgIdByOwner(
+        user.userId,
+      );
       const role = await this.roleRepository.create({
-        userId: user.userId,
         ...createRole,
+        userId: user.userId,
+        orgId,
       });
       return role;
     } catch (error: any) {

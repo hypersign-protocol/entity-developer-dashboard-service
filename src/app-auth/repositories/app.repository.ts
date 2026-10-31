@@ -101,6 +101,18 @@ export class AppRepository {
     return this.appModel.findOneAndUpdate(appFilterQuery, app, { new: true });
   }
 
+  async attachOrganisation(userId: string, orgId: string): Promise<number> {
+    Logger.log(
+      'attachOrganisation() method: set orgId on the owner apps that have none',
+      'AppRepository',
+    );
+    const { modifiedCount } = await this.appModel.updateMany(
+      { userId, orgId: { $exists: false } },
+      { $set: { orgId } },
+    );
+    return modifiedCount;
+  }
+
   async findOneAndDelete(appFilterQuery: FilterQuery<App>): Promise<App> {
     Logger.log(
       'findOneAndDelete() method: starts, delete  app data to db',
@@ -109,7 +121,10 @@ export class AppRepository {
 
     return this.appModel.findOneAndDelete(appFilterQuery);
   }
-  async findAndDeleteServiceDB(connectionStringPrefix: string) {
+  /** Drops the app's service database. Returns false if the drop failed. */
+  async findAndDeleteServiceDB(
+    connectionStringPrefix: string,
+  ): Promise<boolean> {
     try {
       Logger.log('findAndDeleteServiceDB() method to delte service database');
       // Establish a connection to the MongoDB server
@@ -129,12 +144,14 @@ export class AppRepository {
         `Database ${connectionStringPrefix} has been successfully dropped.`,
         'AppRepository',
       );
+      return true;
     } catch (error) {
       Logger.error(
-        'Error while deleting the database:',
+        `Error while deleting the database ${connectionStringPrefix}:`,
         error,
         'AppRepository',
       );
+      return false;
     }
   }
 }

@@ -19,6 +19,11 @@ export class App {
   @Prop()
   userId: string;
 
+  // Organisation (CustomerOnboarding._id) the app belongs to. Set by the server only.
+  @ApiHideProperty()
+  @Prop({ required: false })
+  orgId?: string;
+
   @ApiProperty({
     description: 'Application name',
     example: 'demo app',
@@ -185,3 +190,4 @@ AppSchema.index({ apiKeyPrefix: 1, apiKeySecret: 1 }, { unique: true });
 AppSchema.index({ appId: 1 }, { unique: true });
 AppSchema.index({ appId: 1, walletAddress: 1, edvId: 1 }, { unique: true });
 AppSchema.index({ userId: 1 });
+AppSchema.index({ orgId: 1 });

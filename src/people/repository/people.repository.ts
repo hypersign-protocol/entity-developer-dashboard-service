@@ -34,6 +34,13 @@ export class AdminPeopleRepository {
     return this.adminPeopleModel.find(adminPeopleFilterQuery);
   }
 
+  async attachOrganisation(adminId: string, orgId: string) {
+    return this.adminPeopleModel.updateMany(
+      { adminId, orgId: { $exists: false } },
+      { $set: { orgId } },
+    );
+  }
+
   async findOneAndDelete(adminPeopleFilterQuery: FilterQuery<AdminPeople>) {
     return this.adminPeopleModel.findOneAndDelete(adminPeopleFilterQuery);
   }

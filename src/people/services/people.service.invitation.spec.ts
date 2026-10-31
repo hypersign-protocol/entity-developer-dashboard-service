@@ -12,6 +12,7 @@ describe('PeopleService createInvitation', () => {
   };
   const mailService = { addJobToMailQueue: jest.fn() };
   const config = { get: jest.fn() };
+  const onboardingRepository = { findOrgIdByOwner: jest.fn() };
   const owner = { userId: 'owner-1', email: 'owner@acme.test' };
   let service: PeopleService;
 
@@ -20,6 +21,7 @@ describe('PeopleService createInvitation', () => {
     userRepository.findOne.mockResolvedValue({ userId: 'member-1' });
     adminPeopleRepository.findOne.mockResolvedValue(null);
     adminPeopleRepository.create.mockResolvedValue({});
+    onboardingRepository.findOrgIdByOwner.mockResolvedValue('org-1');
     service = new PeopleService(
       userRepository as any,
       adminPeopleRepository as any,
@@ -28,6 +30,7 @@ describe('PeopleService createInvitation', () => {
       {} as any,
       config as any,
       mailService as any,
+      onboardingRepository as any,
     );
   });
 
@@ -49,6 +52,7 @@ describe('PeopleService createInvitation', () => {
     expect(adminPeopleRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         adminId: 'owner-1',
+        orgId: 'org-1',
         roleId: 'role-1',
         roleName: 'Viewer',
       }),

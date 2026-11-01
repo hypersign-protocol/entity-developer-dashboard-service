@@ -2,6 +2,8 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  IsBoolean,
+  IsIn,
   IsArray,
   IsEmail,
   IsNotEmpty,
@@ -86,4 +88,28 @@ export class UpdateBillingProfileDto {
   @ValidateNested({ each: true })
   @Type(() => BillingTaxIdDto)
   taxIds: BillingTaxIdDto[];
+}
+
+// PATCH /admin/billing/profiles/:orgId: the full profile, plus admin-only fields.
+export class AdminUpdateBillingProfileDto extends UpdateBillingProfileDto {
+  @ApiPropertyOptional({
+    enum: ['IN', 'GLOBAL'],
+    description: 'Changes the billing region',
+  })
+  @IsOptional()
+  @IsIn(['IN', 'GLOBAL'])
+  region?: 'IN' | 'GLOBAL';
+
+  @ApiPropertyOptional({
+    description: 'Clears the lock set by the first invoice',
+  })
+  @IsOptional()
+  @IsBoolean()
+  unlock?: boolean;
+
+  @ApiProperty({ example: 'Customer sent their GST certificate by email' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(300)
+  reason: string;
 }

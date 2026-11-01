@@ -15,13 +15,49 @@ export function regionFromCountry(country?: string): BillingRegion | null {
   return INDIA.includes(value) ? BillingRegion.IN : BillingRegion.GLOBAL;
 }
 
-// GST state codes: 01–38 and 97 (Other Territory).
-const GST_STATE_CODES = new Set([
-  ...Array.from({ length: 38 }, (_, i) => String(i + 1).padStart(2, '0')),
-  '97',
-]);
-export const isGstStateCode = (code?: string) =>
-  !!code && GST_STATE_CODES.has(code);
+// GST state codes and names (25 and 28 are legacy codes still accepted).
+export const GST_STATES: Record<string, string> = {
+  '01': 'Jammu and Kashmir',
+  '02': 'Himachal Pradesh',
+  '03': 'Punjab',
+  '04': 'Chandigarh',
+  '05': 'Uttarakhand',
+  '06': 'Haryana',
+  '07': 'Delhi',
+  '08': 'Rajasthan',
+  '09': 'Uttar Pradesh',
+  '10': 'Bihar',
+  '11': 'Sikkim',
+  '12': 'Arunachal Pradesh',
+  '13': 'Nagaland',
+  '14': 'Manipur',
+  '15': 'Mizoram',
+  '16': 'Tripura',
+  '17': 'Meghalaya',
+  '18': 'Assam',
+  '19': 'West Bengal',
+  '20': 'Jharkhand',
+  '21': 'Odisha',
+  '22': 'Chhattisgarh',
+  '23': 'Madhya Pradesh',
+  '24': 'Gujarat',
+  '25': 'Daman and Diu',
+  '26': 'Dadra and Nagar Haveli and Daman and Diu',
+  '27': 'Maharashtra',
+  '28': 'Andhra Pradesh (old)',
+  '29': 'Karnataka',
+  '30': 'Goa',
+  '31': 'Lakshadweep',
+  '32': 'Kerala',
+  '33': 'Tamil Nadu',
+  '34': 'Puducherry',
+  '35': 'Andaman and Nicobar Islands',
+  '36': 'Telangana',
+  '37': 'Andhra Pradesh',
+  '38': 'Ladakh',
+  '97': 'Other Territory',
+};
+export const isGstStateCode = (code?: string) => !!code && code in GST_STATES;
 
 /** The first two digits of a GSTIN are the registrant's state code. */
 export function gstStateFromTaxIds(taxIds: TaxIdValue[] = []): string | null {

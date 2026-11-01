@@ -116,6 +116,21 @@ export class BillingAccountService {
     };
   }
 
+  /** The caller's organisation id, without the region switch (invoices, profile). */
+  async orgIdOf(userId: string): Promise<string> {
+    const org = await this.onboardingModel
+      .findOne({ userId }, { _id: 1 })
+      .lean();
+    if (!org) {
+      throw new BillingException(
+        HttpStatus.NOT_FOUND,
+        BillingErrorCode.ONBOARDING_NOT_FOUND,
+        'Complete onboarding to use billing.',
+      );
+    }
+    return String(org._id);
+  }
+
   /** Checks that the app belongs to the organisation and is an ID Service app. */
   async assertBillableApp(appId: string, account: BillingAccount) {
     const app = await this.appModel

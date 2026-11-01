@@ -1,4 +1,8 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { CreditModule } from 'src/credits/credits.module';
+import { CreditPlan, CreditsSchema } from 'src/credits/schemas/credit.schema';
+import { SuperAdminMiddleware } from 'src/utils/middleware/super-admin.middleware';
+import { AdminBillingController } from './admin-billing.controller';
 import { MongooseModule } from '@nestjs/mongoose';
 import { App, AppSchema } from 'src/app-auth/schemas/app.schema';
 import {
@@ -24,6 +28,13 @@ import {
 } from './schemas/coupon.schema';
 import { PriceBook, PriceBookSchema } from './schemas/price-book.schema';
 import { Quote, QuoteSchema } from './schemas/quote.schema';
+import {
+  BillingCounter,
+  BillingCounterSchema,
+  Invoice,
+  InvoiceSchema,
+} from './schemas/invoice.schema';
+import { InvoiceService } from './services/invoice.service';
 import { BillingAccountService } from './services/billing-account.service';
 import { CatalogService } from './services/catalog.service';
 import { CouponService } from './services/coupon.service';
@@ -34,18 +45,22 @@ import { QuoteService } from './services/quote.service';
 @Module({
   imports: [
     UserModule,
+    CreditModule,
     MongooseModule.forFeature([
       { name: PriceBook.name, schema: PriceBookSchema },
       { name: Coupon.name, schema: CouponSchema },
       { name: CouponAccount.name, schema: CouponAccountSchema },
       { name: CouponRedemption.name, schema: CouponRedemptionSchema },
       { name: Quote.name, schema: QuoteSchema },
+      { name: Invoice.name, schema: InvoiceSchema },
+      { name: BillingCounter.name, schema: BillingCounterSchema },
+      { name: CreditPlan.name, schema: CreditsSchema },
       { name: CustomerOnboarding.name, schema: CustomerOnboardingSchema },
       { name: App.name, schema: AppSchema },
       { name: AdminPeople.name, schema: AdminPeopleSchema },
     ]),
   ],
-  controllers: [BillingController],
+  controllers: [BillingController, AdminBillingController],
   providers: [
     AdminPeopleRepository,
     BillingAccountService,
@@ -53,6 +68,7 @@ import { QuoteService } from './services/quote.service';
     CouponService,
     QuoteService,
     BillingProfileService,
+    InvoiceService,
   ],
   exports: [BillingProfileService],
 })
@@ -63,5 +79,8 @@ export class BillingModule implements NestModule {
     consumer
       .apply(JWTAuthorizeMiddleware, JWTAccessAccountMiddleware)
       .forRoutes(BillingController);
+    consumer
+      .apply(JWTAuthorizeMiddleware, SuperAdminMiddleware)
+      .forRoutes(AdminBillingController);
   }
 }

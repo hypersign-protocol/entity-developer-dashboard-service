@@ -1,6 +1,6 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import {
   CustomerOnboarding,
   CustomerOnboardingDocument,
@@ -11,7 +11,10 @@ import {
   REGION_CURRENCY,
 } from '../billing.constants';
 import { BillingException } from '../billing.exception';
-import { UpdateBillingProfileDto } from '../dto/update-billing-profile.dto';
+import {
+  AdminUpdateBillingProfileDto,
+  UpdateBillingProfileDto,
+} from '../dto/update-billing-profile.dto';
 import {
   buildBillingProfile,
   gstStateFromTaxIds,
@@ -57,8 +60,47 @@ export class BillingProfileService {
     return buildBillingProfile(await this.findOrg(userId));
   }
 
+  /** PUT /customer-onboarding/billing: the customer saves their own profile. */
   async save(userId: string, dto: UpdateBillingProfileDto) {
-    const org = await this.findOrg(userId);
+    return this.write(await this.findOrg(userId), dto, {});
+  }
+
+  /**
+   * PATCH /admin/billing/profiles/:orgId: a super admin completes or corrects a
+   * customer's profile, for example before invoicing them. May change the region
+   * and locked tax IDs; the reason is logged.
+   */
+  async adminUpdate(
+    orgId: string,
+    dto: AdminUpdateBillingProfileDto,
+    adminUserId: string,
+  ) {
+    const org = Types.ObjectId.isValid(orgId)
+      ? await this.onboardingModel.findById(orgId, PROFILE_FIELDS).lean()
+      : null;
+    if (!org) {
+      throw new BillingException(
+        HttpStatus.NOT_FOUND,
+        BillingErrorCode.ONBOARDING_NOT_FOUND,
+        'Organisation not found.',
+      );
+    }
+    Logger.log(
+      `Billing profile of ${orgId} changed by super admin ${adminUserId}: ${dto.reason}`,
+      'BillingProfileService',
+    );
+    return this.write(org, dto, {
+      region: dto.region as BillingRegion | undefined,
+      admin: true,
+      unlock: dto.unlock === true,
+    });
+  }
+
+  private async write(
+    org: { _id: unknown; billing?: any },
+    dto: UpdateBillingProfileDto,
+    options: { region?: BillingRegion; admin?: boolean; unlock?: boolean },
+  ) {
     const existing = org.billing || {};
     const taxIds = normaliseTaxIds(dto.taxIds);
 
@@ -67,7 +109,8 @@ export class BillingProfileService {
       const problem = taxIdProblem(taxId);
       if (problem) fields[`taxIds[${i}].number`] = problem;
     });
-    const region = (existing.region ||
+    const region = (options.region ||
+      existing.region ||
       regionFromCountry(dto.address.country) ||
       BillingRegion.GLOBAL) as BillingRegion;
     // A GSTIN fixes the state; otherwise the customer picks it.
@@ -90,7 +133,7 @@ export class BillingProfileService {
     const sameTaxIds =
       JSON.stringify(normaliseTaxIds(existing.taxIds || [])) ===
       JSON.stringify(taxIds);
-    if (existing.lockedAt && !sameTaxIds) {
+    if (existing.lockedAt && !sameTaxIds && !options.admin) {
       throw new BillingException(
         HttpStatus.CONFLICT,
         BillingErrorCode.BILLING_PROFILE_LOCKED,
@@ -119,7 +162,12 @@ export class BillingProfileService {
             'billing.confirmedAt': new Date(),
             ...(gstStateCode && { 'billing.gstStateCode': gstStateCode }),
           },
-          ...(!gstStateCode && { $unset: { 'billing.gstStateCode': '' } }),
+          ...((!gstStateCode || options.unlock) && {
+            $unset: {
+              ...(!gstStateCode && { 'billing.gstStateCode': '' }),
+              ...(options.unlock && { 'billing.lockedAt': '' }),
+            },
+          }),
         },
         { new: true, projection: PROFILE_FIELDS },
       )

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Proposed |
-| **Date** | 2026-10-22 (updated 2026-10-28 to match the popup agreed with Business, again on 2026-10-28 after a backend review against the existing schemas, §4.0 and §14, and on 2026-10-31 after the organisation migration put `orgId` on apps, roles and team rows, §4.0 and §4.1) |
+| **Date** | 2026-10-22 (updated 2026-10-28 to match the popup agreed with Business, again on 2026-10-28 after a backend review against the existing schemas, §4.0 and §14, and on 2026-10-31 after the organisation migration put `orgId` on apps, roles and team rows, §4.0 and §4.1; the billing profile reuses the onboarding API, §4.1 and §5.1; rollout in two stages, invoicing before payments, with the epics tracked in [epics.md](epics.md), §11; on 2026-11-01 invoice PDFs moved to the dashboard, rendered from stored invoice data, and invoice email was deferred, §8.3) |
 | **Author** | Vishwas Bhushan |
 | **Deciders** | Engineering (dashboard service, credit middleware, dashboard UI), Business, Finance |
 | **ADR number** | To be assigned (follows ADR-011) |
@@ -49,7 +49,7 @@ This ADR decides how the backend supports both flows: self-serve top-ups and sup
 4. **Pricing is versioned.** Plans, discounts and add-ons belong to a **price book** that is published as a whole. Every quote, order and invoice records the version it used. It is called a price book, not a catalog, because the credit middleware's API price catalog already owns `catalogVersion`.
 5. **Credits are granted only after a verified gateway webhook,** never after the browser redirect. The grant is idempotent per order.
 6. **Payment gateways sit behind a `PaymentProvider` interface,** and a router picks the provider by region and currency. We start with hosted checkout pages, which keeps card data off our servers (PCI SAQ-A).
-7. **Our system owns invoicing; gateways only take payments.** We issue every invoice ourselves, numbered in sequence, and render it as a PDF on request (we don't store PDF files, §8.3). Customers download it from the dashboard. Invoices don't depend on any gateway, so we can run several gateways, including ones without invoicing. Gateway receipts are extras and are not the invoice of record.
+7. **Our system owns invoicing; gateways only take payments.** We issue every invoice ourselves, numbered in sequence, and the dashboard renders it as a PDF from the stored invoice data whenever it is downloaded (we don't store PDF files, §8.3). Customers download it from the dashboard. Invoices don't depend on any gateway, so we can run several gateways, including ones without invoicing. Gateway receipts are extras and are not the invoice of record.
 8. **Purchased credits reuse the existing `CreditPlan` model and `CreditService.grantCredit`.** The existing `source` (`PAYMENT`, `MANUAL_RECHARGE`) and `referenceId` (`'invoice:<invoiceId>'`, already unique per app) cover provenance and idempotency. Only `invoiceId` and `revokedCredits` are added (§4.6). Consumption, expiry, the ledger and the dashboard's balance view keep working unchanged.
 9. **Every ID Service credit grant from the recharge page or a purchase is backed by an invoice.** Self-serve purchases get an invoice when they are paid. Super-admin grants get one when they are created, including ₹0 grants. `CreditService.grantCredit` becomes an internal step that runs once an invoice is settled, and `POST /api/v1/app/:appId/credits` is no longer called from the super-admin page for ID Service. **SSI Service recharges stay as they are, without invoices,** for now (open question 16). Onboarding starter credits are open question 18.
 10. **Super-admin invoices settle in one of three ways** (§8.2): complimentary (amount 0), paid offline (`isPaid = true`), or paid through a gateway payment link (`isPaid = false`). For an unpaid invoice, no credit plan exists until a verified payment, or an admin marking it paid, settles it (§4.6).
@@ -89,11 +89,11 @@ The first draft of this ADR assumed an `Organisation` collection and a `CreditPa
 | `kybStatus` / `kybApprovedAt` | `CustomerOnboarding.companyVerificationStatus` (`KybVerificationEnum`: `Submitted`, `Approved`, `Rejected`, `Completed`) is updated by the KYB webhook (`updateCompanyVerificationStatus`). There's no approval timestamp. | **Don't copy it.** Read the status from `CustomerOnboarding`. **Add one field there:** `companyVerificationApprovedAt`, set by the webhook handler on the first move to `Approved`. FOUNDING coupons need it ("within 6 months of KYB approval"). |
 | Billing address, tax IDs | `CustomerOnboarding.billingAddress` is a **free-text string**, and `country` is optional. The structured address (`street, city, province, postalCode, country`), `countryOfRegistration` and `taxIdType`/`taxIdNumber` are sent to the ID Service's company record (`companyId`) and **not stored here**. `TaxIdTypes` in `identifier-types.ts` already has the GSTIN and PAN validation regexes. | **Add a `billing` sub-document to `CustomerOnboarding`** (§4.1) instead of a separate collection. It's prefilled from the onboarding fields and the KYB company record. Its address uses the KYB address shape, and its tax IDs reuse the `TaxIdTypes` codes and regexes. The free-text `billingAddress` stays as an onboarding input. |
 | Region | No field. The candidates are KYB `countryOfRegistration` and onboarding `country`. | Stored as `billing.region`, derived once when the billing details are first saved: `countryOfRegistration`, falling back to `country`. `IN` → `IN`, anything else (including `XX`) → `GLOBAL`. |
-| Permissions `BILLING_READ` / `BILLING_WRITE` | Per-service access types in `SERVICES.CAVACH_API.ACCESS_TYPES` (`READ_CREDIT`, `WRITE_CREDIT`, …), stored in `User.accessList` and `Role.permissions`. | **Add `READ_BILLING` and `WRITE_BILLING`** to `CAVACH_API.ACCESS_TYPES`, following the existing `VERB_NOUN` naming. The owner gets them through `ALL`. |
+| Permissions `BILLING_READ` / `BILLING_WRITE` | Per-service access types in `SERVICES.CAVACH_API.ACCESS_TYPES` (`READ_CREDIT`, `WRITE_CREDIT`, …), stored in `User.accessList` and `Role.permissions`. | **Add `READ_BILLING` and `WRITE_BILLING`** to `DASHBOARD.ACCESS_TYPES`, following the existing `VERB_NOUN` naming. Billing is an account-level feature, and `DashboardAccessGuard` already checks dashboard permissions for team members. The owner passes the guard without a check. |
 | `BILLING_ADMIN` | Only `UserRole.SUPER_ADMIN` plus `SuperAdminMiddleware`. There are no finer-grained super-admin permissions. | **v1: reuse `SuperAdminMiddleware`.** A separate billing-admin role is deferred (open question 13). |
 | Pricing `CatalogVersion` | The name is taken. The credit middleware's **API price catalog** (credits charged per route) already writes `catalogVersion` into every `creditLedger` row. | **Rename ours `PriceBook`** (`priceBooks`, `priceBookId`, `priceBookVersion`), so Finance never confuses "what a customer paid" with "what an API call costs". |
 | Jobs and queues | BullMQ on Redis is already used for credit commands (`CreditBullMqProvider`) and email (`Entity-Dashboard-Mail-Queue`). | **Reuse BullMQ** for webhook processing, fulfilment, reconciliation and reminders. |
-| Email | `MailNotificationService.addAJob({ to, subject, message, cc, bcc })`. It has **no attachments**. | Extend the job with `attachments` (base64 PDF) and update the mail worker, or send a download link instead (open question 19). |
+| Email | `MailNotificationService.addAJob({ to, subject, message, cc, bcc })`. It has **no attachments**. | Deferred: invoices aren't emailed in v1 (§8.3). When they are, extend the job with `attachments` (base64 PDF) and update the mail worker, or send a download link (open question 19). |
 | Mongo transactions | Already used by `CreditRepository` (`startSession` / `withTransaction`), so the deployment is a replica set. | **Reuse** for invoice numbering (counter + invoice insert). |
 
 **Entity-relationship diagram.** The diagram shows every new collection with its fields, keys (`PK`, `FK`, `UK` for unique) and relationships. It also shows the existing **User** (account owner), **CustomerOnboarding** (the organisation: its `_id` is the `orgId`, and it also holds the billing profile), **App** and **CreditPlan** records, to show where the new data attaches. It renders on GitHub and GitLab, in VS Code's Markdown preview, and at [mermaid.live](https://mermaid.live). The same model is in [Appendix A](#appendix-a-er-diagram-in-dbml) as DBML for [dbdiagram.io](https://dbdiagram.io).
@@ -301,7 +301,6 @@ erDiagram
     string creditPlanId FK
     object eInvoice
     string templateVersion
-    string firstRenderSha256
   }
   CreditNote {
     string _id PK
@@ -365,13 +364,19 @@ export class CustomerOnboarding {
 CustomerOnboardingSchema.index({ userId: 1 }, { unique: true });
 ```
 
-**How it's filled.** `billing` is empty until the first time someone opens the top-up popup, or a super admin first invoices the account. It is then prefilled:
+**What exists today, and why `billing` is still needed.** The onboarding record and its API (`/api/v1/customer-onboarding`) already hold the company: `companyName`, `customerEmail`, an optional `country` and a free-text `billingAddress`. KYB submission (`PATCH /customer-onboarding/:id`) receives the structured address, `countryOfRegistration`, `taxIdType` and `taxIdNumber`, but forwards them to the ID Service company record without saving them here. An invoice can't rely on that record: KYB is optional (open question 7), a registered address isn't always the billing address, and the region must not change under issued invoices. So `billing` keeps a confirmed local copy. It is a sub-document on the same record, not a new collection or module.
+
+**How it's filled.**
+
+- **On KYB submission.** `submitKybCompany` already has the structured address and tax ID in its request body. If `billing` is still empty, it copies them in, so most accounts are prefilled without calling the ID Service.
+- **Accounts that finished KYB before this change** get a one-time backfill from the ID Service company record, or confirm their details in the form.
+- **Otherwise** `billing` is prefilled the first time someone opens the top-up popup, or a super admin first invoices the account:
 
 | Field | Comes from |
 |---|---|
 | `legalName` | `companyName`, or the KYB company name |
 | `email` | `customerEmail` |
-| `address` | the KYB company record in the ID Service (`companyId`). If there's no KYB record, the customer types it in, using the free-text `billingAddress` as a hint |
+| `address` | the KYB submission or company record. If there's no KYB data, the customer types it in, using the free-text `billingAddress` as a hint |
 | `taxIds` | KYB `taxIdType` / `taxIdNumber` |
 | `region` | KYB `countryOfRegistration`, falling back to `country` |
 
@@ -379,7 +384,7 @@ The customer confirms or completes the details before their first purchase. The 
 
 **Rules**
 
-- **Billing has its own write path.** `PUT /billing/profile` updates only `billing.*` with `$set`, and onboarding code never writes `billing`. That way the onboarding workflow (steps, logs, KYB webhook) and billing edits can't overwrite each other. Once `billing.lockedAt` is set, the endpoint refuses region and tax ID changes (`409`).
+- **Billing has its own write path.** `PUT /customer-onboarding/billing` updates only `billing.*` with `$set`. Apart from the one-time copy on KYB submission, which only fills an empty `billing`, onboarding code never writes `billing`. That way the onboarding workflow (steps, logs, KYB webhook) and billing edits can't overwrite each other. Once `billing.lockedAt` is set, the endpoint refuses region and tax ID changes (`409`).
 - **Invoices take a copy.** Each invoice copies the customer details from `billing` when it's issued (§4.7), so later edits never change a past invoice.
 - **KYB status isn't copied into `billing`.** Coupon checks read `companyVerificationStatus === 'Approved'` and `companyVerificationApprovedAt`, which are on the same document.
 - **`Completed` doesn't count as approved.** `KybVerificationEnum.Completed` means "finished, passed or failed", so only `Approved` counts for coupons. Product to confirm (open question 20).
@@ -662,7 +667,7 @@ We keep the existing `CreditPlan` document and the whole credit pipeline unchang
 
   Either path would activate unpaid credits. Purchase history shows "Awaiting payment" rows from unpaid invoices instead (§10).
 - **Activation of paid credits.** Today a new plan stays `Inactive` while another plan is `Active`. It then waits for the customer's **Activate** click, or for the automatic activation at critical balance (40% left). Purchased plans should instead be granted straight to the middleware as `Active`, which supports several active plans and draws from the oldest first. This needs a `grantCredit` option to skip the queue (open question 8).
-- **Revocation needs a middleware change.** The credit middleware has a `REVOKED` plan status but **no command to set it** ("reserved for an explicit future command"), and plans are immutable. Refunds and lost disputes therefore need a new `credit.revoke.requested` command in `@hypersign-protocol/credit-middleware` before they can remove unused credits (§11, phase 6).
+- **Revocation needs a middleware change.** The credit middleware has a `REVOKED` plan status but **no command to set it** ("reserved for an explicit future command"), and plans are immutable. Refunds and lost disputes therefore need a new `credit.revoke.requested` command in `@hypersign-protocol/credit-middleware` before they can remove unused credits (§11).
 
 ### 4.7 Invoice, PaymentLink, CreditNote and BillingCounter
 
@@ -701,7 +706,6 @@ class Invoice {
   creditPlanId?: string;                 // set once the credits are granted (PAID only)
   eInvoice?: { irn: string; ackNo: string; ackDate: Date; signedQr: string };  // India B2B, if e-invoicing applies (§8.4)
   templateVersion: string;               // e.g. 'invoice-v1' (§8.3)
-  firstRenderSha256?: string;            // hash of the PDF as first sent, for evidence
   voidedAt?: Date; voidReason?: string;
 }
 
@@ -726,7 +730,7 @@ class CreditNote {
   amountMinor: number; taxMinor: number;
   creditsRevoked: number;
   refundId?: string;                     // provider refund id, for GATEWAY invoices
-  templateVersion: string; firstRenderSha256?: string;
+  templateVersion: string;
 }
 
 @Schema({ collection: 'billingCounters', versionKey: false })
@@ -742,14 +746,16 @@ Indexes on `invoices`: `(orgId, issuedAt)` for the customer list, `(appId, issue
 
 ## 5. APIs
 
-All endpoints live in this service under the existing `/api/v1` prefix (so `GET /billing/profile` below is `GET /api/v1/billing/profile`). Customer endpoints use the same middleware chain as `CreditsController`: `JWTAuthorizeMiddleware`, then `JWTAccessAccountMiddleware` (which maps a team member to the owner's `userId`), then `RateLimitMiddleware`. The owner's `userId` is resolved once to the organisation id (`orgId = CustomerOnboarding._id`, §4.0) and cached in the session next to `tenantId`. Every billing query is scoped to that `orgId`, and `appId` is checked to belong to the organisation (`App.orgId`). Write calls need the new `WRITE_BILLING` access type and read calls need `READ_BILLING` (§4.0). The webhook route is excluded from all three middlewares.
+All endpoints live in this service under the existing `/api/v1` prefix (so `GET /billing/catalog` below is `GET /api/v1/billing/catalog`). Customer endpoints use the same middleware chain as `CreditsController`: `JWTAuthorizeMiddleware`, then `JWTAccessAccountMiddleware` (which maps a team member to the owner's `userId`), then `RateLimitMiddleware`. The owner's `userId` is resolved once to the organisation id (`orgId = CustomerOnboarding._id`, §4.0) and cached in the session next to `tenantId`. Every billing query is scoped to that `orgId`, and `appId` is checked to belong to the organisation (`App.orgId`). Write calls need the new `WRITE_BILLING` access type and read calls need `READ_BILLING` (§4.0). The webhook route is excluded from all three middlewares.
+
+Request and response bodies, headers and error codes are specified in [api-contract.md](api-contract.md), which the dashboard integrates against.
 
 ### 5.1 Customer
 
 | Method & path | Purpose | Notes |
 |---|---|---|
-| `GET /billing/profile` | Get the billing profile (`CustomerOnboarding.billing`) | Prefilled from onboarding/KYB if `billing` isn't set yet. |
-| `PUT /billing/profile` | Complete or update billing details | Once `locked`, changing the region or tax ID returns `409` and needs a support review. |
+| `GET /customer-onboarding/billing` | Get the billing profile (`CustomerOnboarding.billing`) | Added to the existing onboarding controller, not a new module. Prefilled from onboarding/KYB if `billing` isn't set yet. |
+| `PUT /customer-onboarding/billing` | Complete or update billing details | A separate route from KYB submission (`PATCH /customer-onboarding/:id`), so the two can't overwrite each other. Once `locked`, changing the region or tax ID returns `409` and needs a support review. |
 | `GET /billing/catalog` | Get the published price book (plans, discounts, add-ons, custom limits and `calculatorFlowIds`) for the caller's region | Used to render the popup and to filter the Credit Calculator. Coupons are not included. |
 | `GET /billing/coupons?appId&planCode\|customAmountMinor` | Listed coupons the account is eligible for right now, with `code`, `title`, `description`, `percentBps` and `previewDiscountMinor` for the current selection | Feeds the **Apply a coupon** dialog, including its "Saves ₹x on this top-up" line. Never returns unlisted codes or eligibility rules. |
 | `POST /billing/quotes` | Price a selection: `{ appId, planCode \| customAmountMinor, couponCode? }` → `Quote` | Called again when the selection or coupon changes. Invalid coupon → `422 { code: 'COUPON_INVALID' }`. Rate-limited. |
@@ -758,8 +764,8 @@ All endpoints live in this service under the existing `/api/v1` prefix (so `GET 
 | `POST /billing/orders/:orderId/cancel` | Abandon an unpaid order | Releases the coupon reservation. |
 | `GET /billing/orders?appId&status&page` | Purchase history | Feeds "Credit Purchase History". |
 | `GET /billing/invoices?status&page` | List invoices and credit notes | Unpaid super-admin invoices are included, with a **Pay now** link to their payment link. |
-| `GET /billing/invoices/:invoiceId/download` | Download a PDF | Renders the PDF on request from the stored invoice and streams it (`Content-Disposition: attachment`). Nothing is stored as a file. |
-| `POST /billing/invoices/:invoiceId/email` | Resend an invoice to the billing email | Rate-limited. |
+| `GET /billing/invoices/:invoiceId` | The full invoice data | Everything printed on the invoice, plus its `templateVersion`. The dashboard renders the PDF from it (§8.3). Nothing is stored as a file. |
+| ~~`POST /billing/invoices/:invoiceId/email`~~ | Resend an invoice to the billing email | **Deferred:** invoices aren't emailed in v1 (§8.3). |
 
 **Coupon error responses (agreed with Business).** Every rejected code returns the same `COUPON_INVALID` code: unknown, wrong region, expired, already used or not eligible. The UI always shows "This coupon code is not valid." This stops people discovering codes, and avoids region wording that Indian customers found confusing (for example "only valid for Global billing").
 
@@ -785,13 +791,15 @@ All of these sit behind the existing `SuperAdminMiddleware` (`UserRole.SUPER_ADM
 | `GET /admin/billing/profiles?appId` | Look up the billing profile of the organisation that owns the app (`App.orgId` → `CustomerOnboarding`): legal name, address, tax IDs, region and currency. Feeds the **Billed to** card on the recharge page, and the GST preview. |
 | `PATCH /admin/billing/profiles/:orgId` | Unlock or correct a region or tax ID. |
 | `POST /admin/billing/invoices` + `Idempotency-Key` | Create a super-admin invoice: `{ appId, credits, validityDays, amountMinor, isPaid, payment?: { method, reference, paidAt }, recipients?, note? }`. The account, region and currency come from the app's billing profile. `credits` and `validityDays` are whole numbers; the UI converts months to days. Returns the invoice and, when unpaid, its payment link. See §8.2. |
+| `POST /admin/billing/invoices/preview` | Same body as create, without creating anything. Returns the tax lines, total and resulting status for the summary panel's live preview. |
 | `GET /admin/billing/invoices?orgId&appId&status&source&settlement&from&to` | Search all invoices. |
+| `GET /admin/billing/invoices/:id` | The full invoice data, for the dashboard to render the PDF (§8.3). |
 | `POST /admin/billing/invoices/:id/mark-paid` `{ paymentReference }` | Settle an unpaid invoice that was paid outside the link. Cancels the link and activates the credits. |
 | `POST /admin/billing/invoices/:id/payment-link` | Create a new link after the old one expired. |
 | `POST /admin/billing/invoices/:id/remind` | Email the payment link again. |
 | `POST /admin/billing/invoices/:id/void` `{ reason }` | Void an unpaid invoice. Cancels the link. No credits exist yet, so there is nothing to remove. Paid invoices can't be voided; they need a refund and credit note. |
 | `GET /admin/billing/exports/invoices?from&to&format=csv` | Export invoices and credit notes for GST returns (GSTR-1) and accounting software. |
-| `POST /api/v1/app/:appId/credits` *(existing)* | Kept for SSI Service recharges. For ID Service apps it returns `409 USE_INVOICES` once phase 2 ships. Invoice settlement calls `CreditService.grantCredit` directly, not over HTTP. |
+| `POST /api/v1/app/:appId/credits` *(existing)* | Kept for SSI Service recharges. For ID Service apps it returns `409 USE_INVOICES` once invoicing ships. Invoice settlement calls `CreditService.grantCredit` directly, not over HTTP. |
 
 ### 5.4 Background jobs
 
@@ -799,7 +807,7 @@ All of these sit behind the existing `SuperAdminMiddleware` (`UserRole.SUPER_ADM
 |---|---|---|
 | Webhook processor | queue | Applies `WebhookEvent`s to orders. Retries with backoff, then dead-letters and alerts. |
 | Reconciliation | every 10 min | For `PENDING_PAYMENT` orders older than 15 minutes, asks the provider and applies the result. Then expires stale orders and releases their coupons. |
-| Fulfilment | on `PAID` | Issues the invoice (counter + insert in one transaction), grants the `CreditPlan` with `referenceId 'invoice:<id>'`, emails the customer with the PDF, and sets the order to `FULFILLED`. |
+| Fulfilment | on `PAID` | Issues the invoice (counter + insert in one transaction), grants the `CreditPlan` with `referenceId 'invoice:<id>'`, notifies the customer, and sets the order to `FULFILLED`. (Emailing the PDF is deferred, §8.3.) |
 | Grant watchdog | every 10 min | Retries `grantCredit` for `PAID` invoices without a `creditPlanId`, and alerts after 3 failures. |
 | Referral bonus | hourly | Grants referrer bonuses for qualified referrals. |
 | Webhook payload cleanup | daily | Removes `payload` from `WebhookEvent`s older than 90 days. |
@@ -871,7 +879,7 @@ sequenceDiagram
   P-->>A: webhook payment.succeeded
   A->>A: verify signature, store event, 200
   A->>J: process event
-  J->>J: Order → PAID → Invoice → grantCredit (CreditPlan) → email + PDF → FULFILLED
+  J->>J: Order → PAID → Invoice → grantCredit (CreditPlan) → FULFILLED
   P->>D: redirect to /credits/payment/return?orderId=…
   D->>A: GET /billing/orders/:id (poll until FULFILLED / FAILED)
   D-->>U: "2,499 credits added" + Download invoice
@@ -879,13 +887,13 @@ sequenceDiagram
 
 ## 7. Tax
 
-- **Global (Stripe).** The provider calculates tax (Stripe Tax) from the address collected at checkout. The popup's text "Final tax is calculated on the secure payment page" is accurate for this region. The final `taxMinor` comes from the success event and is written onto the invoice. For customers outside India this is an export of services, which may be zero-rated GST under a LUT; Finance needs to confirm (open question 3).
+- **Global.** **No tax is charged** (decided 2026-10-31). Quotes and invoices for Global customers carry no tax line, and the popup shows no tax text. Services to customers outside India are an export of services, normally zero-rated under a LUT; Finance confirms the wording printed on the invoice (open question 3).
 - **India.** GST at 18% applies to the amount after discounts. The tax type depends on where the customer is:
   - **Same state as our registered entity:** CGST 9% + SGST 9%.
   - **Any other state:** IGST 18%.
 
   The place of supply comes from the GSTIN's state code, or from the billing address state for B2C customers. Razorpay does not calculate GST, so **we calculate it in the quote**. We should then show "GST (18%) ₹x" in the popup instead of the "calculated on the payment page" text, so the amount on the Razorpay page matches what the customer saw. This is a small UI change (open question 4).
-- **Super-admin invoices.** The amount the admin enters excludes tax, and we add tax with the same calculation as the quote. For India this means GST. For Global, offline and link payments don't go through Stripe Checkout, so Stripe Tax's calculation API (or a Finance decision to zero-rate exports) is needed. Open question 12.
+- **Super-admin invoices.** The amount the admin enters excludes tax, and we add tax with the same calculation as the quote. For India this means GST. Global invoices carry no tax.
 - **Complimentary (₹0) invoices** carry no tax.
 - **Invoice SAC code.** Business needs to confirm it (likely 998314 or 998319).
 
@@ -932,7 +940,7 @@ Super-admin invoices are created from the existing **Super Admin › Recharge Se
 
 **Summary panel.** It shows credits, validity, amount, each tax line, the invoice total, the status the invoice will be issued with, and when the credits become active. It also lists any missing fields. The button label follows the choice: "Add free credits", "Recharge and issue paid invoice" or "Create invoice and send link". A confirmation popup repeats everything before anything is created.
 
-**After creating,** a result card shows the invoice number, customer, credits and total, with **Download invoice** (the same PDF the customer gets). For **Collect payment** it also shows the payment link with **Copy**, who it was sent to, and when it expires.
+**After creating,** a result card shows the invoice number, customer, credits and total, with **Download invoice** (the same PDF the customer gets, rendered by the dashboard from `GET /admin/billing/invoices/:id`). For **Collect payment** it also shows the payment link with **Copy**, who it was sent to, and when it expires.
 
 **SSI Service** uses the same step layout for consistency (Application, Credits and validity, Summary), but issues no invoice. It keeps today's **Execute Recharge**, and its credits are active immediately (open question 16).
 
@@ -949,7 +957,7 @@ flowchart TD
   F -->|paid another way| J[Admin marks paid<br/>with reference]
   J --> E
   I -->|void| K[Invoice VOID<br/>no credits granted]
-  C --> L[Credits Active · PDF · email]
+  C --> L[Credits Active · invoice downloadable]
   E --> L
   H --> L
 ```
@@ -980,15 +988,17 @@ flowchart TD
   - **Payment panel:** "Paid on … · UPI via Razorpay · Payment ID …", "Paid on … · Bank transfer · Reference …", "Complimentary credits · No payment is due", or for unpaid invoices "Payment due by …", the payment link and a **QR code** for it.
   - **Notes:** the validity terms, "activated once the payment is confirmed" for unpaid invoices, and "Tax is payable on reverse charge: No." for India.
   - **Footer:** "This is a computer-generated invoice and does not need a signature", the billing email and page numbers.
-- **PDF, rendered on request, not stored.** An invoice's data is copied in when it's issued and never edited, so rendering it again with the same template always produces the same document. We therefore don't keep PDF files in a bucket. The server renders the PDF whenever it is downloaded or emailed. This works under three conditions:
-  - **Versioned templates.** Each invoice records its `templateVersion`, and old template versions stay in the code. A redesign creates a new version, used only for new invoices, so past invoices never change.
-  - **Fixed assets.** Fonts and the Hypersign logo are bundled with the renderer, never fetched from a URL.
-  - **Data is the record.** The invoice data is kept for 8 years (the legal retention). We store a SHA-256 hash of the PDF as first sent to the customer, as evidence of what they received.
+- **PDF, rendered by the dashboard, not stored.** The backend stores invoice *data* only. An invoice's data is copied in when it's issued and never edited, so rendering it again with the same template always produces the same document. The dashboard renders the PDF whenever someone downloads it, from `GET /billing/invoices/:id` (customer) or `GET /admin/billing/invoices/:id` (super admin). No PDF files are kept. This works under four conditions:
+  - **Everything printed is in the data.** Our details, the customer's details, place of supply, lines, discounts, tax lines, totals, the tax note, the payment details and the status are all copied into the invoice when it is issued. The template only lays them out; it never looks anything up or recalculates amounts.
+  - **Versioned templates.** Each invoice records its `templateVersion` (`invoice-v1`). The dashboard keeps every version it has ever used. A redesign creates a new version, used only for new invoices, so past invoices never change. Anything the template derives from the data, such as the amount in words, date formats or badge text, is fixed for a template version.
+  - **Fixed assets.** Fonts and the Hypersign logo are bundled with the dashboard's renderer, never fetched from a URL.
+  - **Data is the record.** The invoice data and its template version are kept for 8 years (the legal retention).
 
-  **Library:** `pdfmake`, which the dashboard already uses. It isn't a dependency of this service yet, so it needs adding. The layout lives in one module with no browser code (`src/components/credit/invoice/invoiceDocument.js`, built for UI sign-off). The same module runs in Node on the server, so the dashboard prototype and the backend produce the same PDF. Rendering one invoice takes milliseconds, so storage isn't needed for performance either.
+  **Library:** `pdfmake`, in the dashboard (`src/components/credit/invoice/invoiceDocument.js` for the layout, `downloadInvoice.js` for the browser). The layout module has no browser code, so when invoices are emailed (deferred) the same module can run in this service unchanged, adding `pdfmake` here.
 
   **Paid status:** an unpaid invoice shows "Payment due" and a QR code for its payment link. Once paid, it renders as "Paid" automatically, because the status is part of its data. Its amounts never change.
-- **Download:** in the dashboard, in each row of **Credits Management › Credit Purchase History** (invoice number, status, total, **Download**, and **Pay now** when unpaid), and later under **Billing & Invoices**. `GET /billing/invoices/:id/download` checks that the invoice's `orgId` is the caller's organisation, and `READ_BILLING`, then streams the PDF. The PDF is attached to an email to the billing contact on issue, and again when an unpaid invoice is paid. It can be resent. `MailNotificationService.addAJob` has no attachments today (open question 19).
+- **Download:** in the dashboard, in each row of **Credits Management › Credit Purchase History** (invoice number, status, total, **Download**, and **Pay now** when unpaid), and later under **Billing & Invoices**. `GET /billing/invoices/:id` checks that the invoice's `orgId` is the caller's organisation, and `READ_BILLING`.
+- **Email: deferred.** v1 doesn't email invoices. When it does, the PDF is rendered in this service with the dashboard's layout module and attached, or a download link is sent (open question 19). `MailNotificationService.addAJob` has no attachments today.
 - **Immutability:** invoice amounts and details are never edited. Refunds and corrections produce a **credit note** that links to the original invoice. If billing details were wrong, we void the invoice and reissue it, only before the GST filing period closes, and that needs admin action.
 - **Retention:** at least 8 years (Indian GST and Income Tax rules).
 - **Provider receipts:** a gateway's receipt URL, if it has one, is stored and may be linked as "Payment receipt", but our invoice is the legal document.
@@ -1026,7 +1036,7 @@ flowchart TD
 | 21 | Gateway outage when creating checkout | Return `503 PAYMENTS_UNAVAILABLE` and the UI offers a retry. We don't fall back to another provider automatically, because the currency and tax handling would differ. |
 | 22 | The account has several apps, or the customer switches app mid-flow | The quote and order record `appId`, and credits always go to that app. The return page shows the app's name. |
 | 23 | Account disabled or team member removed after paying | We still fulfil and invoice, because the money was taken, and flag the order for support. |
-| 24 | Invoice PDF rendering fails | Fulfilment still grants the credits, and the invoice record exists. Because PDFs are rendered on request, a failed render only affects that one download or email, which returns an error and can be retried. Template tests render every template version against sample invoices in CI. |
+| 24 | Invoice PDF rendering fails | Fulfilment still grants the credits, and the invoice record exists. The PDF is rendered by the dashboard on each download, so a failed render only affects that one download, which can be retried. The dashboard's template tests render every template version against sample invoice data. |
 | 25 | Clock and expiry times | Everything is stored in UTC. `expiresAt` = payment time + `validityDays` (India 30, Global 180). The UI shows local time. |
 | 26 | USD credits rate | Fixed per price book version, not live FX. Changing it means publishing a new version. |
 | 27 | Partial refund or overpayment reported by the provider | Applied exactly as the provider reports it, through credit notes. Any mismatch goes to `NEEDS_REVIEW`. |
@@ -1040,7 +1050,7 @@ flowchart TD
 | 35 | Credits granted to the wrong app | Paid invoice: refund or credit note, then a new invoice for the right app. Unpaid invoice: void it and issue a new one. |
 | 36 | Billing profile incomplete when the admin creates an invoice | Creation is refused (`422 BILLING_PROFILE_INCOMPLETE`) until the admin or the customer completes it, because the invoice needs legal name, address and tax IDs. |
 | 37 | Customer never pays an unpaid invoice | Reminders at 3 and 7 days, then the link expires. The admin creates a new link or voids the invoice, and no credits are ever granted. |
-| 38 | E-invoice registration (IRP) is down | The invoice is created and numbered, but downloads and the email wait until the IRN is issued. Retries with backoff, and an alert after 1 hour. |
+| 38 | E-invoice registration (IRP) is down | The invoice is created and numbered, but its data is only returned for download once the IRN is issued. Retries with backoff, and an alert after 1 hour. |
 
 ## 10. Dashboard changes this implies
 
@@ -1068,7 +1078,7 @@ The dashboard UI described here is built so Business can sign it off. Pricing, i
 |---|---|---|
 | Top-up popup, coupon dialog, region pricing | `src/components/credit/CreditTopUpPopup.vue`, `creditTopUpPricing.js` | `GET /billing/catalog`, `GET /billing/coupons`, `POST /billing/quotes` |
 | Credit Calculator (region flows, editable what-if credits, Back button) | `src/components/credit/KycCreditCalculator.vue`, `VerificationFlowConfigurator.vue` | Nothing; the calculator is front-end only |
-| Invoice PDF, rendered on the fly | `src/components/credit/invoice/invoiceDocument.js` (layout, also runs in Node), `downloadInvoice.js` (browser) | Moves to the server as-is for `GET /billing/invoices/:id/download` |
+| Invoice PDF, rendered on the fly | `src/components/credit/invoice/invoiceDocument.js` (layout, also runs in Node), `downloadInvoice.js` (browser) | Stays in the dashboard. Its sample data is replaced by `GET /billing/invoices/:id` and `GET /admin/billing/invoices/:id` |
 | Invoice column in Credit Purchase History | `src/views/playground/KYCDashboardCredit.vue` | `GET /billing/invoices`. Until then, each credit plan gets a sample invoice (`invoice/mockInvoices.js`, `USE_MOCK_INVOICES`) |
 | Super-admin recharge with invoices | `src/views/sa/components/CreditRecharge.vue` | **Free credits** and **Already paid** still grant real credits through today's `POST /app/:appId/credits`; only the invoice is mocked. **Collect payment** is preview-only (no credits created) until `POST /admin/billing/invoices` and pending credits exist. **Billed to** is sample data until `GET /admin/billing/profiles?appId` exists. |
 
@@ -1076,14 +1086,12 @@ Our legal entity details on the invoice (name, address, GSTIN, PAN, billing emai
 
 ## 11. Rollout
 
-1. **Foundation.** ~~One onboarding record per account (duplicate check, fix the guard, unique `userId` index)~~ (done 2026-10-31, with `orgId` on apps, roles and team rows), `billing` and `companyVerificationApprovedAt` on `CustomerOnboarding`, `READ_BILLING`/`WRITE_BILLING`, the price book with versioning, the quote API, and wiring the popup to quotes. Pay stays disabled.
-2. **Invoices first.** The invoice model, numbering, PDFs, download, the Invoice column in Credit Purchase History, and super-admin recharge with **Free credits** and **Already paid** invoices. This replaces today's direct credit grant and works before any gateway is connected.
-3. **India (Razorpay).** Orders, checkout, payment links for unpaid super-admin invoices, webhooks and reconciliation. Pilot with internal or test orgs behind a feature flag.
-4. **Global (Stripe).** Second adapter, tax for Global, and the global invoice series.
-5. **Coupons.** FOUNDING15 and FOUNDING8 with the coupon dialog and `GET /billing/coupons`. PARTNER, WINBACK and REFER (with the referral bonus job) follow when Business switches them on.
-6. **Admin tooling and compliance.** Refunds, credit notes, settlement reports, alerts, exports, and e-invoicing if it applies. Refunds that remove credits depend on the new revoke command in `@hypersign-protocol/credit-middleware`, which should be started in phase 3.
+The work ships in two stages, each behind the `billing.selfServe` flag per region. The organisation prerequisites (one onboarding record per account, `orgId` on apps, roles and team rows) were done on 2026-10-31 (§4.1).
 
-Each phase ships behind the `billing.selfServe` flag per region.
+1. **Invoicing, with no gateway.** The price book, coupons, quotes and the billing profile, with Pay disabled in the popup. Then invoices: numbering, invoice data for the dashboard to render as PDFs, the Invoice column in Credit Purchase History, and super-admin recharge with **Free credits** and **Already paid**. This replaces today's direct credit grant for ID Service.
+2. **Payments, once a gateway is chosen (open question 1).** Checkout for India, webhooks, fulfilment and payment links for unpaid super-admin invoices; then Global; then refunds, credit notes and compliance. Refunds that remove credits depend on the new revoke command in `@hypersign-protocol/credit-middleware`, which should be started with the first gateway.
+
+The breakdown into epics, their order, status and blocking questions are tracked separately in [epics.md](epics.md).
 
 ## 12. Alternatives considered
 
@@ -1100,7 +1108,7 @@ Each phase ships behind the `billing.selfServe` flag per region.
 
 1. **Gateways:** Razorpay for India and Stripe for Global? Which merchant accounts and entities?
 2. **USD → credits rate:** please confirm it. The popup uses 90 credits per $1. With the Global discounts, $1,499 buys 134,910 credits for $674.55 before coupons, so this needs explicit sign-off.
-3. **Global tax:** do we charge local tax through Stripe Tax, or treat global sales as zero-rated exports under a LUT? Which jurisdictions are we registered in?
+3. ~~**Global tax:** do we charge local tax through Stripe Tax, or treat global sales as zero-rated exports under a LUT?~~ **Decided 2026-10-31:** no tax for Global customers. Still open for Finance: the zero-rated export wording on the invoice, and that a LUT is filed.
 4. **India GST display:** may the popup show GST (18%) before checkout? With Razorpay it is the only way the amounts match.
 5. **Refunds:** policy (none, unused credits pro rata, or within N days)? Does a refunded order still count toward coupon limits (FOUNDING's 3 purchases, REFER's first purchase)?
 6. ~~**Coupon errors:** generic or distinct messages?~~ **Decided:** always "This coupon code is not valid." (§5.1).
@@ -1109,14 +1117,14 @@ Each phase ships behind the `billing.selfServe` flag per region.
 9. **Coupon stacking:** do coupons apply after the plan discount (proposed and built), or on the full price? Is there a cap, such as a maximum discount amount?
 10. **Credit validity wording:** India says 1 month and Global 6 months, with no carry-forward. The original wireframe said "Credits never expire". Please confirm the add-on validity is final.
 11. **Unpaid super-admin invoices:** issue a tax invoice with its number straight away (proposed), or a proforma invoice and the tax invoice only once paid? Prepaid credits may count as an advance under GST, which can require a receipt voucher at payment. Finance to confirm which document we issue.
-12. **Tax on super-admin invoices for Global customers:** charge local tax using Stripe Tax's calculation API, or zero-rate as an export under a LUT?
+12. ~~**Tax on super-admin invoices for Global customers.**~~ **Decided 2026-10-31:** no tax, as for self-serve (see 3).
 13. **Controls on `isPaid = true` and complimentary invoices:** every super admin can create invoices in v1. Is the audit trail on the invoice enough, or do we need a separate billing-admin role, or a second approver above an amount? What amount?
 14. **E-invoicing:** is our turnover above the e-invoicing threshold, so that Indian B2B invoices need an IRN and QR code?
 15. **Complimentary invoices:** is a ₹0 tax invoice the right document for free credits, or should Finance treat them differently, for example as promotional with no tax invoice?
 16. **SSI Service recharges:** should they be invoiced too? The proposal keeps them as today's direct recharge, with no invoice, and only ID Service credits go through invoicing.
 17. **Our details on the invoice:** the legal entity name, registered address, GSTIN, PAN, billing email and SAC code (likely 998314). The sign-off build uses placeholders.
 18. **Onboarding starter credits:** onboarding grants ID Service credits directly (`source: CUSTOMER_ONBOARDING`). Should they also get a ₹0 complimentary invoice, or stay outside invoicing like SSI recharges? The proposal keeps them outside, so decision 9 covers only the recharge page and purchases.
-19. **Invoice email:** the mail queue has no attachments today. Should we add PDF attachments to the mail worker (proposed, because Finance teams expect the attachment), or email a signed download link?
+19. **Invoice email (deferred, not needed for v1):** the mail queue has no attachments today. Should we add PDF attachments to the mail worker (proposed, because Finance teams expect the attachment), or email a signed download link?
 20. **KYB "approved" for coupons:** `KybVerificationEnum` has both `Approved` and `Completed` ("finished, passed or failed"). Proposed: only `Approved` counts.
 
 ## 14. Backend review notes (2026-10-28)
@@ -1130,13 +1138,13 @@ This review checked the draft against the code in this service and in `@hypersig
 | 1 | `Organisation` / `orgId` | No such collection. The tenant is the owner's `userId`, and `CustomerOnboarding` holds the company | `orgId = CustomerOnboarding._id` on all billing collections, so billing survives an ownership transfer. The actor goes in `createdBy` |
 | 2 | `CreditPackage` with new `source`, `orderId`, `invoiceId` | `CreditPlan` already has `source` (incl. `PAYMENT`, `MANUAL_RECHARGE`), `validityDays`, `creditedBy`, and a unique `(serviceId, referenceId)` index | Reuse `source` and `referenceId`. Add only `invoiceId` and `revokedCredits`. No backfill |
 | 3 | `PENDING_PAYMENT` credit plans | `activateCredit` (open to customers) doesn't check status, and `processCriticalBalance` automatically activates `Inactive` plans | No plan exists until an invoice is paid |
-| 4 | Refunds and disputes revoke or suspend credits | The middleware has no revoke or suspend command. `REVOKED` is reserved and terminal | Revoke is a new middleware command (phase 6 dependency). Disputes don't suspend |
+| 4 | Refunds and disputes revoke or suspend credits | The middleware has no revoke or suspend command. `REVOKED` is reserved and terminal | Revoke is a new middleware command, needed before refunds ship. Disputes don't suspend |
 | 5 | `CatalogVersion` | `catalogVersion` already means the API price catalog in `creditLedger` | Renamed to `PriceBook` |
 | 6 | Plans, discount rules and add-ons in three collections | Small, read together, published atomically | Embedded in `PriceBook` |
 | 7 | `kybStatus` and `kybApprovedAt` copied into a separate billing profile | Status lives on `CustomerOnboarding`, and there's no approval date | Read the status from onboarding. Add `companyVerificationApprovedAt` there |
 | 8 | Structured address and tax IDs "from onboarding" | Onboarding only has a free-text `billingAddress`. Structured data is in the ID Service company record | Prefill from the KYB company record, reusing the `KybCompanyAddressDto` shape and the `TaxIdTypes` regexes |
 | 9 | FOUNDING "first 500" with `redemptionCount < 500` | That counts uses, not accounts (3 uses each) | `CouponAccount` + `accountCount` |
-| 10 | `BILLING_READ` / `BILLING_WRITE` / `BILLING_ADMIN` | Access types are `VERB_NOUN` per service, and super admin is a role | `READ_BILLING` / `WRITE_BILLING` on `CAVACH_API`. Super-admin routes use `SuperAdminMiddleware` |
+| 10 | `BILLING_READ` / `BILLING_WRITE` / `BILLING_ADMIN` | Access types are `VERB_NOUN` per service, and super admin is a role | `READ_BILLING` / `WRITE_BILLING` on `DASHBOARD` (account-level, checked by `DashboardAccessGuard`). Super-admin routes use `SuperAdminMiddleware` |
 | 11 | `idempotencyKey` globally unique | Two accounts could send the same key | Unique per `(orgId, idempotencyKey)` |
 | 12 | `creditsPerMajorUnit` float | Contradicts decision 2 | Integer |
 | 13 | Endpoints on "the entity API" | Credits live in this service under `/api/v1` | Paths and middleware stated in §5 |
@@ -1151,7 +1159,7 @@ This review checked the draft against the code in this service and in `@hypersig
    - the fulfilment code path would be the same for both flows.
 
    The cost is a second, shorter state machine for admin orders. This is internal and doesn't change any agreed UI.
-2. **Fix `activateCredit` regardless of billing.** It doesn't check the plan's status, or that the app belongs to the caller. A status guard (`Inactive`, no `expiresAt`) and an ownership check should ship with phase 2, before purchased plans exist.
+2. **Fix `activateCredit` regardless of billing.** It doesn't check the plan's status, or that the app belongs to the caller. A status guard (`Inactive`, no `expiresAt`) and an ownership check should ship with invoicing, before purchased plans exist.
 3. **Keep `GET /api/v1/app/:appId/credits` free of billing data.** It is excluded from JWT auth. Purchase history should get invoice details only from the authenticated `/billing/invoices` route.
 4. **Our legal entity details belong in config, not a collection.** The invoice `supplier` block is copied from `BILLING_SUPPLIER_*` environment settings at issue time, so it is a snapshot anyway. Add them to `validateEnv`.
 5. **Monitoring.** Alert on: `PAID` invoices without `creditPlanId` after 10 minutes; orders in `PENDING_PAYMENT` for more than 1 hour; `WebhookEvent`s that are `FAILED`; and any `NEEDS_REVIEW`.
@@ -1395,7 +1403,6 @@ Table invoices {
   creditPlanId string [ref: - creditplans._id]
   eInvoice object
   templateVersion string
-  firstRenderSha256 string
 
   indexes {
     (orgId, issuedAt)

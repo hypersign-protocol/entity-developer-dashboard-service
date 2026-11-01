@@ -12,6 +12,7 @@ import { CreditPlan, CreditSourceEnum, scope } from '../schemas/credit.schema';
 import { ConfigService } from '@nestjs/config';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
+import { UserRole } from 'src/user/schema/user.schema';
 import {
   assertIsDeliverTxSuccess,
   QueryClient,
@@ -77,7 +78,17 @@ export class CreditService {
     return this.creditRepository.findBasedOnAggregationPipeline(pipeline);
   }
 
-  async activateCredit(creditId: string, appId: string) {
+  /** True for ID Service apps, whose credits are granted through invoices. */
+  async isIdServiceApp(appId: string): Promise<boolean> {
+    const app = await this.appRepository.findOne({ appId });
+    return app?.services?.[0]?.id === SERVICE_TYPES.CAVACH_API;
+  }
+
+  async activateCredit(
+    creditId: string,
+    appId: string,
+    caller?: { userId: string; role?: string },
+  ) {
     Logger.log(
       `Activating credit plan for app with Id: ${appId} and creditId ${creditId}`,
       'CreditService',
@@ -103,6 +114,18 @@ export class CreditService {
       ]);
     }
     const appDetail = await this.appRepository.findOne({ appId });
+    // Customers may only activate plans of their own apps (owner id; team
+    // members are mapped to it). Super admins may activate any.
+    if (
+      caller &&
+      caller.role !== UserRole.SUPER_ADMIN &&
+      appDetail &&
+      appDetail.userId !== caller.userId
+    ) {
+      throw new NotFoundException([
+        `No credit detail found for creditId: ${creditId}`,
+      ]);
+    }
     const serviceType = appDetail?.services?.[0]?.id;
     if (
       !appDetail ||

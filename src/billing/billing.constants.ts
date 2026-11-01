@@ -38,6 +38,17 @@ export enum BillingErrorCode {
   COUPON_INVALID = 'COUPON_INVALID',
   BILLING_PROFILE_LOCKED = 'BILLING_PROFILE_LOCKED',
   RATE_LIMITED = 'RATE_LIMITED',
+  INVOICE_NOT_FOUND = 'INVOICE_NOT_FOUND',
+  BILLING_PROFILE_INCOMPLETE = 'BILLING_PROFILE_INCOMPLETE',
+  PAYMENTS_NOT_AVAILABLE = 'PAYMENTS_NOT_AVAILABLE',
+  IDEMPOTENCY_KEY_REUSED = 'IDEMPOTENCY_KEY_REUSED',
+  BILLING_NOT_CONFIGURED = 'BILLING_NOT_CONFIGURED',
+  USE_INVOICES = 'USE_INVOICES',
+}
+
+/** Once true, ID Service credits can only be granted through invoices (POST /app/:appId/credits returns 409). */
+export function invoicedGrantsOnly(): boolean {
+  return process.env.BILLING_INVOICED_GRANTS === 'true';
 }
 
 /** Regions with billing switched on, from BILLING_ENABLED_REGIONS (e.g. "IN,GLOBAL"). Off by default. */

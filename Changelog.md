@@ -9,6 +9,8 @@
 - Updated `POST /api/v1/customer-onboarding` to automatically process credits based on the type of service requested by the user.
 - Added an L1 support email to superadmins to trigger re-onboarding in case of onboarding failure.
 - Implemented Redis to display the live status of the onboarding process.
+- Removed `kyc-credit` allocation during onboarding, as credits are not required in dev mode.
+- Added free credit allocation for production mode.
 ## [3.17.0] - 2026-10-07
 ### Added
 

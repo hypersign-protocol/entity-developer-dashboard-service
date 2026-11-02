@@ -701,7 +701,7 @@ export class AppAuthService {
       // delete onboarding data
       await this.onboardModel.deleteOne({ kycServiceId: appId });
       // delete webpage config data of that service
-      await this.webpageConfigRepo.findOneAndDelete({ appId });
+      await this.webpageConfigRepo.deleteMany({ serviceId: appId });
       linkedSSIServiceId = appDetail.dependentServices[0];
     }
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });

@@ -73,6 +73,10 @@ export const EXPIRY_CONFIG = {
   ONBOARDING_PROGRESS: {
     redisExpiryTime: 30 * TIME.MINUTE,
   },
+  ONBOARDING_PROCESSING_LOCK: {
+    redisExpiryTime: TIME.MINUTE,
+    heartbeatInterval: 15 * TIME.SECOND,
+  },
 
   // KYC and SSI tokens for context - ID and SSI Dashboard
   DASHBOARD_ACCESS: {

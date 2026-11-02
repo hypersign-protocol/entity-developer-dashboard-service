@@ -397,6 +397,14 @@ export class KybCompanyDetailRespDto {
 
 export class FetchCustomerOnboardingRespDto extends CreateCustomerOnboardingRespDto {
   @ApiPropertyOptional({
+    description:
+      'Whether a live onboarding processor currently holds the Redis processing lock. Omitted when the lock state cannot be checked.',
+    type: Boolean,
+  })
+  @IsOptional()
+  processingActive?: boolean;
+
+  @ApiPropertyOptional({
     enum: ['INITIATED', 'PROCESSING', 'FAILED', 'APPROVED'],
   })
   @IsOptional()

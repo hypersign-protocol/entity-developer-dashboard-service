@@ -77,6 +77,10 @@ export const EXPIRY_CONFIG = {
     redisExpiryTime: TIME.MINUTE,
     heartbeatInterval: 15 * TIME.SECOND,
   },
+  FREE_CREDIT_GRANT_LOCK: {
+    redisExpiryTime: TIME.MINUTE,
+    heartbeatInterval: 15 * TIME.SECOND,
+  },
 
   // KYC and SSI tokens for context - ID and SSI Dashboard
   DASHBOARD_ACCESS: {

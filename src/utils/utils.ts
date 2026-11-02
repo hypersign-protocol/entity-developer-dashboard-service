@@ -200,6 +200,7 @@ export const REDIS_KEYS = {
   VERIFIER_PAGE_TOKEN: 'verifierPageToken:',
   CUSTOMER_ONBOARDING_PROGRESS: 'customer-onboarding:progress:',
   CUSTOMER_ONBOARDING_LOCK: 'customer-onboarding:lock:',
+  FREE_CREDIT_GRANT_LOCK: 'free-credit:grant:lock:',
 };
 
 export const CREDIT_REFERENCE_PREFIXES = {

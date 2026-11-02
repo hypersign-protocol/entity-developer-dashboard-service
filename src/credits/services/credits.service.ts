@@ -49,9 +49,14 @@ import { Model } from 'mongoose';
 import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
 import { UserRole } from 'src/user/schema/user.schema';
 import { calculateFreeCreditAmounts } from 'src/credits/utils/credit-amounts';
-import { CREDIT_REFERENCE_PREFIXES, ONBOARDING_CONFIG } from 'src/utils/utils';
+import {
+  CREDIT_REFERENCE_PREFIXES,
+  ONBOARDING_CONFIG,
+  REDIS_KEYS,
+} from 'src/utils/utils';
 import { redisClient } from 'src/utils/redis.provider';
 import { randomUUID } from 'node:crypto';
+import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 
 const SSI_ON_CHAIN_ALLOWANCE_MULTIPLIER = BigInt(2000);
 
@@ -118,9 +123,16 @@ export class CreditService {
     }
 
     let referenceId = `${CREDIT_REFERENCE_PREFIXES.FREE_CREDIT}${onboarding._id}:${appId}`;
-    const lockKey = `FREE_CREDIT_GRANT_LOCK:${appId}`;
+    const lockKey = `${REDIS_KEYS.FREE_CREDIT_GRANT_LOCK}${appId}`;
     const lockToken = randomUUID();
-    const acquired = await redisClient.set(lockKey, lockToken, 'EX', 600, 'NX');
+    const lockExpiry = EXPIRY_CONFIG.FREE_CREDIT_GRANT_LOCK.redisExpiryTime;
+    const acquired = await redisClient.set(
+      lockKey,
+      lockToken,
+      'EX',
+      lockExpiry,
+      'NX',
+    );
     if (acquired !== 'OK') {
       throw new ConflictException([
         'A free-credit request is already being processed for this service',
@@ -132,15 +144,39 @@ export class CreditService {
         ? 'ssiFreeCreditStatus'
         : 'kycFreeCreditStatus';
     let claimStarted = false;
+    let lockLost = false;
+
+    const lockHeartbeat = setInterval(async () => {
+      try {
+        const renewed = await redisClient.eval(
+          "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end",
+          1,
+          lockKey,
+          lockToken,
+          lockExpiry,
+        );
+        if (Number(renewed) !== 1) {
+          lockLost = true;
+          Logger.error(`Lost free-credit lock for ${appId}`, 'CreditService');
+        }
+      } catch (error) {
+        lockLost = true;
+        Logger.error(
+          `Could not renew free-credit lock for ${appId}: ${error}`,
+          'CreditService',
+        );
+      }
+    }, EXPIRY_CONFIG.FREE_CREDIT_GRANT_LOCK.heartbeatInterval * 1000);
+    lockHeartbeat.unref?.();
 
     try {
       const claim = await this.customerOnboardingModel
         .findOneAndUpdate(
           {
             _id: onboarding._id,
-            [statusField]: {
-              $nin: [OnboardingStatus.PROCESSING, OnboardingStatus.APPROVED],
-            },
+            // The Redis lock excludes a live request. PROCESSING here can be
+            // left by a crashed worker, so the lock owner may reclaim it.
+            [statusField]: { $ne: OnboardingStatus.APPROVED },
           },
           {
             $set: {
@@ -165,6 +201,12 @@ export class CreditService {
         ]);
       }
       claimStarted = true;
+
+      if (lockLost) {
+        throw new ConflictException([
+          'Free-credit processing ownership was lost. Retry the request.',
+        ]);
+      }
 
       const existingFreeCredit =
         await this.creditRepository.findParticularCreditDetail({
@@ -206,18 +248,28 @@ export class CreditService {
         referenceId,
         isSsi ? String(amounts.ssiHidAllowanceAmount) : undefined,
       );
-      await this.customerOnboardingModel.updateOne(
-        { _id: onboarding._id },
+      if (lockLost) {
+        throw new ConflictException([
+          'Free-credit processing ownership was lost. Retry the request.',
+        ]);
+      }
+      const completed = await this.customerOnboardingModel.updateOne(
+        { _id: onboarding._id, [statusField]: OnboardingStatus.PROCESSING },
         {
           $set: { [statusField]: OnboardingStatus.APPROVED },
         },
       );
+      if (completed.modifiedCount !== 1) {
+        throw new ConflictException([
+          'Free-credit status changed while the request was processing. Retry the request.',
+        ]);
+      }
       return result;
     } catch (error) {
-      if (claimStarted) {
+      if (claimStarted && !lockLost) {
         try {
           await this.customerOnboardingModel.updateOne(
-            { _id: onboarding._id },
+            { _id: onboarding._id, [statusField]: OnboardingStatus.PROCESSING },
             {
               $set: { [statusField]: OnboardingStatus.FAILED },
             },
@@ -231,6 +283,7 @@ export class CreditService {
       }
       throw error;
     } finally {
+      clearInterval(lockHeartbeat);
       await redisClient.eval(
         "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
         1,

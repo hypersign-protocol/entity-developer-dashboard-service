@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { KybVerificationEnum } from '../constants/identifier-types';
 import { WebhookVerificationType } from '../dto/company-verification-webhook.dto';
 import { CustomerOnboardingService } from './customer-onboarding.service';
@@ -22,10 +23,14 @@ describe('CustomerOnboardingService company verification webhook', () => {
   const onboardingRepository = {
     findCustomerOnboardingById: jest.fn(),
     updateCustomerOnboardingDetails: jest.fn(),
+    createCustomerOnboarding: jest.fn(),
   };
   const userRepository = { findOne: jest.fn() };
   const mailService = { addAJob: jest.fn() };
   const appAuthService = {};
+  const appRepository = { attachOrganisation: jest.fn() };
+  const roleRepository = { attachOrganisation: jest.fn() };
+  const adminPeopleRepository = { attachOrganisation: jest.fn() };
   let service: CustomerOnboardingService;
 
   beforeEach(async () => {
@@ -41,10 +46,11 @@ describe('CustomerOnboardingService company verification webhook', () => {
           key === 'CUSTOMER_ONBOARDING_WEBHOOK_SECRET' ? 'secret' : undefined,
         ),
       } as any,
+      appRepository as any,
+      roleRepository as any,
       {} as any,
       {} as any,
-      {} as any,
-      {} as any,
+      adminPeopleRepository as any,
     );
   });
 
@@ -117,5 +123,87 @@ describe('CustomerOnboardingService company verification webhook', () => {
     expect(
       onboardingRepository.updateCustomerOnboardingDetails,
     ).not.toHaveBeenCalled();
+  });
+
+  describe('createCustomerOnboardingDetail', () => {
+    it.each(['ADMIN', 'SUPER_ADMIN'])(
+      'rejects a second onboarding for a %s with 409',
+      async (role) => {
+        onboardingRepository.findCustomerOnboardingById.mockResolvedValue({
+          _id: 'existing',
+          userId: 'user-1',
+        });
+
+        await expect(
+          service.createCustomerOnboardingDetail(
+            { companyName: 'Acme' } as any,
+            { userId: 'user-1', role },
+            'owner@acme.test',
+          ),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(
+          onboardingRepository.createCustomerOnboarding,
+        ).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe('findUserOnboardingDetail', () => {
+    it('sorts by newest instead of filtering on a sort field', async () => {
+      const onboarding = { userId: 'user-1', companyName: 'Acme' };
+      onboardingRepository.findCustomerOnboardingById.mockResolvedValue(
+        onboarding,
+      );
+
+      await expect(
+        service.findUserOnboardingDetail({ userId: 'user-1' }),
+      ).resolves.toBe(onboarding);
+      expect(
+        onboardingRepository.findCustomerOnboardingById,
+      ).toHaveBeenCalledWith({ userId: 'user-1' }, { sort: { createdAt: -1 } });
+    });
+  });
+
+  describe('formatStatusReason', () => {
+    const format = (reason) => (service as any).formatStatusReason(reason);
+
+    it.each([
+      [undefined, ''],
+      ['COMPANY_INACTIVE', 'COMPANY_INACTIVE'],
+      [['A', 'B'], 'A, B'],
+      [
+        { code: 'DOC_PENDING', message: 'Tax document under review' },
+        'Tax document under review',
+      ],
+      [[{ code: 'A' }, { reason: 'B' }], 'A, B'],
+      [{ TaxRegistration: 'Submitted' }, '{"TaxRegistration":"Submitted"}'],
+    ])('formats %j as %j', (reason, expected) => {
+      expect(format(reason)).toBe(expected);
+    });
+  });
+
+  describe('attachOrganisation', () => {
+    it("links the owner's existing apps, roles and team rows", async () => {
+      appRepository.attachOrganisation.mockResolvedValue(2);
+      roleRepository.attachOrganisation.mockResolvedValue({ modifiedCount: 1 });
+      adminPeopleRepository.attachOrganisation.mockResolvedValue({
+        modifiedCount: 3,
+      });
+
+      await (service as any).attachOrganisation('user-1', 'org-1');
+
+      expect(appRepository.attachOrganisation).toHaveBeenCalledWith(
+        'user-1',
+        'org-1',
+      );
+      expect(roleRepository.attachOrganisation).toHaveBeenCalledWith(
+        'user-1',
+        'org-1',
+      );
+      expect(adminPeopleRepository.attachOrganisation).toHaveBeenCalledWith(
+        'user-1',
+        'org-1',
+      );
+    });
   });
 });

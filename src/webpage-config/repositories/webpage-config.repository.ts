@@ -66,4 +66,17 @@ export class WebPageConfigRepository {
     );
     return this.webPageConfigModel.findOneAndDelete(appFilterQuery);
   }
+
+  async deleteMany(
+    webpageCofigFilterQuery: FilterQuery<WebPageConfig>,
+  ): Promise<number> {
+    Logger.log(
+      'deleteMany() method: starts, delete webpage configurations from db',
+      'WebPageConfigRepository',
+    );
+    const { deletedCount } = await this.webPageConfigModel.deleteMany(
+      webpageCofigFilterQuery,
+    );
+    return deletedCount;
+  }
 }

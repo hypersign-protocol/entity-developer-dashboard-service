@@ -23,6 +23,7 @@ import { ConfigService } from '@nestjs/config';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
 import { JobNames } from 'src/utils/time-constant';
 import { redisClient } from 'src/utils/redis.provider';
+import { CustomerOnboardingRepository } from 'src/customer-onboarding/repositories/customer-onboarding.repositories';
 import {
   TENANT_ERRORS,
   TENANT_INVITE_ERRORS,
@@ -39,6 +40,7 @@ export class PeopleService {
     private readonly jwt: JwtService,
     private readonly configService: ConfigService,
     private readonly mailNotificationService: MailNotificationService,
+    private readonly customerOnboardingRepository: CustomerOnboardingRepository,
   ) {}
   async createInvitation(createPersonDto: CreateInviteDto, adminUserData) {
     Logger.log(
@@ -73,7 +75,10 @@ export class PeopleService {
     const { roleId } = createPersonDto;
     let roleDetail;
     if (roleId) {
-      roleDetail = await this.roleRepository.findOne({ _id: roleId });
+      roleDetail = await this.roleRepository.findOne({
+        _id: roleId,
+        userId: adminUserData.userId,
+      });
       if (!roleDetail) {
         throw new BadRequestException([
           TENANT_INVITE_ERRORS.ROLE_NOT_FOUND(roleId),
@@ -94,8 +99,12 @@ export class PeopleService {
     }
     if (!roleDetail)
       throw new BadRequestException([TENANT_INVITE_ERRORS.NO_ROLE_ASSIGNED]);
+    const orgId = await this.customerOnboardingRepository.findOrgIdByOwner(
+      adminUserData.userId,
+    );
     const invite = await this.adminPeopleService.create({
       adminId: adminUserData.userId,
+      orgId,
       userId: userDetails?.userId || emailId,
       inviteCode: invitecode,
       accepted: false,

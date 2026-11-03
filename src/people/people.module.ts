@@ -13,6 +13,11 @@ import { SocialLoginModule } from 'src/social-login/social-login.module';
 import { JwtModule } from '@nestjs/jwt';
 import { MailNotificationModule } from 'src/mail-notification/mail-notification.module';
 import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
+import {
+  CustomerOnboarding,
+  CustomerOnboardingSchema,
+} from 'src/customer-onboarding/schemas/customer-onboarding.schema';
+import { CustomerOnboardingRepository } from 'src/customer-onboarding/repositories/customer-onboarding.repositories';
 
 @Module({
   imports: [
@@ -20,6 +25,9 @@ import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware'
       { name: AdminPeople.name, schema: AdminPeopleSchema },
     ]),
     MongooseModule.forFeature([{ name: Role.name, schema: RoleSchema }]),
+    MongooseModule.forFeature([
+      { name: CustomerOnboarding.name, schema: CustomerOnboardingSchema },
+    ]),
     SocialLoginModule,
     UserModule,
     JwtModule,
@@ -31,6 +39,7 @@ import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware'
     UserService,
     AdminPeopleRepository,
     RoleRepository,
+    CustomerOnboardingRepository,
   ],
   exports: [AdminPeopleRepository],
 })

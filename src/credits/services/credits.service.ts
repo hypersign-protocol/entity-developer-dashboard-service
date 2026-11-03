@@ -145,8 +145,11 @@ export class CreditService {
         : 'kycFreeCreditStatus';
     let claimStarted = false;
     let lockLost = false;
+    let lockRenewalInFlight = false;
 
     const lockHeartbeat = setInterval(async () => {
+      if (lockLost || lockRenewalInFlight) return;
+      lockRenewalInFlight = true;
       try {
         const renewed = await redisClient.eval(
           "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end",
@@ -157,16 +160,20 @@ export class CreditService {
         );
         if (Number(renewed) !== 1) {
           lockLost = true;
+          clearInterval(lockHeartbeat);
           Logger.error(`Lost free-credit lock for ${appId}`, 'CreditService');
         }
       } catch (error) {
         lockLost = true;
+        clearInterval(lockHeartbeat);
         Logger.error(
           `Could not renew free-credit lock for ${appId}: ${error}`,
           'CreditService',
         );
+      } finally {
+        lockRenewalInFlight = false;
       }
-    }, EXPIRY_CONFIG.FREE_CREDIT_GRANT_LOCK.heartbeatInterval * 1000);
+    }, EXPIRY_CONFIG.FREE_CREDIT_GRANT_LOCK.lockRenewalInterval * 1000);
     lockHeartbeat.unref?.();
 
     try {

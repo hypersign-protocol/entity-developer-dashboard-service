@@ -1139,7 +1139,7 @@ export class CustomerOnboardingService {
     const processingLeaseMs =
       EXPIRY_CONFIG.ONBOARDING_PROCESSING_LOCK.redisExpiryTime * 1000;
     const processingHeartbeatMs =
-      EXPIRY_CONFIG.ONBOARDING_PROCESSING_LOCK.heartbeatInterval * 1000;
+      EXPIRY_CONFIG.ONBOARDING_PROCESSING_LOCK.lockRenewalInterval * 1000;
     let processingClaimed = false;
     let processingLeaseLost = false;
     let processingVersion: number | undefined;

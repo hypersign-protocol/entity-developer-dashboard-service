@@ -11,6 +11,10 @@
 - Implemented Redis to display the live status of the onboarding process.
 - Removed `kyc-credit` allocation during onboarding, as credits are not required in dev mode.
 - Added free credit allocation for production mode.
+
+### Fixed
+
+- Fixed onboarding recovery so users can retry from the next incomplete step after an interrupted process.
 ## [3.17.0] - 2026-10-07
 ### Added
 

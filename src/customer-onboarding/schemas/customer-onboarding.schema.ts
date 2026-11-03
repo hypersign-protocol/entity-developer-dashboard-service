@@ -107,6 +107,5 @@ export class CustomerOnboarding {
 
 export const CustomerOnboardingSchema =
   SchemaFactory.createForClass(CustomerOnboarding);
-CustomerOnboardingSchema.index({ userId: 1 });
-CustomerOnboardingSchema.index({ companyName: 1 });
-CustomerOnboardingSchema.index({ companyEmail: 1 });
+// One onboarding (organisation) per owner.
+CustomerOnboardingSchema.index({ userId: 1 }, { unique: true });

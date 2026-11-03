@@ -15,6 +15,12 @@ export class AdminPeople {
   })
   userId: string;
 
+  // Organisation (CustomerOnboarding._id) of the team owner (adminId).
+  @Prop({
+    required: false,
+  })
+  orgId?: string;
+
   @Prop({ isRequired: true })
   inviteCode: string;
 
@@ -61,3 +67,4 @@ AdminPeopleSchema.index(
     unique: true,
   },
 );
+AdminPeopleSchema.index({ orgId: 1 });

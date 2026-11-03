@@ -7,6 +7,9 @@ export type RoleDocument = Role & Document;
 export class Role {
   @Prop({ required: true })
   userId: string;
+  // Organisation (CustomerOnboarding._id) the role belongs to.
+  @Prop({ required: false })
+  orgId?: string;
   @Prop({ required: true })
   roleName: string;
 
@@ -22,3 +25,4 @@ export class Role {
 
 export const RoleSchema = SchemaFactory.createForClass(Role);
 RoleSchema.index({ userId: 1, roleName: 1 }, { unique: true });
+RoleSchema.index({ orgId: 1 });

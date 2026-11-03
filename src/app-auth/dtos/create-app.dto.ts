@@ -159,4 +159,12 @@ export class DeleteAppResponse {
     example: '3420d77a5547b60fe265a463a0e5897578d3',
   })
   appId: string;
+
+  @ApiProperty({
+    description: 'Clean-up steps that failed and need manual attention',
+    required: false,
+    isArray: true,
+    type: String,
+  })
+  warnings?: string[];
 }

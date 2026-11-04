@@ -122,7 +122,7 @@ export class CreditService {
       ]);
     }
 
-    let referenceId = `${CREDIT_REFERENCE_PREFIXES.FREE_CREDIT}${onboarding._id}:${appId}`;
+    let referenceId = `${CREDIT_REFERENCE_PREFIXES.PROMOTION}${onboarding._id}:${appId}`;
     const lockKey = `${REDIS_KEYS.FREE_CREDIT_GRANT_LOCK}${appId}`;
     const lockToken = randomUUID();
     const lockExpiry = EXPIRY_CONFIG.FREE_CREDIT_GRANT_LOCK.redisExpiryTime;
@@ -218,7 +218,7 @@ export class CreditService {
       const existingFreeCredit =
         await this.creditRepository.findParticularCreditDetail({
           serviceId: appId,
-          source: CreditSourceEnum.FREE_CREDIT,
+          source: CreditSourceEnum.PROMOTION,
         });
       if (
         existingFreeCredit &&
@@ -245,13 +245,13 @@ export class CreditService {
         validityPeriod: amounts.validityPeriod,
         validityPeriodUnit: TimeUnit.Days,
         amountDenom: 'uhid',
-        source: CreditSourceEnum.FREE_CREDIT,
+        source: CreditSourceEnum.PROMOTION,
       };
       const result = await this.grantCredit(
         appId,
         creditDetail,
         user.userId,
-        CreditSourceEnum.FREE_CREDIT,
+        CreditSourceEnum.PROMOTION,
         referenceId,
         isSsi ? String(amounts.ssiHidAllowanceAmount) : undefined,
       );

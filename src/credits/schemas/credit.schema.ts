@@ -20,7 +20,7 @@ export enum CreditStatus {
 export enum CreditSourceEnum {
   'MANUAL_RECHARGE' = 'MANUAL_RECHARGE',
   'CUSTOMER_ONBOARDING' = 'CUSTOMER_ONBOARDING',
-  'FREE_CREDIT' = 'FREE_CREDIT',
+  'PROMOTION' = 'PROMOTION',
   'MIGRATION' = 'MIGRATION',
   'PAYMENT' = 'PAYMENT',
   'ADJUSTMENT' = 'ADJUSTMENT',
@@ -94,7 +94,7 @@ CreditsSchema.index(
   { serviceId: 1 },
   {
     unique: true,
-    partialFilterExpression: { source: CreditSourceEnum.FREE_CREDIT },
+    partialFilterExpression: { source: CreditSourceEnum.PROMOTION },
   },
 );
 CreditsSchema.index({ legacyCreditId: 1, migrationSource: 1 });

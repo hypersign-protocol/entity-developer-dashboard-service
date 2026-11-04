@@ -82,12 +82,12 @@ export class CreditsController {
     @Req() req: any,
   ) {
     const source = creditRequestDto.source ?? CreditSourceEnum.MANUAL_RECHARGE;
-    if (source === CreditSourceEnum.FREE_CREDIT) {
+    if (source === CreditSourceEnum.PROMOTION) {
       return this.creditService.grantFreeCredit(appId, req.user);
     }
     if (source !== CreditSourceEnum.MANUAL_RECHARGE) {
       throw new BadRequestException([
-        'Only FREE_CREDIT and MANUAL_RECHARGE sources are supported by this endpoint',
+        'Only PROMOTION and MANUAL_RECHARGE sources are supported by this endpoint',
       ]);
     }
     if (req.user.role !== UserRole.SUPER_ADMIN) {

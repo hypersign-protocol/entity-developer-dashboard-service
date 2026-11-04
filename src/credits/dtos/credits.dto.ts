@@ -198,7 +198,7 @@ export class CreditRequestDto {
   })
   @ValidateIf(
     (request: CreditRequestDto) =>
-      request.source !== CreditSourceEnum.FREE_CREDIT,
+      request.source !== CreditSourceEnum.PROMOTION,
   )
   @IsString()
   @IsNotEmpty()
@@ -210,7 +210,7 @@ export class CreditRequestDto {
   })
   @ValidateIf(
     (request: CreditRequestDto) =>
-      request.source !== CreditSourceEnum.FREE_CREDIT,
+      request.source !== CreditSourceEnum.PROMOTION,
   )
   @Type(() => Number)
   @IsInt()
@@ -223,7 +223,7 @@ export class CreditRequestDto {
   })
   @ValidateIf(
     (request: CreditRequestDto) =>
-      request.source !== CreditSourceEnum.FREE_CREDIT,
+      request.source !== CreditSourceEnum.PROMOTION,
   )
   @IsEnum(TimeUnit)
   validityPeriodUnit: TimeUnit;
@@ -234,7 +234,7 @@ export class CreditRequestDto {
   })
   @ValidateIf(
     (request: CreditRequestDto) =>
-      request.source !== CreditSourceEnum.FREE_CREDIT,
+      request.source !== CreditSourceEnum.PROMOTION,
   )
   @IsString()
   @IsNotEmpty()

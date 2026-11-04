@@ -25,6 +25,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { TeamModule } from 'src/roles/role.module';
 import { WebpageConfigModule } from 'src/webpage-config/webpage-config.module';
 import { CreditModule } from 'src/credits/credits.module';
+import { BillingModule } from 'src/billing/billing.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { CreditModule } from 'src/credits/credits.module';
     TeamModule,
     WebpageConfigModule,
     CreditModule,
+    BillingModule,
   ],
   controllers: [CustomerOnboardingController],
   providers: [CustomerOnboardingService, CustomerOnboardingRepository],
@@ -68,6 +70,11 @@ export class CustomerOnboardingModule implements NestModule {
         {
           path: 'api/v1/customer-onboarding/:id',
           method: RequestMethod.PATCH,
+        },
+        // GET billing is covered by GET :id above.
+        {
+          path: 'api/v1/customer-onboarding/billing',
+          method: RequestMethod.PUT,
         },
         companyWebhook,
       )

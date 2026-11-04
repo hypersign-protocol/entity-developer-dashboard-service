@@ -24,6 +24,7 @@ import { AllowedOriginMiddleware } from './utils/middleware/allowedOrigin.middle
 import { IpResolverModule } from './ip-resolver/ip-resolver.module';
 import { WebpageConfigModule } from './webpage-config/webpage-config.module';
 import { CustomerOnboardingModule } from './customer-onboarding/customer-onboarding.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { CustomerOnboardingModule } from './customer-onboarding/customer-onboard
     IpResolverModule,
     WebpageConfigModule,
     CustomerOnboardingModule,
+    BillingModule,
   ],
   controllers: [],
   providers: [

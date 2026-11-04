@@ -11,6 +11,43 @@ import {
 import { KybVerificationEnum } from '../constants/identifier-types';
 export type CustomerOnboardingDocument = CustomerOnboarding & Document;
 
+@Schema({ _id: false })
+export class BillingAddress {
+  @Prop({ type: String }) street: string;
+  @Prop({ type: String }) city: string;
+  @Prop({ type: String }) province: string;
+  @Prop({ type: String }) postalCode: string;
+  @Prop({ type: String }) country: string; // ISO 3166-1 alpha-2
+}
+
+@Schema({ _id: false })
+export class BillingTaxId {
+  @Prop({ type: String }) type: string; // TaxIdTypes code: GSTIN, PAN, VAT, …
+  @Prop({ type: String }) number: string;
+}
+
+// The organisation's billing profile (ADR §4.1). Fields are optional because
+// they arrive in steps: region first, then KYB prefill, then the customer's
+// confirmation (confirmedAt).
+@Schema({ _id: false })
+export class BillingDetails {
+  @Prop({ type: String, enum: ['IN', 'GLOBAL'] })
+  region?: 'IN' | 'GLOBAL';
+  @Prop({ type: String, enum: ['INR', 'USD'] })
+  currency?: 'INR' | 'USD';
+  @Prop({ type: String }) legalName?: string;
+  @Prop({ type: String }) email?: string;
+  @Prop({ type: SchemaFactory.createForClass(BillingAddress) })
+  address?: BillingAddress;
+  @Prop({ type: String }) gstStateCode?: string; // India: 2-digit GST state code
+  @Prop({ type: [SchemaFactory.createForClass(BillingTaxId)] })
+  taxIds?: BillingTaxId[];
+  @Prop({ type: Date }) confirmedAt?: Date; // saved by the customer
+  @Prop({ type: Date }) lockedAt?: Date; // first paid invoice
+}
+export const BillingDetailsSchema =
+  SchemaFactory.createForClass(BillingDetails);
+
 export class LogDetail {
   @Prop({ Type: String, required: true })
   step: OnboardingStep;
@@ -89,20 +126,14 @@ export class CustomerOnboarding {
   companyVerificationStatus?: string;
   @Prop({ type: String, required: false })
   companyStatusReason?: string;
+  // Set by the KYB webhook on the first move to Approved. Coupons use it.
+  @Prop({ type: Date, required: false })
+  companyVerificationApprovedAt?: Date;
   @Prop({ type: String, required: true })
   userId: string;
-  @Prop({
-    type: String,
-    enum: CreditStatus,
-    default: CreditStatus.INITIATED,
-  })
-  ssiFreeCreditStatus?: CreditStatus;
-  @Prop({
-    type: String,
-    enum: CreditStatus,
-    default: CreditStatus.INITIATED,
-  })
-  kycFreeCreditStatus?: CreditStatus;
+  // Billing profile. Written only by the billing module (its own $set path).
+  @Prop({ type: BillingDetailsSchema, required: false })
+  billing?: BillingDetails;
 }
 
 export const CustomerOnboardingSchema =

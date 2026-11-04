@@ -84,6 +84,12 @@ export class CreditPlan {
   legacyCreditId?: string;
   @Prop({ required: false, type: CreditNotificationState })
   notification?: CreditNotificationState;
+  // The invoice that paid for this plan (billing, ADR §4.6).
+  @Prop({ required: false, type: String })
+  invoiceId?: string;
+  // Set by a refund or a lost dispute. Remaining = total - used - revokedCredits.
+  @Prop({ required: false, type: Number })
+  revokedCredits?: number;
 }
 
 export const CreditsSchema = SchemaFactory.createForClass(CreditPlan);
@@ -99,3 +105,4 @@ CreditsSchema.index(
 );
 CreditsSchema.index({ legacyCreditId: 1, migrationSource: 1 });
 CreditsSchema.index({ status: 1, expiresAt: 1 });
+CreditsSchema.index({ invoiceId: 1 }, { sparse: true });

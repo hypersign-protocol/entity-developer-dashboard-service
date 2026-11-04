@@ -11,6 +11,7 @@ import {
   ValidationPipe,
   Query,
   ForbiddenException,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -29,6 +30,11 @@ import {
 } from '../dtos/credits.dto';
 import { CreditSourceEnum } from '../schemas/credit.schema';
 import { UserRole } from 'src/user/schema/user.schema';
+import {
+  BillingErrorCode,
+  invoicedGrantsOnly,
+} from 'src/billing/billing.constants';
+import { BillingException } from 'src/billing/billing.exception';
 
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Credits')
@@ -65,8 +71,12 @@ export class CreditsController {
   async activateCredit(
     @Param('creditId') creditId: string,
     @Param('appId') appId: string,
+    @Req() req: any,
   ) {
-    return this.creditService.activateCredit(creditId, appId);
+    return this.creditService.activateCredit(creditId, appId, {
+      userId: req.user.userId,
+      role: req.user.role,
+    });
   }
 
   @ApiBearerAuth('Authorization')
@@ -94,6 +104,17 @@ export class CreditsController {
       throw new ForbiddenException([
         'Only a super admin can grant manual credits',
       ]);
+    // Once invoicing is switched on, ID Service credits are granted only
+    // through invoices (POST /admin/billing/invoices). SSI is unchanged.
+    if (
+      invoicedGrantsOnly() &&
+      (await this.creditService.isIdServiceApp(appId))
+    ) {
+      throw new BillingException(
+        HttpStatus.CONFLICT,
+        BillingErrorCode.USE_INVOICES,
+        'ID Service credits are granted through invoices. Use Recharge Service Credits > Invoice.',
+      );
     }
     return this.creditService.grantCredit(
       appId,

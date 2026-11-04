@@ -45,3 +45,4 @@ gha-creds-*.json
 
 # Generated temporarily by google-github-actions/get-gke-credentials.
 gha-kubeconfig-*
+.env-prod

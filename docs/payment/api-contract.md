@@ -5,7 +5,7 @@ The request and response formats for the billing APIs in `entity-developer-dashb
 | Part | Status | Build the UI now? |
 |---|---|---|
 | [Stage 1: invoicing](#stage-1-invoicing) | **Agreed** | Yes |
-| [Stage 2: payments](#stage-2-payments-provisional) | **Provisional**, the payment gateway isn't chosen yet | Only behind the `features.pay` flag, and expect changes |
+| [Stage 2: payments](#stage-2-payments) | **Agreed** for India with Razorpay: §6 checkout, §7 Collect payment (payment links) | Yes, behind `features.pay` (customer) and `BILLING_PAY_ENABLED` (super admin) |
 
 Any change to an agreed endpoint is recorded in the [changelog](#changelog) at the end.
 
@@ -50,6 +50,7 @@ Any change to an agreed endpoint is recorded in the [changelog](#changelog) at t
 | `InvoiceStatus` | `UNPAID`, `PAID`, `VOID` |
 | `InvoiceSettlement` | `COMPLIMENTARY`, `OFFLINE`, `GATEWAY` (only on `PAID` invoices) |
 | `InvoiceSource` | `SELF_SERVE`, `ADMIN` |
+| `OrderStatus` | `CREATED`, `PENDING_PAYMENT`, `PAID`, `FULFILLED`, `FAILED`, `EXPIRED`, `CANCELLED`, `NEEDS_REVIEW` |
 | `OfflinePaymentMethod` | `BANK_TRANSFER`, `UPI`, `CHEQUE`, `CARD_OUTSIDE_DASHBOARD`, `OTHER_SYSTEM` |
 | `TaxLineType` | `CGST`, `SGST`, `IGST`, `GST` (Indian state not known yet), `ZERO_RATED_EXPORT`, `VAT`, `SALES_TAX` |
 | `TaxMode` | `INCLUDED_IN_QUOTE` (India: the quote contains the final GST), `NONE` (Global: no tax is charged), `CALCULATED_AT_CHECKOUT` (reserved: not returned today) |
@@ -368,9 +369,9 @@ Prices the current selection. Request a new quote every time the plan, the custo
 
 | Field | Notes |
 |---|---|
-| `status` / `settlement` | Tag and settlement text in Credit Purchase History: `PAID` + `GATEWAY` is "Paid · Paid via {payment.method}"; `PAID` + `OFFLINE` is "Paid · Paid offline"; `PAID` + `COMPLIMENTARY` is "Complimentary · No payment due"; `UNPAID` is "Due · Due {dueAt}" (stage 2); `VOID` is "Void" |
+| `status` / `settlement` | Tag and settlement text in Credit Purchase History: `PAID` + `GATEWAY` is "Paid · Paid via {payment.method}"; `PAID` + `OFFLINE` is "Paid · Paid offline"; `PAID` + `COMPLIMENTARY` is "Complimentary · No payment due"; `VOID` is "Void". `UNPAID` isn't issued: Collect payment issues the invoice only once paid (§7) |
 | `creditPlanId` | Joins the invoice to a credit plan from the existing `GET /api/v1/app/:appId/credits` (the plan's `_id`). `null` for unpaid or void invoices, which have no plan yet |
-| `payNowUrl` | Only on unpaid invoices (stage 2). Show **Pay now** when it isn't `null` |
+| `payNowUrl` | Always `null` today. Open payment links come from `GET /billing/payment-links` (§7) |
 
 #### `GET /api/v1/billing/invoices?appId=…&status=…&page=…&limit=…`
 
@@ -380,7 +381,7 @@ The organisation's invoices, newest first. Needs `READ_BILLING`. `appId` and `st
 
 **How Credit Purchase History uses it:** load the app's credit plans as today, plus `GET /billing/invoices?appId=…`. Then:
 - put each invoice in the **Invoice** column of the plan whose `_id` equals its `creditPlanId`;
-- add the `UNPAID` invoices, which have no plan, as "Awaiting payment" rows (stage 2);
+- add the open payment links from `GET /billing/payment-links?appId=…` (§7), which have no plan or invoice yet, as "Awaiting payment" rows with **Pay now**;
 - sort all rows by date.
 
 #### `InvoiceDocument` object
@@ -459,7 +460,7 @@ How other invoices differ:
 | **Customer in Karnataka** (our state) | `tax`: CGST 9% and SGST 9% lines |
 | **Global** | `series: "GL"`, `financialYear: null`, `currency: "USD"`, `tax: []`, `customer.gstStateCode: null`, `placeOfSupply: { "code": "96", "name": "Other Countries" }`, `taxNote`: "Supply meant for export of services under LUT without payment of IGST." |
 | **Self-serve** (stage 2) | `source: "SELF_SERVE"`, `settlement: "GATEWAY"`, `orderNumber` set, `discounts.plan` / `discounts.coupon` filled, `payment.provider` and `payment.paymentId` set |
-| **Unpaid** (stage 2) | `status: "UNPAID"`, `paidAt: null`, `dueAt` and `payNowUrl` set, `payment: null` |
+| **Collect payment, paid** | `source: "ADMIN"`, `settlement: "GATEWAY"`, `orderNumber` set, `payment.provider: "razorpay"`, `payment.paymentId` and `payment.method` set |
 
 Rendering rules:
 - **Pick the template by `templateVersion`.** Keep every version the dashboard has ever shipped. If the version is unknown, show "Please refresh the dashboard to download this invoice" instead of rendering with another template.
@@ -546,7 +547,7 @@ Feeds the summary panel's live totals while the admin types. It creates nothing.
 }
 ```
 
-- **`creditsActive`:** `IMMEDIATELY` when the app has no active plan; `AFTER_CURRENT_PLAN` when it has one, because a new plan waits until the current one runs low or the customer activates it (today's credit behaviour); `WHEN_PAID` for **Collect payment** (stage 2). Show it in the summary panel, for example "Credits start after the current plan".
+- **`creditsActive`:** `IMMEDIATELY` when the app has no active plan; `AFTER_CURRENT_PLAN` when it has one, because a new plan waits until the current one runs low or the customer activates it (today's credit behaviour); `WHEN_PAID` for **Collect payment** (`isPaid: false`), whose `willIssueAs` is `{ "status": "AWAITING_PAYMENT", "settlement": "GATEWAY" }`. Show it in the summary panel, for example "Credits start after the current plan".
 - **Errors:** the same as for create.
 
 #### `POST /api/v1/admin/billing/invoices`
@@ -578,9 +579,11 @@ Creates the invoice. Header: `Idempotency-Key`.
 | `credits` | Whole number above 0 |
 | `validityDays` | Whole number above 0. The UI turns months into days, using the region's validity add-on as the default (India 30, Global 180) |
 | `amountMinor` | **Excludes tax.** `0` means complimentary, and then `isPaid` and `payment` are ignored |
-| `isPaid` | Required when `amountMinor > 0`. `false` is **Collect payment** (stage 2) and returns `422 PAYMENTS_NOT_AVAILABLE` until then |
+| `isPaid` | Required when `amountMinor > 0`. `false` is **Collect payment**: a payment link instead of an invoice (§7) |
 | `payment` | Required when `isPaid` is `true`. `method` is an `OfflinePaymentMethod`, `reference` can't be empty, and `paidAt` is a date (`YYYY-MM-DD`) not in the future |
-| `recipients` | Optional list of email addresses. Defaults to the billing email |
+| `notifyByEmail` | Collect payment only. Default `true`: Razorpay emails the link (with reminders). `false`: the link is only created; copy it and send it yourself |
+| `notifyEmail` | Collect payment only. Optional; where Razorpay emails the link. Defaults to the profile's billing email |
+| `linkExpiresInDays` | Collect payment only. 1–30, default 15 |
 | `note` | Optional and internal. It isn't printed on the invoice |
 
 **201:**
@@ -592,14 +595,14 @@ Creates the invoice. Header: `Idempotency-Key`.
 }
 ```
 
-The result card shows `invoice.invoiceNumber`, the customer and the total, with **Download invoice**, which loads `GET /admin/billing/invoices/:invoiceId` (below) and renders the PDF. `paymentLink` is only set for **Collect payment** (stage 2).
+The result card shows `invoice.invoiceNumber`, the customer and the total, with **Download invoice**, which loads `GET /admin/billing/invoices/:invoiceId` (below) and renders the PDF. For **Collect payment** the response is different: see §7.
 
 **Errors:**
 
 | HTTP | `code` | Notes |
 |---|---|---|
 | 422 | `BILLING_PROFILE_INCOMPLETE` | `details.missingFields` holds the missing field paths |
-| 422 | `PAYMENTS_NOT_AVAILABLE` | `isPaid: false` before stage 2 |
+| 422 | `PAYMENTS_NOT_AVAILABLE` | Collect payment for a region without payments (today: anything but India), or payments are switched off |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | The same key was used with a different body. Generate a new key |
 | 422 | `APP_NOT_BILLABLE` | An SSI app. Use the existing SSI recharge |
 | 422 | `ONBOARDING_NOT_FOUND` | The app's owner has no organisation |
@@ -626,99 +629,315 @@ The same `InvoiceDocument` as the customer endpoint (§4), for any organisation,
 
 ---
 
-## Stage 2: payments (provisional)
+## Stage 2: payments
 
-These depend on the gateway choice and may change. Build them only behind `features.pay`.
+**Phase 1:** Indian customers top up themselves, paying through Razorpay Standard Checkout (a popup on our page). Global payments and super-admin payment links come in phase 2. `features.pay` in the catalog is `true` only where Pay works (today: `IN`, once switched on).
+
+There are no gateway webhooks yet. The server asks Razorpay for the payment status itself: when the popup reports success, when the dashboard polls, and in a background job every 5 minutes. Credits are granted only after the server has seen a captured payment of the right amount.
 
 ### 6. Checkout
 
-#### 6.1 `POST /api/v1/billing/orders`
-
-Pay. Header: `Idempotency-Key`. Needs `WRITE_BILLING`.
-
-```json
-{ "quoteId": "6723b0a1c1d2e3f4a5b6c7e9" }
+```mermaid
+sequenceDiagram
+  actor U as Customer
+  participant D as Dashboard
+  participant A as Entity API
+  participant R as Razorpay
+  D->>A: POST /billing/quotes
+  U->>D: Pay
+  D->>A: POST /billing/orders {quoteId} + Idempotency-Key
+  A->>R: create order
+  A-->>D: order + checkout options
+  D->>R: open Checkout popup (checkout.js)
+  U->>R: pay (UPI / card / netbanking)
+  R-->>D: handler(razorpay_payment_id, razorpay_order_id, razorpay_signature)
+  D->>A: POST /billing/orders/:id/confirm
+  A->>R: fetch the order's payments
+  A->>A: invoice + credits
+  A-->>D: order (FULFILLED)
 ```
 
-**201:**
+#### `Order` object
+
+Returned by every endpoint in this section.
 
 ```json
 {
   "orderId": "6723d1e2c1d2e3f4a5b6c801",
   "orderNumber": "ORD-2026-000123",
   "status": "PENDING_PAYMENT",
-  "checkoutUrl": "https://gateway.example/checkout/…",
-  "expiresAt": "2026-10-31T10:45:00.000Z"
-}
-```
-
-Redirect the browser to `checkoutUrl`. The gateway sends the user back to `/credits/payment/return?orderId=…`.
-
-**Errors:**
-
-| HTTP | `code` | UI behaviour |
-|---|---|---|
-| 409 | `QUOTE_EXPIRED` | Request a new quote. If the total changed, ask the user to confirm; otherwise retry Pay |
-| 422 | `COUPON_INVALID` | Remove the coupon, show the new total and ask the user to confirm |
-| 422 | `BILLING_PROFILE_INCOMPLETE` | Show the billing details form |
-| 503 | `PAYMENTS_UNAVAILABLE` | "Payments are temporarily unavailable", with a retry |
-
-#### 6.2 `GET /api/v1/billing/orders/:orderId`
-
-Polled by the return page every 2 seconds, for up to 60 seconds.
-
-**200:**
-
-```json
-{
-  "orderId": "6723d1e2c1d2e3f4a5b6c801",
-  "orderNumber": "ORD-2026-000123",
-  "status": "FULFILLED",
   "appId": "98f0815cf8c2096a2b54ea1746f5b9538a72",
   "appName": "Acme KYC",
   "currency": "INR",
   "totalMinor": 203469,
   "credits": 2499,
-  "invoice": { "invoiceId": "6723c4d2c1d2e3f4a5b6c7f0", "invoiceNumber": "HS/IN/2026-27/000124" },
+  "validityDays": 30,
+  "expiresAt": "2026-11-03T10:45:00.000Z",
+  "checkout": {
+    "provider": "razorpay",
+    "keyId": "rzp_test_XXXXXXXXXXXX",
+    "providerOrderId": "order_PbX1yZ2abc",
+    "amountMinor": 203469,
+    "currency": "INR",
+    "name": "Hypersign",
+    "description": "2,499 credits for Acme KYC",
+    "prefill": { "name": "Acme Private Limited", "email": "billing@acme.example" }
+  },
+  "payment": null,
+  "lastPaymentError": null,
+  "invoice": null,
+  "creditPlanId": null,
+  "creditsActive": null,
   "failureReason": null
 }
 ```
 
-How the return page uses `status`:
-
-| `status` | Return page shows |
+| Field | Notes |
 |---|---|
-| `FULFILLED` | "{credits} credits added", with **Download invoice** |
-| `PENDING_PAYMENT`, `PAID` | Keep polling. After 60 seconds: "Payment processing; credits will appear once confirmed" |
-| `FAILED`, `EXPIRED`, `CANCELLED` | Failure message with **Try again** |
-| `NEEDS_REVIEW` | "We're checking your payment. Our team will contact you." |
+| `status` | `OrderStatus`, see the table under 6.2 |
+| `checkout` | Set only while the order can be paid (`PENDING_PAYMENT` and before `expiresAt`); otherwise `null`. Everything the popup needs |
+| `payment` | Once paid: `{ "paymentId": "pay_…", "method": "upi", "paidAt": "…" }` |
+| `lastPaymentError` | The last failed attempt, `{ "code", "description" }`. Razorpay's `description` is safe to show. The order stays payable: the customer can try again |
+| `invoice` | Once fulfilled: `{ "invoiceId", "invoiceNumber" }`. Download it as in §4 |
+| `creditsActive` | Once fulfilled: `IMMEDIATELY`, or `AFTER_CURRENT_PLAN` (the app already has an active plan; the new one starts when that one runs low) |
+| `failureReason` | `COUPON_INVALID`, `CHECKOUT_NOT_CREATED` (on `FAILED`), `AMOUNT_MISMATCH` (on `NEEDS_REVIEW`), else `null` |
 
-#### 6.3 `POST /api/v1/billing/orders/:orderId/cancel`
+An order is payable for **30 minutes**. After that, request a new quote and create a new order.
 
-The customer abandons an unpaid order. No body.
+#### 6.1 `POST /api/v1/billing/orders`
 
-- **200:** the order, with `status: "CANCELLED"`.
+Pay. Header: `Idempotency-Key` (a new UUID per Pay click; reuse it when retrying the same click). Needs `WRITE_BILLING`.
 
-### 7. Paying an unpaid invoice
+```json
+{ "quoteId": "6723b0a1c1d2e3f4a5b6c7e9" }
+```
 
-- **Customers:** an `UNPAID` `InvoiceSummary` has `dueAt` and `payNowUrl`. **Pay now** opens `payNowUrl`.
-- **Super admin, Collect payment:** `POST /admin/billing/invoices` with `"isPaid": false` and optional `recipients` returns:
+**201:** the `Order`, with `status: "PENDING_PAYMENT"` and `checkout` set. The same key with the same `quoteId` returns the same order.
+
+Then open the popup:
+
+```js
+// <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+const rzp = new Razorpay({
+  key: order.checkout.keyId,
+  order_id: order.checkout.providerOrderId,
+  amount: order.checkout.amountMinor,
+  currency: order.checkout.currency,
+  name: order.checkout.name,
+  description: order.checkout.description,
+  prefill: order.checkout.prefill,
+  notes: { orderNumber: order.orderNumber },
+  handler: (r) =>
+    confirm(order.orderId, {
+      providerOrderId: r.razorpay_order_id,
+      paymentId: r.razorpay_payment_id,
+      signature: r.razorpay_signature,
+    }),
+  modal: { ondismiss: () => pollOrder(order.orderId) },
+});
+rzp.on('payment.failed', () => { /* Razorpay shows the error and lets the user retry in the popup */ });
+rzp.open();
+```
+
+**Errors:**
+
+| HTTP | `code` | UI behaviour |
+|---|---|---|
+| 400 | `VALIDATION_FAILED` | Missing `Idempotency-Key`, or `quoteId` isn't an id |
+| 409 | `QUOTE_EXPIRED` | Request a new quote. If the total changed, ask the user to confirm; otherwise retry Pay with a new key. `details.reason`: `QUOTE_EXPIRED`, `PRICES_CHANGED`, `TAX_CHANGED`, `REGION_CHANGED` |
+| 409 | `IDEMPOTENCY_KEY_REUSED` | The key was used for another quote: a dashboard bug; use a new key |
+| 422 | `COUPON_INVALID` | Remove the coupon, re-quote, show the new total and ask the user to confirm |
+| 422 | `BILLING_PROFILE_INCOMPLETE` | Show the billing details form (`details.missingFields`) |
+| 503 | `PAYMENTS_UNAVAILABLE` | "Payments are temporarily unavailable", with a retry (same key) |
+| 503 | `BILLING_NOT_CONFIGURED` | As above. Our invoice settings are missing; nothing is charged |
+
+#### 6.2 `POST /api/v1/billing/orders/:orderId/confirm`
+
+Called from the popup's `handler`. Needs `WRITE_BILLING`.
 
 ```json
 {
-  "invoice": { "…": "InvoiceSummary with status UNPAID" },
-  "paymentLink": { "url": "https://gateway.example/pay/…", "expiresAt": "2026-11-15T09:00:00.000Z", "sentTo": ["billing@acme.example"] }
+  "providerOrderId": "order_PbX1yZ2abc",
+  "paymentId": "pay_PbX2AbCdEf",
+  "signature": "9ef4dffbfd84f1318f6739a3ce19f9d85851857ae648f114332d8401e0949a3d"
 }
 ```
 
-- **Super-admin actions on an unpaid invoice:**
+The three values are Razorpay's `razorpay_order_id`, `razorpay_payment_id` and `razorpay_signature`, renamed.
 
-| Endpoint | Body | Effect |
+**200:** the `Order`. Usually `FULFILLED` already. If it's still `PENDING_PAYMENT` or `PAID`, poll 6.3.
+
+| HTTP | `code` | UI behaviour |
 |---|---|---|
-| `POST /admin/billing/invoices/:id/mark-paid` | `{ "method": "BANK_TRANSFER", "reference": "UTR…", "paidAt": "2026-11-02" }` | Settles the invoice and activates its credits |
-| `POST /admin/billing/invoices/:id/payment-link` | none | Creates a new link after the old one expired |
-| `POST /admin/billing/invoices/:id/remind` | none | Emails the link again |
-| `POST /admin/billing/invoices/:id/void` | `{ "reason": "…" }` | Voids the invoice. No credits are granted |
+| 400 | `PAYMENT_VERIFICATION_FAILED` | Don't show success. Poll 6.3: if the payment was real, the order still becomes `FULFILLED` |
+| 404 | `ORDER_NOT_FOUND` | — |
+| 409 | `ORDER_NOT_PAYABLE` | The order never reached the gateway |
+
+#### 6.3 `GET /api/v1/billing/orders/:orderId`
+
+The order's status. Needs `READ_BILLING`. While the order is open, the server re-checks Razorpay (at most every 5 seconds), so polling also finds payments the popup didn't report (closed tab, slow UPI approval).
+
+Poll every 2 seconds for up to 60 seconds after confirm or after the popup is dismissed.
+
+| `status` | Dashboard shows |
+|---|---|
+| `FULFILLED` | "{credits} credits added", with **Download invoice**. With `creditsActive: "AFTER_CURRENT_PLAN"`: "They start when your current plan runs low" |
+| `PENDING_PAYMENT` | Keep polling. With `lastPaymentError`: "Payment failed: {description}", with **Try again** (reopen the popup with the same `checkout`, while it isn't `null`). After 60 seconds: "Payment not completed" with **Try again** and **Cancel** |
+| `PAID` | Keep polling: credits are being added. After 60 seconds: "Payment received; credits will appear shortly" |
+| `EXPIRED`, `CANCELLED`, `FAILED` | "Payment not completed", with **Start again** (new quote, new order) |
+| `NEEDS_REVIEW` | "We're checking your payment. Our team will contact you." |
+
+An `EXPIRED` or `CANCELLED` order can still become `FULFILLED` if Razorpay reports a late payment: the money was taken, so the credits are granted.
+
+#### 6.4 `POST /api/v1/billing/orders/:orderId/cancel`
+
+The customer gives up on an unpaid order: frees the coupon straight away. No body. Needs `WRITE_BILLING`.
+
+- **200:** the `Order`, normally `CANCELLED`. If the payment went through meanwhile, it comes back `FULFILLED` instead: show success.
+- **409 `ORDER_NOT_CANCELLABLE`:** the order is already paid.
+
+### 7. Collect payment (payment links)
+
+The super admin's third option on **Recharge Service Credits**. It creates a Razorpay payment link for the amount with tax. Razorpay can email it to the customer, and the super admin can copy it and send it any way they like. **No invoice exists until the customer pays.** Then the server issues the invoice (`source: "ADMIN"`, `settlement: "GATEWAY"`) and grants the credits, exactly as for **Already paid**. An expired or voided link leaves nothing behind.
+
+Payment status comes from Razorpay's API (no webhooks yet): the server checks open links every 15 minutes, and whenever a link is opened with `GET`. India only for now.
+
+#### `PaymentLink` object
+
+```json
+{
+  "orderId": "6729f0a1c1d2e3f4a5b6c901",
+  "orderNumber": "ORD-2026-000009",
+  "status": "PENDING_PAYMENT",
+  "org": { "orgId": "69832fafec5bf58b25caff2b", "companyName": "Acme Technologies" },
+  "appId": "98f0815cf8c2096a2b54ea1746f5b9538a72",
+  "appName": "Acme KYC",
+  "currency": "INR",
+  "totalBeforeTaxMinor": 4000000,
+  "tax": { "amountMinor": 720000, "lines": [{ "type": "IGST", "rateBps": 1800, "amountMinor": 720000 }] },
+  "totalMinor": 4720000,
+  "credits": 40000,
+  "validityDays": 30,
+  "url": "https://rzp.io/i/AbC123",
+  "expiresAt": "2026-11-18T09:00:00.000Z",
+  "notifyByEmail": true,
+  "sentTo": "billing@acme.example",
+  "lastSentAt": "2026-11-03T09:00:00.000Z",
+  "payment": null,
+  "invoice": null,
+  "creditPlanId": null,
+  "failureReason": null,
+  "createdBy": "<super admin userId>",
+  "createdAt": "2026-11-03T09:00:00.000Z",
+  "cancelledAt": null,
+  "cancelReason": null,
+  "note": "Annual prepay"
+}
+```
+
+| `status` | Meaning | Badge and actions |
+|---|---|---|
+| `PENDING_PAYMENT` | Open: waiting for the customer | "Awaiting payment". **Copy link**, **Resend email**, **Void** |
+| `PAID` | Paid; the invoice and credits are being added | "Processing" |
+| `FULFILLED` | Paid, invoiced, credits granted | "Paid". **Download invoice** (`invoice.invoiceId`, §5) |
+| `EXPIRED` | Not paid in time | "Expired". To collect again, create a new link |
+| `CANCELLED` | Voided by a super admin (`cancelReason`) | "Void" |
+| `FAILED` | Razorpay never created the link (`failureReason: "CHECKOUT_NOT_CREATED"`) | "Failed". Create a new one |
+| `NEEDS_REVIEW` | The amount paid doesn't match (`failureReason: "AMOUNT_MISMATCH"`) | "Needs review". No credits; contact support |
+| `CREATED` | Briefly, before Razorpay answers | "Creating…" |
+
+`url` is `null` until the link exists. `sentTo` is `null` when the link wasn't emailed (`notifyByEmail: false`).
+
+#### 7.1 Create: `POST /api/v1/admin/billing/invoices` with `"isPaid": false`
+
+The same endpoint, body and `Idempotency-Key` as §5, plus the optional `notifyByEmail`, `notifyEmail` and `linkExpiresInDays`:
+
+```json
+{
+  "appId": "98f0815cf8c2096a2b54ea1746f5b9538a72",
+  "credits": 40000,
+  "validityDays": 30,
+  "amountMinor": 4000000,
+  "isPaid": false,
+  "notifyByEmail": true,
+  "linkExpiresInDays": 15,
+  "note": "Annual prepay"
+}
+```
+
+**201:**
+
+```json
+{ "invoice": null, "paymentLink": { "…": "PaymentLink, status PENDING_PAYMENT, url set" } }
+```
+
+The result card shows the amount, "Link sent to {sentTo}" (or "Copy the link and send it to the customer"), the link with **Copy**, and the expiry date. There is no invoice to download yet.
+
+**Errors:** as in §5, plus:
+
+| HTTP | `code` | UI behaviour |
+|---|---|---|
+| 422 | `PAYMENTS_NOT_AVAILABLE` | "Collect payment isn't available for this customer yet" (not India, or payments are off) |
+| 503 | `PAYMENTS_UNAVAILABLE` | "The payment link could not be created." **Retry** resends the same request with the same key |
+| 409 | `IDEMPOTENCY_KEY_REUSED` | The same key with a different body. Use a new key |
+
+#### 7.2 `GET /api/v1/admin/billing/payment-links?orgId=…&appId=…&status=…&page=…&limit=…`
+
+All payment links, newest first. Filters are optional; `status` is a `PaymentLink` status. A paginated list of `PaymentLink`. Show it as a "Payment links" tab or table on the page, with the badges above.
+
+#### 7.3 `GET /api/v1/admin/billing/payment-links/:orderId`
+
+One link. While it's open, the server first asks Razorpay for its status, so opening it shows a payment straight away.
+
+- **200:** `PaymentLink`. **404 `ORDER_NOT_FOUND`**
+
+#### 7.4 `POST /api/v1/admin/billing/payment-links/:orderId/resend`
+
+Razorpay emails the link again (to `sentTo`, or the billing email if it was never emailed). No body.
+
+- **200:** `PaymentLink` with a new `lastSentAt`.
+- **409 `ORDER_NOT_PAYABLE`:** the link isn't open any more.
+- **503 `PAYMENTS_UNAVAILABLE`:** Razorpay didn't answer; retry.
+
+#### 7.5 `POST /api/v1/admin/billing/payment-links/:orderId/cancel`
+
+**Void.** Cancels the link at Razorpay, so it can't be paid any more.
+
+```json
+{ "reason": "Customer paid by bank transfer instead" }
+```
+
+- **200:** `PaymentLink` with `status: "CANCELLED"`. Voiding an already closed link returns it unchanged.
+- **409 `ORDER_NOT_CANCELLABLE`:** the customer has already paid. Refresh: the link is `FULFILLED`.
+- **503 `PAYMENTS_UNAVAILABLE`:** Razorpay didn't answer; retry.
+
+If the customer paid some other way, void the link, then use **Already paid**.
+
+#### 7.6 Customer: `GET /api/v1/billing/payment-links?appId=…`
+
+The organisation's open links, for "Awaiting payment" rows in Credit Purchase History. Needs `READ_BILLING`. `appId` is optional.
+
+```json
+{
+  "data": [
+    {
+      "orderId": "6729f0a1c1d2e3f4a5b6c901",
+      "orderNumber": "ORD-2026-000009",
+      "appId": "98f0815cf8c2096a2b54ea1746f5b9538a72",
+      "appName": "Acme KYC",
+      "currency": "INR",
+      "totalMinor": 4720000,
+      "credits": 40000,
+      "validityDays": 30,
+      "url": "https://rzp.io/i/AbC123",
+      "expiresAt": "2026-11-18T09:00:00.000Z",
+      "createdAt": "2026-11-03T09:00:00.000Z"
+    }
+  ]
+}
+```
+
+Show each one as "{credits} credits · Awaiting payment · Due by {expiresAt}" with **Pay now**, which opens `url` in a new tab. Once paid, the row disappears from this list and the invoice and plan appear as usual.
 
 ---
 
@@ -733,3 +952,5 @@ The customer abandons an unpaid order. No body.
 | 2026-11-01 | Invoices: PDFs are rendered by the dashboard. `GET /billing/invoices/:id/download` and `GET /admin/billing/invoices/:id/download` are replaced by `GET /billing/invoices/:id` and `GET /admin/billing/invoices/:id`, which return the new `InvoiceDocument` object (§4). `POST /billing/invoices/:id/email` is deferred. |
 | 2026-10-31 | Global charges no tax: `taxMode` and `tax.mode` are `NONE` with `tax.amountMinor: 0` (was `CALCULATED_AT_CHECKOUT` with `null`). India unchanged: a single "GST 18%" line until the customer's state is known. |
 | 2026-10-31 | §2 and §3.3 implemented: `GET`/`PUT /customer-onboarding/billing` and `POST /billing/quotes`. §2: `complete` also requires a saved profile. §3.3: added `429 RATE_LIMITED` for repeated rejected coupon codes. |
+| 2026-11-03 | §6 agreed for phase 1 (India, Razorpay Standard Checkout, no webhooks): `POST /billing/orders` returns `checkout` options instead of `checkoutUrl`; new `POST /billing/orders/:id/confirm`; the `Order` object gains `validityDays`, `checkout`, `payment`, `lastPaymentError`, `creditPlanId`, `creditsActive`; cancel is 6.4. New codes `IDEMPOTENCY_KEY_REUSED`, `PAYMENT_VERIFICATION_FAILED`, `ORDER_NOT_FOUND`, `ORDER_NOT_PAYABLE`, `ORDER_NOT_CANCELLABLE`. §7 stays provisional (phase 2). |
+| 2026-11-03 | §7 agreed: Collect payment creates a Razorpay payment link (`POST /admin/billing/invoices` with `isPaid: false` returns `{ invoice: null, paymentLink }`). The invoice is issued only when the link is paid (Q11: no unpaid invoices). `recipients` is replaced by `notifyByEmail`, `notifyEmail` and `linkExpiresInDays`. New `GET /admin/billing/payment-links`, `GET …/:id`, `POST …/:id/resend`, `POST …/:id/cancel`, and customer `GET /billing/payment-links`. `mark-paid` is dropped: void the link and use Already paid. Preview: `willIssueAs.status: AWAITING_PAYMENT`, `creditsActive: WHEN_PAID`. |

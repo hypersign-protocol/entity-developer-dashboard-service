@@ -1465,101 +1465,101 @@ export class CustomerOnboardingService {
               break;
             }
 
-            case OnboardingStep.REGISTER_DID: {
-              Logger.log(
-                'REGISTER_DID step started',
-                'CustomerOnboardingService',
-              );
-              if (!ssiService && customerOnboardingData.ssiServiceId) {
-                ssiService = await this.appAuthRepository.findOne({
-                  appId: customerOnboardingData.ssiServiceId,
-                });
-              }
+            // case OnboardingStep.REGISTER_DID: {
+            //   Logger.log(
+            //     'REGISTER_DID step started',
+            //     'CustomerOnboardingService',
+            //   );
+            //   if (!ssiService && customerOnboardingData.ssiServiceId) {
+            //     ssiService = await this.appAuthRepository.findOne({
+            //       appId: customerOnboardingData.ssiServiceId,
+            //     });
+            //   }
 
-              Logger.debug(`ssiService: ${ssiService._id}`);
+            //   Logger.debug(`ssiService: ${ssiService._id}`);
 
-              const ssiServiceDetail = await redisClient.get(ssiRedisKey);
-              const defaultAccessList = getAccessListForModule(
-                TokenModule.DASHBOARD,
-                SERVICE_TYPES.SSI_API,
-              );
-              const accessList = evaluateAccessPolicy(
-                defaultAccessList,
-                SERVICE_TYPES.SSI_API,
-                userDetail.accessList,
-                Context.idDashboard,
-              );
-              if (!ssiServiceDetail) {
-                await this.appAuthService.storeDataInRedis(
-                  GRANT_TYPES.access_service_ssi,
-                  ssiService,
-                  accessList,
-                  ssiRedisKey,
-                );
-              }
-              ssiAccessToken =
-                ssiAccessToken ||
-                (await this.appAuthService.getAccessToken(
-                  {
-                    appId:
-                      ssiService?.appId || customerOnboardingData.ssiServiceId,
-                    grantType: GRANT_TYPES.access_service_ssi,
-                    appname: ssiService?.appName,
-                    subdomain:
-                      ssiService?.subdomain ||
-                      customerOnboardingData.ssiSubdomain,
-                    sessionId: ssiRedisKey,
-                  },
-                  EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
-                  EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
-                ));
+            //   const ssiServiceDetail = await redisClient.get(ssiRedisKey);
+            //   const defaultAccessList = getAccessListForModule(
+            //     TokenModule.DASHBOARD,
+            //     SERVICE_TYPES.SSI_API,
+            //   );
+            //   const accessList = evaluateAccessPolicy(
+            //     defaultAccessList,
+            //     SERVICE_TYPES.SSI_API,
+            //     userDetail.accessList,
+            //     Context.idDashboard,
+            //   );
+            //   if (!ssiServiceDetail) {
+            //     await this.appAuthService.storeDataInRedis(
+            //       GRANT_TYPES.access_service_ssi,
+            //       ssiService,
+            //       accessList,
+            //       ssiRedisKey,
+            //     );
+            //   }
+            //   ssiAccessToken =
+            //     ssiAccessToken ||
+            //     (await this.appAuthService.getAccessToken(
+            //       {
+            //         appId:
+            //           ssiService?.appId || customerOnboardingData.ssiServiceId,
+            //         grantType: GRANT_TYPES.access_service_ssi,
+            //         appname: ssiService?.appName,
+            //         subdomain:
+            //           ssiService?.subdomain ||
+            //           customerOnboardingData.ssiSubdomain,
+            //         sessionId: ssiRedisKey,
+            //       },
+            //       EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
+            //       EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
+            //     ));
 
-              const didToRegister =
-                issuerDidData?.did || customerOnboardingData.businessId;
+            //   const didToRegister =
+            //     issuerDidData?.did || customerOnboardingData.businessId;
 
-              if (!didDocument) {
-                const resolvedDidData = await this.makeExternalRequest(
-                  `${sanitizeUrl(
-                    ssiTenantUrl,
-                    true,
-                  )}api/v1/did/resolve/${didToRegister}`,
-                  {
-                    method: 'GET',
-                    headers: {
-                      authorization: `Bearer ${ssiAccessToken.access_token}`,
-                      'Content-Type': 'application/json',
-                      origin: ssiService?.whitelistedCors[0],
-                    },
-                  },
-                  'Failed to resolve DID',
-                );
-                didDocument = resolvedDidData.didDocument;
-              }
+            //   if (!didDocument) {
+            //     const resolvedDidData = await this.makeExternalRequest(
+            //       `${sanitizeUrl(
+            //         ssiTenantUrl,
+            //         true,
+            //       )}api/v1/did/resolve/${didToRegister}`,
+            //       {
+            //         method: 'GET',
+            //         headers: {
+            //           authorization: `Bearer ${ssiAccessToken.access_token}`,
+            //           'Content-Type': 'application/json',
+            //           origin: ssiService?.whitelistedCors[0],
+            //         },
+            //       },
+            //       'Failed to resolve DID',
+            //     );
+            //     didDocument = resolvedDidData.didDocument;
+            //   }
 
-              await this.makeExternalRequest(
-                `${sanitizeUrl(ssiTenantUrl, true)}api/v1/did/register/v2`,
-                {
-                  method: 'POST',
-                  headers: {
-                    authorization: `Bearer ${ssiAccessToken.access_token}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    didDocument,
-                    signInfos: this.getDidRegisterSignInfos(
-                      didToRegister,
-                      useBabyJubJubIssuer,
-                    ),
-                  }),
-                },
-                'Failed to register DID',
-              );
-              Logger.debug(
-                'REGISTER_DID step ends',
-                'CustomerOnboardingService',
-              );
-              break;
-            }
+            //   await this.makeExternalRequest(
+            //     `${sanitizeUrl(ssiTenantUrl, true)}api/v1/did/register/v2`,
+            //     {
+            //       method: 'POST',
+            //       headers: {
+            //         authorization: `Bearer ${ssiAccessToken.access_token}`,
+            //         'Content-Type': 'application/json',
+            //       },
+            //       body: JSON.stringify({
+            //         didDocument,
+            //         signInfos: this.getDidRegisterSignInfos(
+            //           didToRegister,
+            //           useBabyJubJubIssuer,
+            //         ),
+            //       }),
+            //     },
+            //     'Failed to register DID',
+            //   );
+            //   Logger.debug(
+            //     'REGISTER_DID step ends',
+            //     'CustomerOnboardingService',
+            //   );
+            //   break;
+            // }
 
             case OnboardingStep.CREATE_KYC_SERVICE: {
               Logger.log(

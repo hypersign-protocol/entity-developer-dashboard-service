@@ -1,5 +1,11 @@
 import { buildBillingProfile } from '../profile/billing-profile';
-import { buildAdminInvoice, priceAdminInvoice } from './build-invoice';
+import { indiaGst } from '../tax/india-gst';
+import {
+  buildAdminInvoice,
+  buildLinkPaidInvoice,
+  buildSelfServeInvoice,
+  priceAdminInvoice,
+} from './build-invoice';
 import { Supplier, supplierProblems } from './supplier';
 
 const supplier: Supplier = {
@@ -179,5 +185,117 @@ describe('supplierProblems', () => {
       'BILLING_SUPPLIER_GSTIN must start with BILLING_SUPPLIER_STATE_CODE',
       'BILLING_SUPPLIER_PAN must match characters 3–12 of the GSTIN',
     ]);
+  });
+});
+
+describe('buildSelfServeInvoice', () => {
+  // ₹2,499 plan, 25% plan discount, FOUNDING8: the shared fixture.
+  const lines = {
+    subtotalMinor: 249900,
+    planDiscount: { percentBps: 2500, amountMinor: 62475 },
+    coupon: { code: 'FOUNDING8', percentBps: 800, amountMinor: 14994 },
+    addOns: [{ code: 'VALIDITY', title: 'Credit validity' }],
+    totalBeforeTaxMinor: 172431,
+  };
+  const input = (gstStateCode: string) => ({
+    orderNumber: 'ORD-2026-000123',
+    lines,
+    tax: indiaGst(172431, gstStateCode, '29').lines,
+    credits: 2499,
+    validityDays: 30,
+    payment: {
+      provider: 'razorpay',
+      paymentId: 'pay_123',
+      method: 'upi',
+      paidAt: new Date('2026-11-01T08:59:00Z'),
+    },
+    profile: profile('IN', gstStateCode),
+    supplier,
+    app: base.app,
+    now: base.now,
+  });
+
+  it('prints the quote: discounts, coupon, IGST and the gateway payment', () => {
+    const invoice = buildSelfServeInvoice(input('27'));
+    expect(invoice).toMatchObject({
+      source: 'SELF_SERVE',
+      status: 'PAID',
+      settlement: 'GATEWAY',
+      orderNumber: 'ORD-2026-000123',
+      lines: [
+        {
+          unitPriceMinor: 249900,
+          discountMinor: 77469,
+          taxableMinor: 172431,
+        },
+      ],
+      discounts: {
+        plan: { percentBps: 2500, amountMinor: 62475 },
+        coupon: { code: 'FOUNDING8', percentBps: 800, amountMinor: 14994 },
+      },
+      tax: [{ type: 'IGST', rateBps: 1800, amountMinor: 31038 }],
+      placeOfSupply: { code: '27', name: 'Maharashtra' },
+      totals: {
+        subtotalMinor: 249900,
+        discountMinor: 77469,
+        taxableMinor: 172431,
+        taxMinor: 31038,
+        totalMinor: 203469,
+        amountPaidMinor: 203469,
+        balanceDueMinor: 0,
+      },
+      payment: {
+        method: 'upi',
+        reference: 'pay_123',
+        provider: 'razorpay',
+        paymentId: 'pay_123',
+      },
+      addOnLines: [{ code: 'VALIDITY', title: 'Credit validity' }],
+    });
+  });
+
+  it('splits CGST and SGST in our state, and omits an empty plan discount', () => {
+    const invoice = buildSelfServeInvoice({
+      ...input('29'),
+      lines: {
+        ...lines,
+        planDiscount: { percentBps: 0, amountMinor: 0 },
+        coupon: null,
+      },
+    });
+    expect(invoice.tax.map((t) => t.type)).toEqual(['CGST', 'SGST']);
+    expect(invoice.discounts).toEqual({ plan: null, coupon: null });
+  });
+});
+
+describe('buildLinkPaidInvoice', () => {
+  it('is a super-admin invoice settled by the gateway', () => {
+    const invoice = buildLinkPaidInvoice({
+      ...base,
+      amountMinor: 4000000,
+      profile: profile('IN', '27'),
+      orderNumber: 'ORD-2026-000009',
+      payment: {
+        provider: 'razorpay',
+        paymentId: 'pay_9',
+        method: 'netbanking',
+        paidAt: new Date('2026-11-05T10:00:00Z'),
+      },
+    });
+    expect(invoice).toMatchObject({
+      source: 'ADMIN',
+      status: 'PAID',
+      settlement: 'GATEWAY',
+      orderNumber: 'ORD-2026-000009',
+      tax: [{ type: 'IGST', rateBps: 1800, amountMinor: 720000 }],
+      totals: { totalMinor: 4720000, balanceDueMinor: 0 },
+      paidAt: new Date('2026-11-05T10:00:00Z'),
+      payment: {
+        method: 'netbanking',
+        reference: 'pay_9',
+        provider: 'razorpay',
+        paymentId: 'pay_9',
+      },
+    });
   });
 });

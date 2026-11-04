@@ -44,6 +44,12 @@ export enum BillingErrorCode {
   IDEMPOTENCY_KEY_REUSED = 'IDEMPOTENCY_KEY_REUSED',
   BILLING_NOT_CONFIGURED = 'BILLING_NOT_CONFIGURED',
   USE_INVOICES = 'USE_INVOICES',
+  PAYMENTS_UNAVAILABLE = 'PAYMENTS_UNAVAILABLE',
+  QUOTE_EXPIRED = 'QUOTE_EXPIRED',
+  ORDER_NOT_FOUND = 'ORDER_NOT_FOUND',
+  ORDER_NOT_PAYABLE = 'ORDER_NOT_PAYABLE',
+  ORDER_NOT_CANCELLABLE = 'ORDER_NOT_CANCELLABLE',
+  PAYMENT_VERIFICATION_FAILED = 'PAYMENT_VERIFICATION_FAILED',
 }
 
 /** Once true, ID Service credits can only be granted through invoices (POST /app/:appId/credits returns 409). */
@@ -59,7 +65,12 @@ export function isBillingEnabled(region: BillingRegion): boolean {
     .includes(region);
 }
 
-/** Pay stays off until a payment gateway is connected (stage 2). */
-export function isPayEnabled(): boolean {
-  return process.env.BILLING_PAY_ENABLED === 'true';
+// Online payment per region. Phase 1: India only, through Razorpay.
+export const PAY_PROVIDER: Partial<Record<BillingRegion, string>> = {
+  [BillingRegion.IN]: 'razorpay',
+};
+
+/** Pay is offered when BILLING_PAY_ENABLED=true and the region has a provider. */
+export function isPayEnabled(region: BillingRegion): boolean {
+  return process.env.BILLING_PAY_ENABLED === 'true' && !!PAY_PROVIDER[region];
 }

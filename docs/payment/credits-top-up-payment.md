@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Proposed |
-| **Date** | 2026-10-22 (updated 2026-10-28 to match the popup agreed with Business, again on 2026-10-28 after a backend review against the existing schemas, §4.0 and §14, and on 2026-10-31 after the organisation migration put `orgId` on apps, roles and team rows, §4.0 and §4.1; the billing profile reuses the onboarding API, §4.1 and §5.1; rollout in two stages, invoicing before payments, with the epics tracked in [epics.md](epics.md), §11; on 2026-11-01 invoice PDFs moved to the dashboard, rendered from stored invoice data, and invoice email was deferred, §8.3) |
+| **Date** | 2026-10-22 (updated 2026-10-28 to match the popup agreed with Business, again on 2026-10-28 after a backend review against the existing schemas, §4.0 and §14, and on 2026-10-31 after the organisation migration put `orgId` on apps, roles and team rows, §4.0 and §4.1; the billing profile reuses the onboarding API, §4.1 and §5.1; rollout in two stages, invoicing before payments, with the epics tracked in [epics.md](epics.md), §11; on 2026-11-01 open questions 2, 4, 10 and 17 were answered, invoice PDFs moved to the dashboard, rendered from stored invoice data, and invoice email was deferred, §8.3) |
 | **Author** | Vishwas Bhushan |
 | **Deciders** | Engineering (dashboard service, credit middleware, dashboard UI), Business, Finance |
 | **ADR number** | To be assigned (follows ADR-011) |
@@ -47,7 +47,7 @@ This ADR decides how the backend supports both flows: self-serve top-ups and sup
 2. **Money is stored as integers in minor units** (paise, cents). Percentages are stored as integer **basis points** (46.5% = `4650`). There are no floating-point numbers anywhere.
 3. **The region is fixed by the account's billing profile,** not chosen in the UI. The "Preview as" switch in the popup exists only for the sign-off build.
 4. **Pricing is versioned.** Plans, discounts and add-ons belong to a **price book** that is published as a whole. Every quote, order and invoice records the version it used. It is called a price book, not a catalog, because the credit middleware's API price catalog already owns `catalogVersion`.
-5. **Credits are granted only after a verified gateway webhook,** never after the browser redirect. The grant is idempotent per order.
+5. **Credits are granted only after a verified gateway webhook,** never after the browser redirect. (Phase 1 has no webhooks: a captured payment read from the provider's API counts instead, §6.2.) The grant is idempotent per order.
 6. **Payment gateways sit behind a `PaymentProvider` interface,** and a router picks the provider by region and currency. We start with hosted checkout pages, which keeps card data off our servers (PCI SAQ-A).
 7. **Our system owns invoicing; gateways only take payments.** We issue every invoice ourselves, numbered in sequence, and the dashboard renders it as a PDF from the stored invoice data whenever it is downloaded (we don't store PDF files, §8.3). Customers download it from the dashboard. Invoices don't depend on any gateway, so we can run several gateways, including ones without invoicing. Gateway receipts are extras and are not the invoice of record.
 8. **Purchased credits reuse the existing `CreditPlan` model and `CreditService.grantCredit`.** The existing `source` (`PAYMENT`, `MANUAL_RECHARGE`) and `referenceId` (`'invoice:<invoiceId>'`, already unique per app) cover provenance and idempotency. Only `invoiceId` and `revokedCredits` are added (§4.6). Consumption, expiry, the ledger and the dashboard's balance view keep working unchanged.
@@ -885,6 +885,16 @@ sequenceDiagram
   D-->>U: "2,499 credits added" + Download invoice
 ```
 
+### 6.2 Phase 1: Razorpay without webhooks
+
+Decided 2026-11-03. It differs from §6 and §6.1 in three ways:
+
+- **Popup instead of a hosted page.** Razorpay Standard Checkout (`checkout.js`) opens on our page with the Razorpay order id. Card and UPI data still never reach our servers. `POST /billing/orders` returns checkout options instead of `checkoutUrl` (contract §6).
+- **The provider's API, not webhooks, decides.** The popup's success handler sends Razorpay's signature to `POST /billing/orders/:id/confirm`. The signature is checked against the Razorpay order id we stored, and then the order's payments are read from Razorpay (`GET /v1/orders/:id/payments`). Credits are granted only for a `captured` payment of the order's amount and currency. Polling (`GET /billing/orders/:id`) and a reconciliation job every 5 minutes run the same check, so a lost browser never loses a payment. This replaces "only signed webhooks are trusted" (§2, decision 5) for phase 1: the API read is authenticated with our key secret, which is at least as strong.
+- **Capture.** Automatic capture is switched on in the Razorpay Dashboard. The sync captures any `authorized` payment it finds, because Razorpay refunds uncaptured payments after 3 days.
+
+Orders are payable for 30 minutes (Razorpay orders don't expire on their own, so this is our rule). A payment that arrives after expiry or cancellation is still fulfilled: the money was taken at the quoted price. Webhooks come in phase 2, as one more trigger for the same sync.
+
 ## 7. Tax
 
 - **Global.** **No tax is charged** (decided 2026-10-31). Quotes and invoices for Global customers carry no tax line, and the popup shows no tax text. Services to customers outside India are an export of services, normally zero-rated under a LUT; Finance confirms the wording printed on the invoice (open question 3).
@@ -1106,23 +1116,23 @@ The breakdown into epics, their order, status and blocking questions are tracked
 
 ## 13. Open questions for Business and Finance
 
-1. **Gateways:** Razorpay for India and Stripe for Global? Which merchant accounts and entities?
-2. **USD → credits rate:** please confirm it. The popup uses 90 credits per $1. With the Global discounts, $1,499 buys 134,910 credits for $674.55 before coupons, so this needs explicit sign-off.
+1. ~~**Gateways:** Razorpay for India and Stripe for Global? Which merchant accounts and entities?~~ **Decided 2026-11-03: Razorpay for every region** (international payments enabled on the account). Phase 1: India self-serve with Standard Checkout and no webhooks (§6.2).
+2. ~~**USD → credits rate:**~~ please confirm it. The popup uses 90 credits per $1. With the Global discounts, $1,499 buys 134,910 credits for $674.55 before coupons, so this needs explicit sign-off. **Decided 2026-11-01: 90 credits per $1 is confirmed. Future work: make the rate configurable instead of fixed per price book version.**
 3. ~~**Global tax:** do we charge local tax through Stripe Tax, or treat global sales as zero-rated exports under a LUT?~~ **Decided 2026-10-31:** no tax for Global customers. Still open for Finance: the zero-rated export wording on the invoice, and that a LUT is filed.
-4. **India GST display:** may the popup show GST (18%) before checkout? With Razorpay it is the only way the amounts match.
+4. ~~**India GST display:**~~ may the popup show GST (18%) before checkout? With Razorpay it is the only way the amounts match. **Decided 2026-11-01: yes, the popup shows the GST lines from the quote.**
 5. **Refunds:** policy (none, unused credits pro rata, or within N days)? Does a refunded order still count toward coupon limits (FOUNDING's 3 purchases, REFER's first purchase)?
 6. ~~**Coupon errors:** generic or distinct messages?~~ **Decided:** always "This coupon code is not valid." (§5.1).
 7. **KYB:** must KYB be approved before buying, or only for FOUNDING coupons?
-8. **Activation:** should purchased credits become active immediately (proposed), or be queued like admin grants?
+8. **Activation:** should purchased credits become active immediately (proposed), or be queued like admin grants? **Decided for now (2026-11-03): unchanged.** A plan bought while another is active waits, with its validity not started, and switches on when the current plan reaches its low-balance level. To check: a current plan that *expires* with credits left doesn't switch on the waiting one (`processPlanExpired`).
 9. **Coupon stacking:** do coupons apply after the plan discount (proposed and built), or on the full price? Is there a cap, such as a maximum discount amount?
-10. **Credit validity wording:** India says 1 month and Global 6 months, with no carry-forward. The original wireframe said "Credits never expire". Please confirm the add-on validity is final.
-11. **Unpaid super-admin invoices:** issue a tax invoice with its number straight away (proposed), or a proforma invoice and the tax invoice only once paid? Prepaid credits may count as an advance under GST, which can require a receipt voucher at payment. Finance to confirm which document we issue.
+10. ~~**Credit validity wording:**~~ India says 1 month and Global 6 months, with no carry-forward. The original wireframe said "Credits never expire". Please confirm the add-on validity is final. **Decided 2026-11-01: confirmed, India 1 month and Global 6 months, no carry-forward.**
+11. ~~**Unpaid super-admin invoices (phase 2):** issue a tax invoice with its number straight away (proposed), or a proforma invoice and the tax invoice only once paid? Prepaid credits may count as an advance under GST, which can require a receipt voucher at payment. Finance to confirm which document we issue.~~ **Decided 2026-11-03: no unpaid invoices.** Collect payment creates a payment link backed by an `ADMIN` order; the tax invoice is issued once the payment is captured (the approach recommended in §14.2, "make the super-admin invoice an `Order` too"). Finance can still ask for a proforma document for the link later.
 12. ~~**Tax on super-admin invoices for Global customers.**~~ **Decided 2026-10-31:** no tax, as for self-serve (see 3).
 13. **Controls on `isPaid = true` and complimentary invoices:** every super admin can create invoices in v1. Is the audit trail on the invoice enough, or do we need a separate billing-admin role, or a second approver above an amount? What amount?
 14. **E-invoicing:** is our turnover above the e-invoicing threshold, so that Indian B2B invoices need an IRN and QR code?
 15. **Complimentary invoices:** is a ₹0 tax invoice the right document for free credits, or should Finance treat them differently, for example as promotional with no tax invoice?
 16. **SSI Service recharges:** should they be invoiced too? The proposal keeps them as today's direct recharge, with no invoice, and only ID Service credits go through invoicing.
-17. **Our details on the invoice:** the legal entity name, registered address, GSTIN, PAN, billing email and SAC code (likely 998314). The sign-off build uses placeholders.
+17. ~~**Our details on the invoice:**~~ the legal entity name, registered address, GSTIN, PAN, billing email and SAC code (likely 998314). The sign-off build uses placeholders. **Done 2026-11-01: set in the production `BILLING_SUPPLIER_*` and `BILLING_SAC_CODE` settings.**
 18. **Onboarding starter credits:** onboarding grants ID Service credits directly (`source: CUSTOMER_ONBOARDING`). Should they also get a ₹0 complimentary invoice, or stay outside invoicing like SSI recharges? The proposal keeps them outside, so decision 9 covers only the recharge page and purchases.
 19. **Invoice email (deferred, not needed for v1):** the mail queue has no attachments today. Should we add PDF attachments to the mail worker (proposed, because Finance teams expect the attachment), or email a signed download link?
 20. **KYB "approved" for coupons:** `KybVerificationEnum` has both `Approved` and `Completed` ("finished, passed or failed"). Proposed: only `Approved` counts.

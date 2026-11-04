@@ -1,8 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  ArrayMaxSize,
-  IsArray,
   IsBoolean,
   IsEmail,
   IsIn,
@@ -11,6 +9,7 @@ import {
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -89,13 +88,31 @@ export class AdminInvoiceDto {
   payment?: OfflinePaymentDto;
 
   @ApiPropertyOptional({
-    description: 'Payment link recipients (Collect payment, stage 2)',
+    description:
+      'Collect payment: Razorpay emails the link (default true). false: copy the link and send it yourself',
   })
   @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(10)
-  @IsEmail({}, { each: true })
-  recipients?: string[];
+  @IsBoolean()
+  notifyByEmail?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      "Collect payment: where the link is emailed. Defaults to the profile's billing email",
+  })
+  @IsOptional()
+  @IsEmail()
+  notifyEmail?: string;
+
+  @ApiPropertyOptional({
+    example: 15,
+    description:
+      'Collect payment: days the link stays payable (1–30, default 15)',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  linkExpiresInDays?: number;
 
   @ApiPropertyOptional({ description: 'Internal, never printed' })
   @IsOptional()
@@ -116,4 +133,31 @@ export class InvoiceListQueryDto {
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) to?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) limit?: number;
+}
+
+export const PAYMENT_LINK_STATUSES = [
+  'CREATED',
+  'PENDING_PAYMENT',
+  'PAID',
+  'FULFILLED',
+  'FAILED',
+  'EXPIRED',
+  'CANCELLED',
+  'NEEDS_REVIEW',
+];
+
+export class PaymentLinkListQueryDto {
+  @IsOptional() @IsString() appId?: string;
+  @IsOptional() @IsString() orgId?: string;
+  @IsOptional() @IsIn(PAYMENT_LINK_STATUSES) status?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) limit?: number;
+}
+
+export class CancelPaymentLinkDto {
+  @ApiProperty({ example: 'Customer paid by bank transfer instead' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  reason: string;
 }

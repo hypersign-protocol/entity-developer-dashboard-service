@@ -29,6 +29,18 @@ import {
 import { PriceBook, PriceBookSchema } from './schemas/price-book.schema';
 import { Quote, QuoteSchema } from './schemas/quote.schema';
 import {
+  Order,
+  OrderSchema,
+  PaymentAttempt,
+  PaymentAttemptSchema,
+} from './schemas/order.schema';
+import { PaymentRouter } from './payments/payment-router';
+import { RazorpayProvider } from './payments/razorpay.provider';
+import { CouponReservationService } from './services/coupon-reservation.service';
+import { OrderService } from './services/order.service';
+import { PaymentLinkService } from './services/payment-link.service';
+import { PaymentReconciliationService } from './services/payment-reconciliation.service';
+import {
   BillingCounter,
   BillingCounterSchema,
   Invoice,
@@ -54,6 +66,8 @@ import { QuoteService } from './services/quote.service';
       { name: Quote.name, schema: QuoteSchema },
       { name: Invoice.name, schema: InvoiceSchema },
       { name: BillingCounter.name, schema: BillingCounterSchema },
+      { name: Order.name, schema: OrderSchema },
+      { name: PaymentAttempt.name, schema: PaymentAttemptSchema },
       { name: CreditPlan.name, schema: CreditsSchema },
       { name: CustomerOnboarding.name, schema: CustomerOnboardingSchema },
       { name: App.name, schema: AppSchema },
@@ -69,6 +83,12 @@ import { QuoteService } from './services/quote.service';
     QuoteService,
     BillingProfileService,
     InvoiceService,
+    RazorpayProvider,
+    PaymentRouter,
+    CouponReservationService,
+    OrderService,
+    PaymentLinkService,
+    PaymentReconciliationService,
   ],
   exports: [BillingProfileService],
 })

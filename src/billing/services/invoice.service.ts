@@ -27,6 +27,8 @@ import { BillingException } from '../billing.exception';
 import { AdminInvoiceDto, InvoiceListQueryDto } from '../dto/admin-invoice.dto';
 import {
   buildAdminInvoice,
+  buildLinkPaidInvoice,
+  buildSelfServeInvoice,
   InvoiceFields,
   priceAdminInvoice,
 } from '../invoices/build-invoice';
@@ -39,6 +41,7 @@ import {
   Invoice,
   InvoiceDocument,
 } from '../schemas/invoice.schema';
+import { Order } from '../schemas/order.schema';
 import {
   PriceBook,
   PriceBookDocument,
@@ -84,6 +87,11 @@ export class InvoiceService implements OnModuleInit {
         'InvoiceService',
       );
     }
+  }
+
+  /** Pay refuses to take money we couldn't invoice. */
+  assertConfigured() {
+    this.supplier();
   }
 
   private supplier(): Supplier {
@@ -152,12 +160,13 @@ export class InvoiceService implements OnModuleInit {
     };
   }
 
-  private checkRequest(dto: AdminInvoiceDto) {
+  /** `collect`: Collect payment (isPaid false) is handled by the caller. */
+  private checkRequest(dto: AdminInvoiceDto, collect = false) {
     if (dto.amountMinor === 0) return;
     const fields: Record<string, string> = {};
     if (dto.isPaid === undefined)
       fields.isPaid = 'Required when amountMinor is above 0';
-    if (dto.isPaid === false) {
+    if (dto.isPaid === false && !collect) {
       throw new BillingException(
         HttpStatus.UNPROCESSABLE_ENTITY,
         BillingErrorCode.PAYMENTS_NOT_AVAILABLE,
@@ -198,7 +207,8 @@ export class InvoiceService implements OnModuleInit {
 
   /** POST /admin/billing/invoices/preview: what create would issue, without writing. */
   async preview(dto: AdminInvoiceDto) {
-    this.checkRequest(dto);
+    this.checkRequest(dto, true);
+    const collect = dto.amountMinor > 0 && dto.isPaid === false;
     const supplier = this.supplier();
     const { profile } = await this.appAndOrg(dto.appId);
     this.requireCompleteProfile(profile);
@@ -219,12 +229,53 @@ export class InvoiceService implements OnModuleInit {
       totalBeforeTaxMinor: totals.taxableMinor,
       tax: { amountMinor: totals.taxMinor, lines: tax },
       totalMinor: totals.totalMinor,
-      willIssueAs: {
-        status: 'PAID',
-        settlement: dto.amountMinor === 0 ? 'COMPLIMENTARY' : 'OFFLINE',
-      },
+      // Collect payment: a payment link now; the invoice once it's paid.
+      willIssueAs: collect
+        ? { status: 'AWAITING_PAYMENT', settlement: 'GATEWAY' }
+        : {
+            status: 'PAID',
+            settlement: dto.amountMinor === 0 ? 'COMPLIMENTARY' : 'OFFLINE',
+          },
       // A new plan waits while another is active (today's credit behaviour).
-      creditsActive: hasActivePlan ? 'AFTER_CURRENT_PLAN' : 'IMMEDIATELY',
+      creditsActive: collect
+        ? 'WHEN_PAID'
+        : hasActivePlan
+        ? 'AFTER_CURRENT_PLAN'
+        : 'IMMEDIATELY',
+    };
+  }
+
+  /**
+   * Collect payment: everything the payment link and its later invoice need,
+   * checked as for an invoice. Nothing is written.
+   */
+  async paymentLinkDraft(dto: AdminInvoiceDto) {
+    this.checkRequest(dto, true);
+    const supplier = this.supplier();
+    const { app, org, profile } = await this.appAndOrg(dto.appId);
+    this.requireCompleteProfile(profile);
+    const { tax, totals } = priceAdminInvoice(
+      dto.amountMinor,
+      profile.region,
+      profile.gstStateCode,
+      supplier.stateCode,
+    );
+    const book = await this.priceBookModel
+      .findOne(
+        { region: profile.region, status: PriceBookStatus.PUBLISHED },
+        { addOns: 1 },
+      )
+      .lean();
+    return {
+      app: { appId: app.appId, appName: app.appName },
+      org: { orgId: String(org._id), companyName: org.companyName },
+      profile,
+      tax,
+      totals,
+      addOnLines: (book?.addOns || []).map(({ code, title }) => ({
+        code,
+        title,
+      })),
     };
   }
 
@@ -373,7 +424,8 @@ export class InvoiceService implements OnModuleInit {
   /** Grants the invoice's credits once, and links the plan and the invoice. */
   private async grantCredits(
     invoice: Invoice & { _id: unknown },
-    superAdminUserId: string,
+    creditedBy: string,
+    source = CreditSourceEnum.MANUAL_RECHARGE,
   ) {
     if (invoice.creditPlanId) return invoice;
     const invoiceId = String(invoice._id);
@@ -387,8 +439,8 @@ export class InvoiceService implements OnModuleInit {
           validityPeriodUnit: TimeUnit.Days,
           amountDenom: 'credits',
         },
-        superAdminUserId,
-        CreditSourceEnum.MANUAL_RECHARGE,
+        creditedBy,
+        source,
         referenceId,
       );
     } catch (error) {
@@ -414,6 +466,95 @@ export class InvoiceService implements OnModuleInit {
       );
     }
     return { ...invoice, creditPlanId };
+  }
+
+  /**
+   * A paid self-serve order: issues its invoice once (the unique orderId index
+   * stops a second one), then grants the credits once. Safe to call again.
+   */
+  async issueForOrder(order: Order & { _id: unknown }) {
+    const orderId = String(order._id);
+    let invoice = await this.invoiceModel.findOne({ orderId }).lean();
+    if (!invoice) {
+      const supplier = this.supplier();
+      const now = new Date();
+      const payment = {
+        provider: order.provider,
+        paymentId: order.payment.paymentId,
+        method: order.payment.method,
+        paidAt: order.payment.paidAt,
+      };
+      const app = { appId: order.appId, appName: order.appName };
+      const fields =
+        order.source === 'ADMIN'
+          ? buildLinkPaidInvoice({
+              credits: order.quote.credits,
+              validityDays: order.quote.validityDays,
+              amountMinor: order.quote.lines.totalBeforeTaxMinor,
+              payment,
+              orderNumber: order.orderNumber,
+              profile: order.customer,
+              supplier,
+              app,
+              addOnLines: order.quote.lines.addOns,
+              now,
+            })
+          : buildSelfServeInvoice({
+              orderNumber: order.orderNumber,
+              lines: order.quote.lines,
+              tax: order.tax,
+              credits: order.quote.credits,
+              validityDays: order.quote.validityDays,
+              payment,
+              profile: order.customer,
+              supplier,
+              app,
+              now,
+            });
+      try {
+        invoice = await this.issue(
+          {
+            ...fields,
+            orgId: order.orgId,
+            appId: order.appId,
+            orderId,
+            ...(order.source === 'ADMIN' && {
+              createdBy: order.createdBy,
+              note: order.note,
+            }),
+          },
+          order.region,
+          supplier.invoicePrefix,
+          now,
+        );
+        Logger.log(
+          `Invoice ${invoice.invoiceNumber} issued for order ${order.orderNumber}`,
+          'InvoiceService',
+        );
+      } catch (error) {
+        if (error?.code !== 11000) throw error;
+        invoice = await this.invoiceModel.findOne({ orderId }).lean();
+        if (!invoice) throw error;
+      }
+      await this.onboardingModel.updateOne(
+        { _id: order.orgId, 'billing.lockedAt': { $exists: false } },
+        { $set: { 'billing.lockedAt': now } },
+      );
+    }
+    const creditsActive = invoice.creditPlanId
+      ? undefined
+      : (await this.creditPlanModel.exists({
+          serviceId: order.appId,
+          status: CreditStatus.ACTIVE,
+        }))
+      ? ('AFTER_CURRENT_PLAN' as const)
+      : ('IMMEDIATELY' as const);
+    const granted = await this.grantCredits(
+      invoice,
+      order.createdBy,
+      CreditSourceEnum.PAYMENT,
+    );
+    return { invoice: granted, creditsActive };
   }
 
   private adminResult(invoice: Invoice & { _id: unknown }) {

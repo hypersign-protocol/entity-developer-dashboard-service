@@ -252,4 +252,66 @@ describe('InvoiceService.createAdmin', () => {
     );
     expect(invoiceModel.create).toHaveBeenCalledTimes(1);
   });
+
+  describe('issueForOrder', () => {
+    const order = {
+      _id: 'order-1',
+      orderNumber: 'ORD-2026-000001',
+      orgId: 'org-1',
+      appId: 'app-1',
+      appName: 'Acme KYC',
+      createdBy: 'owner@acme.example',
+      region: 'IN',
+      provider: 'razorpay',
+      customer: {
+        ...org().billing,
+        legalName: 'Acme',
+        email: 'a@acme.example',
+        taxIds: [],
+        gstStateCode: '27',
+        currency: 'INR',
+      },
+      tax: [{ type: 'IGST', rateBps: 1800, amountMinor: 31038 }],
+      quote: {
+        credits: 2499,
+        validityDays: 30,
+        lines: {
+          subtotalMinor: 249900,
+          planDiscount: { percentBps: 2500, amountMinor: 62475 },
+          coupon: null,
+          addOns: [],
+          totalBeforeTaxMinor: 172431,
+        },
+      },
+      payment: { paymentId: 'pay_1', method: 'upi', paidAt: new Date() },
+    } as any;
+
+    it('issues a GATEWAY invoice and grants the credits as a PAYMENT', async () => {
+      const result = await service.issueForOrder(order);
+      expect(invoiceModel.create.mock.calls[0][0][0]).toMatchObject({
+        source: 'SELF_SERVE',
+        settlement: 'GATEWAY',
+        orderId: 'order-1',
+        orderNumber: 'ORD-2026-000001',
+        totals: { totalMinor: 203469 },
+      });
+      expect(creditService.grantCredit).toHaveBeenCalledWith(
+        'app-1',
+        expect.objectContaining({ amount: '2499', validityPeriod: 30 }),
+        'owner@acme.example',
+        'PAYMENT',
+        'invoice:inv-1',
+      );
+      expect(result.creditsActive).toBe('IMMEDIATELY');
+    });
+
+    it('reuses the invoice already issued for the order', async () => {
+      invoiceModel.findOne.mockReturnValue(
+        lean({ _id: 'inv-1', appId: 'app-1', creditPlanId: 'plan-1' }),
+      );
+      await service.issueForOrder(order);
+      expect(invoiceModel.create).not.toHaveBeenCalled();
+      expect(creditService.grantCredit).not.toHaveBeenCalled();
+    });
+  });
 });

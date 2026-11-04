@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -21,12 +22,15 @@ import { BillingErrorCode } from './billing.constants';
 import { BillingException, billingValidationPipe } from './billing.exception';
 import { InvoiceListQueryDto } from './dto/admin-invoice.dto';
 import { CreateQuoteDto } from './dto/create-quote.dto';
+import { ConfirmOrderDto, CreateOrderDto } from './dto/order.dto';
 import { GetCouponsQueryDto } from './dto/get-coupons-query.dto';
 import { PricingSelection } from './pricing/pricing';
 import { BillingAccountService } from './services/billing-account.service';
 import { CatalogService } from './services/catalog.service';
 import { CouponService } from './services/coupon.service';
 import { InvoiceService } from './services/invoice.service';
+import { OrderService } from './services/order.service';
+import { PaymentLinkService } from './services/payment-link.service';
 import { QuoteService } from './services/quote.service';
 
 // Formats: docs/payment/api-contract.md.
@@ -41,6 +45,8 @@ export class BillingController {
     private readonly coupons: CouponService,
     private readonly quotes: QuoteService,
     private readonly invoices: InvoiceService,
+    private readonly orders: OrderService,
+    private readonly paymentLinks: PaymentLinkService,
   ) {}
 
   @ApiOkResponse({ description: "Published prices for the caller's region" })
@@ -115,5 +121,66 @@ export class BillingController {
   async getInvoice(@Param('invoiceId') invoiceId: string, @Req() req: any) {
     const orgId = await this.accounts.orgIdOf(req.user.userId);
     return this.invoices.getForOrg(orgId, invoiceId);
+  }
+
+  @ApiOkResponse({
+    description: 'An order for the quote, with the checkout options',
+  })
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.WRITE_BILLING)
+  @UsePipes(billingValidationPipe())
+  @Post('orders')
+  async createOrder(
+    @Body() dto: CreateOrderDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+    @Req() req: any,
+  ) {
+    const account = await this.accounts.resolve(req.user.userId);
+    return this.orders.create(
+      account,
+      dto.quoteId,
+      req.user.email || req.user.userId,
+      idempotencyKey,
+    );
+  }
+
+  @ApiOkResponse({ description: 'The order, re-checked with the gateway' })
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.READ_BILLING)
+  @Get('orders/:orderId')
+  async getOrder(@Param('orderId') orderId: string, @Req() req: any) {
+    const orgId = await this.accounts.orgIdOf(req.user.userId);
+    return this.orders.get(orgId, orderId);
+  }
+
+  @ApiOkResponse({ description: 'The order after the payment was verified' })
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.WRITE_BILLING)
+  @UsePipes(billingValidationPipe())
+  @HttpCode(HttpStatus.OK)
+  @Post('orders/:orderId/confirm')
+  async confirmOrder(
+    @Param('orderId') orderId: string,
+    @Body() dto: ConfirmOrderDto,
+    @Req() req: any,
+  ) {
+    const orgId = await this.accounts.orgIdOf(req.user.userId);
+    return this.orders.confirm(orgId, orderId, dto);
+  }
+
+  @ApiOkResponse({ description: 'The order, cancelled unless already paid' })
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.WRITE_BILLING)
+  @HttpCode(HttpStatus.OK)
+  @Post('orders/:orderId/cancel')
+  async cancelOrder(@Param('orderId') orderId: string, @Req() req: any) {
+    const orgId = await this.accounts.orgIdOf(req.user.userId);
+    return this.orders.cancel(orgId, orderId);
+  }
+
+  @ApiOkResponse({
+    description: 'Open payment links sent by Hypersign ("Awaiting payment")',
+  })
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.READ_BILLING)
+  @Get('payment-links')
+  async listPaymentLinks(@Query('appId') appId: string, @Req() req: any) {
+    const orgId = await this.accounts.orgIdOf(req.user.userId);
+    return this.paymentLinks.listOpenForOrg(orgId, appId);
   }
 }

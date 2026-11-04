@@ -80,7 +80,7 @@ export class CatalogService {
       creditsPerMajorUnit: book.creditsPerMajorUnit,
       validityDays: validityDaysOf(book),
       taxMode: REGION_TAX_MODE[account.region],
-      features: { coupons: !!hasCoupons, pay: isPayEnabled() },
+      features: { coupons: !!hasCoupons, pay: isPayEnabled(account.region) },
       plans,
       custom: {
         enabled: book.custom.enabled,

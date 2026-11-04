@@ -17,10 +17,7 @@ import { UserRepository } from 'src/user/repository/user.repository';
 import { UserRole } from 'src/user/schema/user.schema';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
 import { kybBillingDefaults } from 'src/billing/profile/billing-profile';
-import {
-  CreditDetail,
-  CustomerOnboardingProcessDto,
-} from '../dto/customer-onboarding-process.dto';
+import { CreditDetail } from '../dto/customer-onboarding-process.dto';
 import {
   AppAuthService,
   GRANT_TYPES,

@@ -48,7 +48,6 @@ import { CreditCommandService } from './credit-command.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
-import { UserRole } from 'src/user/schema/user.schema';
 import { calculateFreeCreditAmounts } from 'src/credits/utils/credit-amounts';
 import {
   CREDIT_REFERENCE_PREFIXES,
@@ -140,11 +139,6 @@ export class CreditService {
       ]);
     }
 
-    const statusField =
-      serviceType === SERVICE_TYPES.SSI_API
-        ? 'ssiFreeCreditStatus'
-        : 'kycFreeCreditStatus';
-    let claimStarted = false;
     let lockLost = false;
     let lockRenewalInFlight = false;
 
@@ -178,38 +172,6 @@ export class CreditService {
     lockHeartbeat.unref?.();
 
     try {
-      const claim = await this.customerOnboardingModel
-        .findOneAndUpdate(
-          {
-            _id: onboarding._id,
-            // The Redis lock excludes a live request. PROCESSING here can be
-            // left by a crashed worker, so the lock owner may reclaim it.
-            [statusField]: { $ne: OnboardingStatus.APPROVED },
-          },
-          {
-            $set: {
-              [statusField]: OnboardingStatus.PROCESSING,
-            },
-          },
-          { new: true },
-        )
-        .lean()
-        .exec();
-      if (!claim) {
-        const current = await this.customerOnboardingModel
-          .findById(onboarding._id)
-          .lean()
-          .exec();
-        const currentStatus = current?.[statusField];
-        if (currentStatus === OnboardingStatus.APPROVED) {
-          return { message: 'Free credit has already been claimed' };
-        }
-        throw new ConflictException([
-          'A free-credit request is already being processed for this service',
-        ]);
-      }
-      claimStarted = true;
-
       if (lockLost) {
         throw new ConflictException([
           'Free-credit processing ownership was lost. Retry the request.',
@@ -261,35 +223,7 @@ export class CreditService {
           'Free-credit processing ownership was lost. Retry the request.',
         ]);
       }
-      const completed = await this.customerOnboardingModel.updateOne(
-        { _id: onboarding._id, [statusField]: OnboardingStatus.PROCESSING },
-        {
-          $set: { [statusField]: OnboardingStatus.APPROVED },
-        },
-      );
-      if (completed.modifiedCount !== 1) {
-        throw new ConflictException([
-          'Free-credit status changed while the request was processing. Retry the request.',
-        ]);
-      }
       return result;
-    } catch (error) {
-      if (claimStarted && !lockLost) {
-        try {
-          await this.customerOnboardingModel.updateOne(
-            { _id: onboarding._id, [statusField]: OnboardingStatus.PROCESSING },
-            {
-              $set: { [statusField]: OnboardingStatus.FAILED },
-            },
-          );
-        } catch (statusError) {
-          Logger.error(
-            `Could not persist failed free-credit status for ${appId}: ${statusError}`,
-            'CreditService',
-          );
-        }
-      }
-      throw error;
     } finally {
       clearInterval(lockHeartbeat);
       await redisClient.eval(

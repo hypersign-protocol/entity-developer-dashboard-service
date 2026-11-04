@@ -405,20 +405,6 @@ export class FetchCustomerOnboardingRespDto extends CreateCustomerOnboardingResp
   processingActive?: boolean;
 
   @ApiPropertyOptional({
-    enum: ['INITIATED', 'PROCESSING', 'FAILED', 'APPROVED'],
-  })
-  @IsOptional()
-  @IsString()
-  ssiFreeCreditStatus?: string;
-
-  @ApiPropertyOptional({
-    enum: ['INITIATED', 'PROCESSING', 'FAILED', 'APPROVED'],
-  })
-  @IsOptional()
-  @IsString()
-  kycFreeCreditStatus?: string;
-
-  @ApiPropertyOptional({
     description:
       'Company details required by the dashboard for KYB review and resubmission',
     type: KybCompanyDetailRespDto,

@@ -729,7 +729,6 @@ export class AppAuthService {
       appDetail?.services?.length > 0 &&
       appDetail.services[0].id === SERVICE_TYPES.CAVACH_API
     ) {
-
       await this.onboardModel.updateMany(
         { kycServiceId: appId },
         { $unset: { kycServiceId: '', kycSubdomain: '' } },

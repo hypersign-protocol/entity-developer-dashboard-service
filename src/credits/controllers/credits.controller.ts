@@ -95,15 +95,11 @@ export class CreditsController {
     if (source === CreditSourceEnum.PROMOTION) {
       return this.creditService.grantFreeCredit(appId, req.user);
     }
-    if (source !== CreditSourceEnum.MANUAL_RECHARGE) {
-      throw new BadRequestException([
-        'Only PROMOTION and MANUAL_RECHARGE sources are supported by this endpoint',
-      ]);
-    }
     if (req.user.role !== UserRole.SUPER_ADMIN) {
       throw new ForbiddenException([
         'Only a super admin can grant manual credits',
       ]);
+    }
     // Once invoicing is switched on, ID Service credits are granted only
     // through invoices (POST /admin/billing/invoices). SSI is unchanged.
     if (
@@ -120,7 +116,7 @@ export class CreditsController {
       appId,
       creditRequestDto,
       req.user.userId,
-      CreditSourceEnum.MANUAL_RECHARGE,
+      source,
     );
   }
 }

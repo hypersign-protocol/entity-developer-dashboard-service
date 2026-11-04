@@ -97,7 +97,7 @@ export class CreditsController {
     }
     if (req.user.role !== UserRole.SUPER_ADMIN) {
       throw new ForbiddenException([
-        'Only a super admin can grant manual credits',
+        `Only a super admin can grant ${source} credits`,
       ]);
     }
     // Once invoicing is switched on, ID Service credits are granted only

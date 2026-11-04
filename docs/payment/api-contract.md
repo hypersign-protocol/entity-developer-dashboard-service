@@ -939,6 +939,77 @@ The organisation's open links, for "Awaiting payment" rows in Credit Purchase Hi
 
 Show each one as "{credits} credits · Awaiting payment · Due by {expiresAt}" with **Pay now**, which opens `url` in a new tab. Once paid, the row disappears from this list and the invoice and plan appear as usual.
 
+### 8. Free-credit promotion
+
+Onboarding no longer grants starter credits. Instead the dashboard shows a banner, and the customer claims the free credits themselves. Each organisation can claim **once per service** (SSI, ID Service). The claim is recorded on the organisation, so deleting an app and creating a new one does not allow a second claim. Free credits granted before this existed count as claimed: any `PROMOTION` plan on the organisation's apps, and for ID Service the old onboarding starter credits (`CUSTOMER_ONBOARDING`).
+
+**Before claiming, the organisation must save complete billing details, for every service.** Details pre-filled from KYB count only once the customer has saved them. Company verification (KYB) is not waited for, as with going live.
+
+An ID Service claim is always issued as a ₹0 invoice (`source: PROMOTION`, `settlement: COMPLIMENTARY`) before the credits are granted, whatever `BILLING_INVOICED_GRANTS` says. That needs complete billing details and the `BILLING_SUPPLIER_*` settings. SSI claims are not invoiced, like other SSI credits.
+
+#### 8.1 `GET /api/v1/billing/promotion?appId=…`
+
+Whether to show the banner for this app. Only the app's owner sees it; another owner's app returns `404 APP_NOT_FOUND`.
+
+```json
+{
+  "appId": "98f0815cf8c2096a2b54ea1746f5b9538a72",
+  "serviceId": "CAVACH_API",
+  "eligible": false,
+  "claimed": false,
+  "reason": "BILLING_PROFILE_INCOMPLETE",
+  "missingFields": ["address.postalCode"],
+  "offer": { "credits": 5000, "validityDays": 15 },
+  "invoiced": true,
+  "claim": null
+}
+```
+
+| `reason` | Meaning | Banner |
+| --- | --- | --- |
+| `null` (`eligible: true`) | Can claim now | Show **Claim free credits** |
+| `BILLING_PROFILE_INCOMPLETE` | Billing details not saved or incomplete (`missingFields`) | Show it with **Add billing details** instead of Claim |
+| `ALREADY_CLAIMED` | The organisation has claimed for this service (`claim` says on which app and when) | Hide |
+| `ONBOARDING_NOT_APPROVED` | Onboarding isn't approved yet | Hide |
+| `SERVICE_NOT_ELIGIBLE` | Not an SSI or ID Service app | Hide |
+| `BILLING_NOT_CONFIGURED` | Invoicing settings missing on the server | Hide |
+
+`claim` (when present): `{ status: "CLAIMING" | "GRANTED", appId, credits, validityDays, claimedAt, grantedAt, creditPlanId, invoiceId, invoiceNumber }`. `CLAIMING` with `eligible: true` is an interrupted claim; claiming again finishes it.
+
+#### 8.2 `POST /api/v1/billing/promotion/claim`
+
+Body `{ "appId": "…" }`; the server sets the amount and validity. Needs `WRITE_BILLING`. `201`:
+
+```json
+{
+  "message": "Free credits granted.",
+  "claim": {
+    "status": "GRANTED",
+    "appId": "98f0815cf8c2096a2b54ea1746f5b9538a72",
+    "credits": 5000,
+    "validityDays": 15,
+    "claimedAt": "2026-11-04T10:00:00.000Z",
+    "grantedAt": "2026-11-04T10:00:01.000Z",
+    "creditPlanId": "6728a1…",
+    "invoiceId": "6728a2…",
+    "invoiceNumber": "HS/IN/2026-27/0007"
+  },
+  "creditsActive": "IMMEDIATELY"
+}
+```
+
+`creditsActive` is `AFTER_CURRENT_PLAN` when another plan is active. `invoiceId` and `invoiceNumber` are `null` when the claim isn't invoiced.
+
+| Status | `code` | When |
+| --- | --- | --- |
+| 409 | `PROMOTION_ALREADY_CLAIMED` | Already claimed for this service by the organisation; `details.claim` has the claim |
+| 409 | `PROMOTION_CLAIM_IN_PROGRESS` | Another claim for the organisation is running; check §8.1 again after a few seconds |
+| 422 | `PROMOTION_NOT_ELIGIBLE` | `details.reason` is one of the §8.1 reasons, with `missingFields` for `BILLING_PROFILE_INCOMPLETE` |
+| 404 | `APP_NOT_FOUND` | Not the caller's app |
+| 500 | | Granting failed after the claim was recorded; retry, which finishes it without granting twice |
+
+`POST /api/v1/app/:appId/credits` is super-admin only again, and refuses `source: PROMOTION` with 400: free credits are granted only through this claim, so that it's recorded on the organisation.
+
 ---
 
 ## Changelog
@@ -953,4 +1024,5 @@ Show each one as "{credits} credits · Awaiting payment · Due by {expiresAt}" w
 | 2026-10-31 | Global charges no tax: `taxMode` and `tax.mode` are `NONE` with `tax.amountMinor: 0` (was `CALCULATED_AT_CHECKOUT` with `null`). India unchanged: a single "GST 18%" line until the customer's state is known. |
 | 2026-10-31 | §2 and §3.3 implemented: `GET`/`PUT /customer-onboarding/billing` and `POST /billing/quotes`. §2: `complete` also requires a saved profile. §3.3: added `429 RATE_LIMITED` for repeated rejected coupon codes. |
 | 2026-11-03 | §6 agreed for phase 1 (India, Razorpay Standard Checkout, no webhooks): `POST /billing/orders` returns `checkout` options instead of `checkoutUrl`; new `POST /billing/orders/:id/confirm`; the `Order` object gains `validityDays`, `checkout`, `payment`, `lastPaymentError`, `creditPlanId`, `creditsActive`; cancel is 6.4. New codes `IDEMPOTENCY_KEY_REUSED`, `PAYMENT_VERIFICATION_FAILED`, `ORDER_NOT_FOUND`, `ORDER_NOT_PAYABLE`, `ORDER_NOT_CANCELLABLE`. §7 stays provisional (phase 2). |
+| 2026-11-04 | §8 added: free-credit promotion. New `GET /billing/promotion` and `POST /billing/promotion/claim`, which replaces customers calling `POST /app/:appId/credits` `{ source: PROMOTION }`; that endpoint is super-admin only again and refuses `PROMOTION`. A claim is once per organisation and service, answers `409 PROMOTION_ALREADY_CLAIMED` on a repeat (was a 200), and always issues a ₹0 `PROMOTION` invoice for ID Service (not tied to `BILLING_INVOICED_GRANTS`); SSI is not invoiced. Claims need saved, complete billing details for every service (`BILLING_PROFILE_INCOMPLETE`); KYB approval is not required. Invoice `source` gains `PROMOTION`. |
 | 2026-11-03 | §7 agreed: Collect payment creates a Razorpay payment link (`POST /admin/billing/invoices` with `isPaid: false` returns `{ invoice: null, paymentLink }`). The invoice is issued only when the link is paid (Q11: no unpaid invoices). `recipients` is replaced by `notifyByEmail`, `notifyEmail` and `linkExpiresInDays`. New `GET /admin/billing/payment-links`, `GET …/:id`, `POST …/:id/resend`, `POST …/:id/cancel`, and customer `GET /billing/payment-links`. `mark-paid` is dropped: void the link and use Already paid. Preview: `willIssueAs.status: AWAITING_PAYMENT`, `creditsActive: WHEN_PAID`. |

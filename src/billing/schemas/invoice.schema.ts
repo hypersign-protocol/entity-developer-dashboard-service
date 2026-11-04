@@ -17,10 +17,16 @@ export class Invoice {
   financialYear: string | null;
   @Prop({ type: String, required: true })
   templateVersion: string;
-  @Prop({ type: String, enum: ['SELF_SERVE', 'ADMIN'], required: true })
-  source: 'SELF_SERVE' | 'ADMIN';
+  @Prop({
+    type: String,
+    enum: ['SELF_SERVE', 'ADMIN', 'PROMOTION'],
+    required: true,
+  })
+  source: 'SELF_SERVE' | 'ADMIN' | 'PROMOTION';
   @Prop({ type: String, required: false })
   orderId?: string; // SELF_SERVE only
+  @Prop({ type: String, required: false })
+  promotionKey?: string; // PROMOTION: 'PROMOTION:<orgId>:<serviceId>'
   @Prop({ type: String, required: true })
   orgId: string;
   @Prop({ type: String, required: true })
@@ -109,6 +115,13 @@ InvoiceSchema.index(
 InvoiceSchema.index(
   { orderId: 1 },
   { unique: true, partialFilterExpression: { orderId: { $type: 'string' } } },
+);
+InvoiceSchema.index(
+  { promotionKey: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { promotionKey: { $type: 'string' } },
+  },
 );
 InvoiceSchema.index({ orgId: 1, issuedAt: -1 });
 InvoiceSchema.index({ appId: 1, issuedAt: -1 });

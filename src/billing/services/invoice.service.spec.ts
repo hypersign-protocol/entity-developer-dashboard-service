@@ -314,4 +314,58 @@ describe('InvoiceService.createAdmin', () => {
       expect(creditService.grantCredit).not.toHaveBeenCalled();
     });
   });
+
+  describe('issueForPromotion', () => {
+    const input = {
+      promotionKey: 'PROMOTION:org-1:CAVACH_API',
+      orgId: 'org-1',
+      app: { appId: 'app-1', appName: 'Acme KYC' },
+      credits: 5000,
+      validityDays: 15,
+      claimedBy: 'owner-1',
+    };
+
+    it('issues a ₹0 complimentary PROMOTION invoice and grants its credits as PROMOTION', async () => {
+      const result = await service.issueForPromotion(input);
+      expect(invoiceModel.create.mock.calls[0][0][0]).toMatchObject({
+        source: 'PROMOTION',
+        status: 'PAID',
+        settlement: 'COMPLIMENTARY',
+        promotionKey: 'PROMOTION:org-1:CAVACH_API',
+        createdBy: 'owner-1',
+        credits: 5000,
+        validityDays: 15,
+        totals: { totalMinor: 0, balanceDueMinor: 0 },
+        tax: [],
+        payment: null,
+      });
+      expect(creditService.grantCredit).toHaveBeenCalledWith(
+        'app-1',
+        expect.objectContaining({ amount: '5000', validityPeriod: 15 }),
+        'owner-1',
+        'PROMOTION',
+        'invoice:inv-1',
+      );
+      expect(result.creditPlanId).toBe('plan-1');
+    });
+
+    it('reuses the invoice already issued for the promotion', async () => {
+      invoiceModel.findOne.mockReturnValue(
+        lean({ _id: 'inv-1', appId: 'app-1', creditPlanId: 'plan-1' }),
+      );
+      await service.issueForPromotion(input);
+      expect(invoiceModel.create).not.toHaveBeenCalled();
+      expect(creditService.grantCredit).not.toHaveBeenCalled();
+    });
+
+    it('refuses to invoice an incomplete billing profile', async () => {
+      onboardingModel.findOne.mockReturnValue(
+        lean(org({ address: undefined, confirmedAt: undefined })),
+      );
+      await expect(service.issueForPromotion(input)).rejects.toMatchObject({
+        code: 'BILLING_PROFILE_INCOMPLETE',
+      });
+      expect(invoiceModel.create).not.toHaveBeenCalled();
+    });
+  });
 });

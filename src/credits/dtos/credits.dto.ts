@@ -8,7 +8,6 @@ import {
   IsPositive,
   IsString,
   Min,
-  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { TimeUnit } from 'src/customer-onboarding/constants/enum';
@@ -191,55 +190,36 @@ export class GrantAllowanceResponseDto {
 }
 
 export class CreditRequestDto {
-  @ApiPropertyOptional({
+  @ApiProperty({
     name: 'amount',
     description: 'Amount of allowance provided',
     example: '15000',
   })
-  @ValidateIf(
-    (request: CreditRequestDto) =>
-      request.source !== CreditSourceEnum.PROMOTION,
-  )
-  @IsString()
-  @IsNotEmpty()
   amount: string;
-  @ApiPropertyOptional({
+  @ApiProperty({
     name: 'validityPeriod',
     description: 'Time till credit will be valie',
     example: '60',
   })
-  @ValidateIf(
-    (request: CreditRequestDto) =>
-      request.source !== CreditSourceEnum.PROMOTION,
-  )
   @Type(() => Number)
-  @IsInt()
-  @IsPositive()
   validityPeriod: number;
-  @ApiPropertyOptional({
+  @ApiProperty({
     name: 'validityPeriodUnit',
     description: 'unit for validity period',
     enum: TimeUnit,
   })
-  @ValidateIf(
-    (request: CreditRequestDto) =>
-      request.source !== CreditSourceEnum.PROMOTION,
-  )
   @IsEnum(TimeUnit)
   validityPeriodUnit: TimeUnit;
-  @ApiPropertyOptional({
+  @ApiProperty({
     name: 'amountDenom',
     description: 'denom',
     example: 'uHid',
   })
-  @ValidateIf(
-    (request: CreditRequestDto) =>
-      request.source !== CreditSourceEnum.PROMOTION,
-  )
   @IsString()
-  @IsNotEmpty()
   amountDenom: string;
 
+  // Defaults to MANUAL_RECHARGE. PROMOTION is only granted by the customer's
+  // claim (POST /api/v1/billing/promotion/claim).
   @ApiPropertyOptional({ enum: CreditSourceEnum })
   @IsOptional()
   @IsEnum(CreditSourceEnum)

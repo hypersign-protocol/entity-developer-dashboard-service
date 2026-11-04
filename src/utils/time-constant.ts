@@ -82,9 +82,6 @@ export const EXPIRY_CONFIG = {
   ONBOARDING_PROCESSING_LOCK: {
     ...DISTRIBUTED_LOCK_CONFIG,
   },
-  FREE_CREDIT_GRANT_LOCK: {
-    ...DISTRIBUTED_LOCK_CONFIG,
-  },
 
   // KYC and SSI tokens for context - ID and SSI Dashboard
   DASHBOARD_ACCESS: {

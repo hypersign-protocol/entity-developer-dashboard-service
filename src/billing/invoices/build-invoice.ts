@@ -188,6 +188,16 @@ export function buildLinkPaidInvoice(
   };
 }
 
+/** A claimed free-credit promotion: complimentary, issued to the customer's own claim. */
+export function buildPromotionInvoice(
+  input: Omit<AdminInvoiceInput, 'amountMinor' | 'payment'>,
+) {
+  return {
+    ...buildAdminInvoice({ ...input, amountMinor: 0 }),
+    source: 'PROMOTION' as const,
+  };
+}
+
 export interface SelfServeInvoiceInput {
   orderNumber: string;
   lines: {
@@ -299,4 +309,5 @@ export function buildSelfServeInvoice(input: SelfServeInvoiceInput) {
 export type InvoiceFields =
   | ReturnType<typeof buildAdminInvoice>
   | ReturnType<typeof buildLinkPaidInvoice>
+  | ReturnType<typeof buildPromotionInvoice>
   | ReturnType<typeof buildSelfServeInvoice>;

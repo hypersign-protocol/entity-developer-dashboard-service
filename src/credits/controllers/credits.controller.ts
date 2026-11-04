@@ -10,7 +10,6 @@ import {
   UsePipes,
   ValidationPipe,
   Query,
-  ForbiddenException,
   HttpStatus,
 } from '@nestjs/common';
 import {
@@ -29,7 +28,6 @@ import {
   GetCreditsQueryDto,
 } from '../dtos/credits.dto';
 import { CreditSourceEnum } from '../schemas/credit.schema';
-import { UserRole } from 'src/user/schema/user.schema';
 import {
   BillingErrorCode,
   invoicedGrantsOnly,
@@ -92,12 +90,11 @@ export class CreditsController {
     @Req() req: any,
   ) {
     const source = creditRequestDto.source ?? CreditSourceEnum.MANUAL_RECHARGE;
+    // Free credits come only from the customer's one-time claim, which
+    // records it on the organisation (POST /api/v1/billing/promotion/claim).
     if (source === CreditSourceEnum.PROMOTION) {
-      return this.creditService.grantFreeCredit(appId, req.user);
-    }
-    if (req.user.role !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException([
-        `Only a super admin can grant ${source} credits`,
+      throw new BadRequestException([
+        'PROMOTION credits are granted only by the customer claiming them',
       ]);
     }
     // Once invoicing is switched on, ID Service credits are granted only

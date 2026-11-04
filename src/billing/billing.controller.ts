@@ -32,6 +32,8 @@ import { InvoiceService } from './services/invoice.service';
 import { OrderService } from './services/order.service';
 import { PaymentLinkService } from './services/payment-link.service';
 import { QuoteService } from './services/quote.service';
+import { PromotionService } from './services/promotion.service';
+import { PromotionAppDto } from './dto/promotion.dto';
 
 // Formats: docs/payment/api-contract.md.
 @UseFilters(AllExceptionsFilter)
@@ -47,7 +49,29 @@ export class BillingController {
     private readonly invoices: InvoiceService,
     private readonly orders: OrderService,
     private readonly paymentLinks: PaymentLinkService,
+    private readonly promotions: PromotionService,
   ) {}
+
+  @ApiOkResponse({
+    description:
+      'Whether the app can claim the free-credit promotion (the banner)',
+  })
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.READ_BILLING)
+  @UsePipes(billingValidationPipe())
+  @Get('promotion')
+  async getPromotion(@Query() query: PromotionAppDto, @Req() req: any) {
+    return this.promotions.status(query.appId, req.user);
+  }
+
+  @ApiOkResponse({
+    description: 'Claims the free-credit promotion, once per organisation',
+  })
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.WRITE_BILLING)
+  @UsePipes(billingValidationPipe())
+  @Post('promotion/claim')
+  async claimPromotion(@Body() body: PromotionAppDto, @Req() req: any) {
+    return this.promotions.claim(body.appId, req.user);
+  }
 
   @ApiOkResponse({ description: "Published prices for the caller's region" })
   @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.READ_BILLING)

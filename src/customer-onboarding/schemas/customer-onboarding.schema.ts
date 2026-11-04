@@ -59,6 +59,22 @@ export class LogDetail {
   failureReason?: string;
 }
 
+export interface PromotionClaim {
+  status: 'CLAIMING' | 'GRANTED';
+  appId: string;
+  claimedBy: string;
+  claimedAt: Date;
+  credits: number;
+  validityDays: number;
+  onChainAllowance?: number; // SSI: the HID allowance granted with the credits
+  invoiced: boolean; // fixed at the claim, so a retry takes the same path
+  creditPlanId?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  grantedAt?: Date;
+  legacy?: boolean; // granted before claims were recorded here
+}
+
 @Schema({ timestamps: true })
 export class CustomerOnboarding {
   @Prop({ type: String, required: true, unique: true })
@@ -134,6 +150,10 @@ export class CustomerOnboarding {
   // Billing profile. Written only by the billing module (its own $set path).
   @Prop({ type: BillingDetailsSchema, required: false })
   billing?: BillingDetails;
+  // Free-credit promotion claims, one per service (SSI_API, CAVACH_API), so a
+  // new app can't claim again. Written only by billing's PromotionService.
+  @Prop({ type: Object, required: false })
+  promotions?: Record<string, PromotionClaim>;
 }
 
 export const CustomerOnboardingSchema =

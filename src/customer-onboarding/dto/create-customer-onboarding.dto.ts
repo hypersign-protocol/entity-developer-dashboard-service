@@ -198,8 +198,9 @@ export class CustomerOnboardingBasicDto {
   referralSource?: string;
   @ApiProperty({
     name: 'phoneNumber',
-    description: 'Contact phone number of the company',
-    example: '6234572090',
+    description:
+      'Contact phone number of the company: national format for the selected country (030 12345678) or international (+49 30 12345678). Spaces and dashes are allowed.',
+    example: '+91 6234572090',
     required: false,
   })
   @ValidateIf(

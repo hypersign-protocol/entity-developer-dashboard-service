@@ -125,7 +125,7 @@ export class InvoiceListQueryDto {
   @IsOptional() @IsString() appId?: string;
   @IsOptional() @IsString() orgId?: string;
   @IsOptional() @IsIn(['UNPAID', 'PAID', 'VOID']) status?: string;
-  @IsOptional() @IsIn(['SELF_SERVE', 'ADMIN']) source?: string;
+  @IsOptional() @IsIn(['SELF_SERVE', 'ADMIN', 'PROMOTION']) source?: string;
   @IsOptional()
   @IsIn(['GATEWAY', 'OFFLINE', 'COMPLIMENTARY'])
   settlement?: string;

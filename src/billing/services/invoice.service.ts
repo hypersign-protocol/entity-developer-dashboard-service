@@ -28,6 +28,7 @@ import { AdminInvoiceDto, InvoiceListQueryDto } from '../dto/admin-invoice.dto';
 import {
   buildAdminInvoice,
   buildLinkPaidInvoice,
+  buildPromotionInvoice,
   buildSelfServeInvoice,
   InvoiceFields,
   priceAdminInvoice,
@@ -450,7 +451,7 @@ export class InvoiceService implements OnModuleInit {
         'InvoiceService',
       );
       throw new InternalServerErrorException([
-        `Invoice ${invoice.invoiceNumber} was issued, but the credits could not be granted yet. Retry with the same Idempotency-Key.`,
+        `Invoice ${invoice.invoiceNumber} was issued, but the credits could not be granted yet. Retry the same request; nothing is issued or granted twice.`,
       ]);
     }
     const plan = await this.creditPlanModel.findOneAndUpdate(
@@ -555,6 +556,78 @@ export class InvoiceService implements OnModuleInit {
       CreditSourceEnum.PAYMENT,
     );
     return { invoice: granted, creditsActive };
+  }
+
+  /**
+   * A claimed promotion on an ID Service app: a complimentary invoice, issued
+   * once per promotionKey (unique index), then its credits granted once.
+   * Safe to call again.
+   */
+  async issueForPromotion(input: {
+    promotionKey: string;
+    orgId: string;
+    app: { appId: string; appName: string };
+    credits: number;
+    validityDays: number;
+    claimedBy: string;
+  }) {
+    const { promotionKey, orgId, app } = input;
+    let invoice = await this.invoiceModel.findOne({ promotionKey }).lean();
+    if (!invoice) {
+      const supplier = this.supplier();
+      const org = await this.onboardingModel
+        .findOne({ _id: orgId }, PROFILE_FIELDS)
+        .lean();
+      const profile = buildBillingProfile(org);
+      this.requireCompleteProfile(profile);
+      const book = await this.priceBookModel
+        .findOne(
+          { region: profile.region, status: PriceBookStatus.PUBLISHED },
+          { addOns: 1 },
+        )
+        .lean();
+      const now = new Date();
+      const fields = buildPromotionInvoice({
+        credits: input.credits,
+        validityDays: input.validityDays,
+        profile,
+        supplier,
+        app,
+        addOnLines: book?.addOns || [],
+        now,
+      });
+      try {
+        invoice = await this.issue(
+          {
+            ...fields,
+            orgId,
+            appId: app.appId,
+            promotionKey,
+            createdBy: input.claimedBy,
+          },
+          profile.region as BillingRegion,
+          supplier.invoicePrefix,
+          now,
+        );
+        Logger.log(
+          `Invoice ${invoice.invoiceNumber} issued for ${promotionKey}`,
+          'InvoiceService',
+        );
+      } catch (error) {
+        if (error?.code !== 11000) throw error;
+        invoice = await this.invoiceModel.findOne({ promotionKey }).lean();
+        if (!invoice) throw error;
+      }
+      await this.onboardingModel.updateOne(
+        { _id: orgId, 'billing.lockedAt': { $exists: false } },
+        { $set: { 'billing.lockedAt': now } },
+      );
+    }
+    return this.grantCredits(
+      invoice,
+      input.claimedBy,
+      CreditSourceEnum.PROMOTION,
+    );
   }
 
   private adminResult(invoice: Invoice & { _id: unknown }) {

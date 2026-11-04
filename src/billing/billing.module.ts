@@ -52,6 +52,7 @@ import { CatalogService } from './services/catalog.service';
 import { CouponService } from './services/coupon.service';
 import { BillingProfileService } from './services/billing-profile.service';
 import { QuoteService } from './services/quote.service';
+import { PromotionService } from './services/promotion.service';
 
 // Self-serve credit top-up and invoicing (docs/payment/credits-top-up-payment.md).
 @Module({
@@ -89,6 +90,7 @@ import { QuoteService } from './services/quote.service';
     OrderService,
     PaymentLinkService,
     PaymentReconciliationService,
+    PromotionService,
   ],
   exports: [BillingProfileService],
 })

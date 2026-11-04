@@ -1134,6 +1134,7 @@ The breakdown into epics, their order, status and blocking questions are tracked
 16. **SSI Service recharges:** should they be invoiced too? The proposal keeps them as today's direct recharge, with no invoice, and only ID Service credits go through invoicing.
 17. ~~**Our details on the invoice:**~~ the legal entity name, registered address, GSTIN, PAN, billing email and SAC code (likely 998314). The sign-off build uses placeholders. **Done 2026-11-01: set in the production `BILLING_SUPPLIER_*` and `BILLING_SAC_CODE` settings.**
 18. **Onboarding starter credits:** onboarding grants ID Service credits directly (`source: CUSTOMER_ONBOARDING`). Should they also get a ₹0 complimentary invoice, or stay outside invoicing like SSI recharges? The proposal keeps them outside, so decision 9 covers only the recharge page and purchases.
+    **Decided (2026-11-04):** onboarding no longer grants them. The customer claims them from a dashboard banner (`source: PROMOTION`), once per organisation and service. An ID Service claim always gets a ₹0 complimentary invoice (`source: PROMOTION`), so decision 9 covers it too; SSI claims are not invoiced. See api-contract.md §8.
 19. **Invoice email (deferred, not needed for v1):** the mail queue has no attachments today. Should we add PDF attachments to the mail worker (proposed, because Finance teams expect the attachment), or email a signed download link?
 20. **KYB "approved" for coupons:** `KybVerificationEnum` has both `Approved` and `Completed` ("finished, passed or failed"). Proposed: only `Approved` counts.
 

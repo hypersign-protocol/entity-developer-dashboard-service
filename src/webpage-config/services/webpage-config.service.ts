@@ -125,6 +125,17 @@ export class WebpageConfigService {
     };
   }
 
+  async fetchParticularWebpage(
+    serviceId: string,
+    pageType: PageType,
+  ): Promise<boolean> {
+    const existing = await this.webPageConfigRepo.findAWebpageConfig({
+      serviceId,
+      pageType,
+    });
+    return Boolean(existing);
+  }
+
   async fetchWebPageConfigurationList(
     serviceId: string,
     pageType: PageType,

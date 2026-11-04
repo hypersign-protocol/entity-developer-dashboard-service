@@ -117,6 +117,7 @@ export class CreditModule implements NestModule {
       .apply(SuperAdminMiddleware)
       .exclude(
         { path: 'api/v1/app/:appId/credits', method: RequestMethod.GET },
+        { path: 'api/v1/app/:appId/credits', method: RequestMethod.POST },
         {
           path: 'api/v1/app/:appId/credits/:creditId/activate',
           method: RequestMethod.POST,

@@ -66,7 +66,6 @@ export class WebPageConfigRepository {
     );
     return this.webPageConfigModel.findOneAndDelete(appFilterQuery);
   }
-
   async deleteMany(
     webpageCofigFilterQuery: FilterQuery<WebPageConfig>,
   ): Promise<number> {

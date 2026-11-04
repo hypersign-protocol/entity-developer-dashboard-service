@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -7,7 +9,6 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { Types } from 'mongoose';
-import { randomUUID } from 'node:crypto';
 import { CreditPlan, CreditSourceEnum, scope } from '../schemas/credit.schema';
 import { ConfigService } from '@nestjs/config';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
@@ -36,10 +37,26 @@ import {
   MSG_UPDATE_DID_TYPEURL,
 } from 'src/utils/authz';
 import { CreditRequestDto } from '../dtos/credits.dto';
-import { TimeUnit } from 'src/customer-onboarding/constants/enum';
+import {
+  CreditStatus as OnboardingStatus,
+  InterestedService,
+  TimeUnit,
+} from 'src/customer-onboarding/constants/enum';
 import { CreditRepository } from '../repositories/credit.repository';
 import { CreditStatus } from '../schemas/credit.schema';
 import { CreditCommandService } from './credit-command.service';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
+import { calculateFreeCreditAmounts } from 'src/credits/utils/credit-amounts';
+import {
+  CREDIT_REFERENCE_PREFIXES,
+  ONBOARDING_CONFIG,
+  REDIS_KEYS,
+} from 'src/utils/utils';
+import { redisClient } from 'src/utils/redis.provider';
+import { randomUUID } from 'node:crypto';
+import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 
 const SSI_ON_CHAIN_ALLOWANCE_MULTIPLIER = BigInt(2000);
 
@@ -56,7 +73,167 @@ export class CreditService {
     private readonly creditRepository: CreditRepository,
     private readonly creditCommandService: CreditCommandService,
     private readonly moduleRef: ModuleRef,
+    @InjectModel(CustomerOnboarding.name)
+    private readonly customerOnboardingModel: Model<CustomerOnboarding> = null as any,
   ) {}
+
+  async grantFreeCredit(
+    appId: string,
+    user: { userId: string; role: UserRole },
+  ) {
+    const appDetail = await this.appRepository.findOne({ appId });
+    if (!appDetail) {
+      throw new BadRequestException([`No app found for appId ${appId}`]);
+    }
+    if (appDetail.userId !== user.userId) {
+      throw new ForbiddenException([
+        'Free credits can only be requested by app owner',
+      ]);
+    }
+    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException([
+        'Caller is not eligible to request credits',
+      ]);
+    }
+
+    const serviceType = appDetail.services?.[0]?.id as SERVICE_TYPES;
+    if (
+      serviceType !== SERVICE_TYPES.SSI_API &&
+      serviceType !== SERVICE_TYPES.CAVACH_API
+    ) {
+      throw new BadRequestException([
+        'Free credits are only available for SSI and KYC services',
+      ]);
+    }
+
+    const onboarding = await this.customerOnboardingModel
+      .findOne({
+        userId: appDetail.userId,
+        onboardingStatus: OnboardingStatus.APPROVED,
+        ...(serviceType === SERVICE_TYPES.SSI_API
+          ? { ssiServiceId: appId }
+          : { kycServiceId: appId }),
+      })
+      .lean()
+      .exec();
+    if (!onboarding) {
+      throw new BadRequestException([
+        'No completed onboarding is associated with this app',
+      ]);
+    }
+
+    let referenceId = `${CREDIT_REFERENCE_PREFIXES.PROMOTION}${onboarding._id}:${appId}`;
+    const lockKey = `${REDIS_KEYS.FREE_CREDIT_GRANT_LOCK}${appId}`;
+    const lockToken = randomUUID();
+    const lockExpiry = EXPIRY_CONFIG.FREE_CREDIT_GRANT_LOCK.redisExpiryTime;
+    const acquired = await redisClient.set(
+      lockKey,
+      lockToken,
+      'EX',
+      lockExpiry,
+      'NX',
+    );
+    if (acquired !== 'OK') {
+      throw new ConflictException([
+        'A free-credit request is already being processed for this service',
+      ]);
+    }
+
+    let lockLost = false;
+    let lockRenewalInFlight = false;
+
+    const lockHeartbeat = setInterval(async () => {
+      if (lockLost || lockRenewalInFlight) return;
+      lockRenewalInFlight = true;
+      try {
+        const renewed = await redisClient.eval(
+          "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end",
+          1,
+          lockKey,
+          lockToken,
+          lockExpiry,
+        );
+        if (Number(renewed) !== 1) {
+          lockLost = true;
+          clearInterval(lockHeartbeat);
+          Logger.error(`Lost free-credit lock for ${appId}`, 'CreditService');
+        }
+      } catch (error) {
+        lockLost = true;
+        clearInterval(lockHeartbeat);
+        Logger.error(
+          `Could not renew free-credit lock for ${appId}: ${error}`,
+          'CreditService',
+        );
+      } finally {
+        lockRenewalInFlight = false;
+      }
+    }, EXPIRY_CONFIG.FREE_CREDIT_GRANT_LOCK.lockRenewalInterval * 1000);
+    lockHeartbeat.unref?.();
+
+    try {
+      if (lockLost) {
+        throw new ConflictException([
+          'Free-credit processing ownership was lost. Retry the request.',
+        ]);
+      }
+
+      const existingFreeCredit =
+        await this.creditRepository.findParticularCreditDetail({
+          serviceId: appId,
+          source: CreditSourceEnum.PROMOTION,
+        });
+      if (
+        existingFreeCredit &&
+        existingFreeCredit.referenceId !== referenceId
+      ) {
+        const legacyReferenceId = `${CREDIT_REFERENCE_PREFIXES.LEGACY_FREE_CREDIT}${onboarding._id}:${appId}`;
+        if (existingFreeCredit.referenceId === legacyReferenceId) {
+          referenceId = existingFreeCredit.referenceId;
+        } else {
+          throw new ConflictException(['Free credit has already been claimed']);
+        }
+      }
+
+      const amounts = calculateFreeCreditAmounts(
+        ONBOARDING_CONFIG.TOTAL_VERIFICATION,
+        onboarding.interestedService as InterestedService[],
+        ONBOARDING_CONFIG.EXPIRY,
+      );
+      const isSsi = serviceType === SERVICE_TYPES.SSI_API;
+      const creditDetail: CreditRequestDto = {
+        amount: String(
+          isSsi ? amounts.ssiCreditAmount : amounts.kycCreditAmount,
+        ),
+        validityPeriod: amounts.validityPeriod,
+        validityPeriodUnit: TimeUnit.Days,
+        amountDenom: 'uhid',
+        source: CreditSourceEnum.PROMOTION,
+      };
+      const result = await this.grantCredit(
+        appId,
+        creditDetail,
+        user.userId,
+        CreditSourceEnum.PROMOTION,
+        referenceId,
+        isSsi ? String(amounts.ssiHidAllowanceAmount) : undefined,
+      );
+      if (lockLost) {
+        throw new ConflictException([
+          'Free-credit processing ownership was lost. Retry the request.',
+        ]);
+      }
+      return result;
+    } finally {
+      clearInterval(lockHeartbeat);
+      await redisClient.eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+        1,
+        lockKey,
+        lockToken,
+      );
+    }
+  }
 
   async fetchCreditDetails(appId: string, status?: CreditStatus) {
     Logger.log('Fetching credit plan list', 'CreditService');
@@ -563,6 +740,7 @@ export class CreditService {
     superAdminUserId: string,
     source: CreditSourceEnum,
     grantReferenceId?: string,
+    exactOnChainAllowanceAmount?: string,
   ) {
     try {
       const appDetail = await this.appRepository.findOne({ appId });
@@ -578,6 +756,27 @@ export class CreditService {
       const serviceType = serviceInfo.id as SERVICE_TYPES;
       const isSsiService = serviceInfo.id === SERVICE_TYPES.SSI_API;
       const { amount, validityPeriod, validityPeriodUnit } = creditDto;
+
+      let onChainAllowanceAmount: string | undefined;
+      if (exactOnChainAllowanceAmount !== undefined) {
+        if (!isSsiService) {
+          throw new BadRequestException([
+            'onChainAllowanceAmount can only be set for SSI services',
+          ]);
+        }
+        if (!/^[1-9]\d*$/.test(exactOnChainAllowanceAmount)) {
+          throw new BadRequestException([
+            'onChainAllowanceAmount must be a positive integer',
+          ]);
+        }
+        const parsedAllowance = BigInt(exactOnChainAllowanceAmount);
+        if (parsedAllowance > BigInt(Number.MAX_SAFE_INTEGER)) {
+          throw new BadRequestException([
+            'onChainAllowanceAmount exceeds the maximum safe integer',
+          ]);
+        }
+        onChainAllowanceAmount = parsedAllowance.toString();
+      }
 
       const totalCredit = Number(amount);
       if (!Number.isSafeInteger(totalCredit) || totalCredit <= 0) {
@@ -603,7 +802,10 @@ export class CreditService {
           existingCredit.apiCredit.total !== totalCredit ||
           existingCredit.criticalBalance !== criticalBalance ||
           existingCredit.validityDays !== validity.validityDays ||
-          existingCredit.source !== source
+          existingCredit.source !== source ||
+          (onChainAllowanceAmount !== undefined &&
+            String(existingCredit.onChainAllowance?.amount) !==
+              onChainAllowanceAmount)
         ) {
           throw new BadRequestException([
             'referenceId was reused with different credit semantics',
@@ -660,7 +862,7 @@ export class CreditService {
         );
         const authzCreditDetail = await this.grantSSIAllowance(
           appId,
-          this.ssiOnChainAllowance(totalCredit),
+          onChainAllowanceAmount ?? this.ssiOnChainAllowance(totalCredit),
           periodInYears,
         );
         onChainAllowance = {

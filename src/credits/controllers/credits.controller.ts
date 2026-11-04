@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   UseFilters,
   Controller,
   Get,
@@ -9,6 +10,7 @@ import {
   UsePipes,
   ValidationPipe,
   Query,
+  ForbiddenException,
   HttpStatus,
 } from '@nestjs/common';
 import {
@@ -27,6 +29,7 @@ import {
   GetCreditsQueryDto,
 } from '../dtos/credits.dto';
 import { CreditSourceEnum } from '../schemas/credit.schema';
+import { UserRole } from 'src/user/schema/user.schema';
 import {
   BillingErrorCode,
   invoicedGrantsOnly,
@@ -88,6 +91,15 @@ export class CreditsController {
     @Body() creditRequestDto: CreditRequestDto,
     @Req() req: any,
   ) {
+    const source = creditRequestDto.source ?? CreditSourceEnum.MANUAL_RECHARGE;
+    if (source === CreditSourceEnum.PROMOTION) {
+      return this.creditService.grantFreeCredit(appId, req.user);
+    }
+    if (req.user.role !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException([
+        'Only a super admin can grant manual credits',
+      ]);
+    }
     // Once invoicing is switched on, ID Service credits are granted only
     // through invoices (POST /admin/billing/invoices). SSI is unchanged.
     if (
@@ -104,7 +116,7 @@ export class CreditsController {
       appId,
       creditRequestDto,
       req.user.userId,
-      CreditSourceEnum.MANUAL_RECHARGE,
+      source,
     );
   }
 }

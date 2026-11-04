@@ -36,6 +36,12 @@ export enum TIME_UNIT {
   HOUR = 'h',
   DAY = 'd',
 }
+
+const DISTRIBUTED_LOCK_CONFIG = {
+  redisExpiryTime: TIME.MINUTE,
+  lockRenewalInterval: 15 * TIME.SECOND,
+} as const;
+
 export const getSecondsFromUnit = (time: number, unit: TIME_UNIT) => {
   const key = Object.keys(TIME_UNIT).find(
     (k) => TIME_UNIT[k as keyof typeof TIME_UNIT] === unit,
@@ -69,6 +75,15 @@ export const EXPIRY_CONFIG = {
   ONBOARDING_ACCESS: {
     jwtTime: 10,
     jwtUnit: TIME_UNIT.MINUTE,
+  },
+  ONBOARDING_PROGRESS: {
+    redisExpiryTime: 30 * TIME.MINUTE,
+  },
+  ONBOARDING_PROCESSING_LOCK: {
+    ...DISTRIBUTED_LOCK_CONFIG,
+  },
+  FREE_CREDIT_GRANT_LOCK: {
+    ...DISTRIBUTED_LOCK_CONFIG,
   },
 
   // KYC and SSI tokens for context - ID and SSI Dashboard

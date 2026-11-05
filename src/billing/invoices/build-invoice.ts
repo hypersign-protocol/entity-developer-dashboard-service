@@ -97,6 +97,19 @@ export function invoiceFx(
   };
 }
 
+/** The company's tax IDs, or else the masked personal one (finance's rule). */
+function invoiceTaxIds({ taxIds, personalTaxId }: BillingProfile) {
+  if (taxIds.length || !personalTaxId) {
+    return taxIds.map(({ type, number }) => ({ type, number }));
+  }
+  return [
+    {
+      type: personalTaxId.type === 'OTHER' ? 'Tax ID' : personalTaxId.type,
+      number: personalTaxId.number,
+    },
+  ];
+}
+
 /** Who, where and the tax note: the same for every kind of invoice. */
 function parties(profile: BillingProfile, supplier: Supplier) {
   const india = profile.region === BillingRegion.IN;
@@ -114,7 +127,7 @@ function parties(profile: BillingProfile, supplier: Supplier) {
       legalName: profile.legalName,
       email: profile.email,
       address: { ...profile.address },
-      taxIds: profile.taxIds.map(({ type, number }) => ({ type, number })),
+      taxIds: invoiceTaxIds(profile),
       gstStateCode: india ? profile.gstStateCode : null,
       region: profile.region,
     },

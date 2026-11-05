@@ -19,6 +19,7 @@ import { MailNotificationService } from 'src/mail-notification/services/mail-not
 import {
   kybApprovedBillingUpdate,
   kybBillingDefaults,
+  kybPersonalTaxId,
 } from 'src/billing/profile/billing-profile';
 import { CreditDetail } from '../dto/customer-onboarding-process.dto';
 import {
@@ -473,6 +474,7 @@ export class CustomerOnboardingService {
     }
     const statusReason = companyData.statusReason;
     const isCompleted = companyData.status === KybVerificationEnum.Completed;
+    const personalTaxId = kybPersonalTaxId(company);
     const updatedOnboarding =
       await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
         { _id: onboardingId, userId: user.userId },
@@ -487,6 +489,7 @@ export class CustomerOnboardingService {
             }),
             // Prefill an unconfirmed billing profile from the KYB company.
             ...kybBillingDefaults(onboarding.billing, company),
+            ...(personalTaxId && { 'billing.personalTaxId': personalTaxId }),
             ...(!isCompleted &&
               statusReason !== undefined && {
                 companyStatusReason: this.formatStatusReason(statusReason),
@@ -497,6 +500,10 @@ export class CustomerOnboardingService {
                 companyStatusReason: '',
               }),
           },
+          // A resubmission can replace it with the company's own tax ID.
+          ...(!personalTaxId && {
+            $unset: { 'billing.personalTaxId': '' },
+          }),
         },
       );
     return updatedOnboarding;

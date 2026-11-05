@@ -26,6 +26,13 @@ export class BillingTaxId {
   @Prop({ type: String }) number: string;
 }
 
+// A personal tax ID from KYB. Only the end of it is kept, for invoices.
+@Schema({ _id: false })
+export class BillingPersonalTaxId {
+  @Prop({ type: String }) type: string; // PAN or OTHER
+  @Prop({ type: String }) last4: string;
+}
+
 // The organisation's billing profile (ADR §4.1). Fields are optional because
 // they arrive in steps: region first, then KYB prefill, then confirmedAt, from
 // the customer's save or KYB approval.
@@ -43,6 +50,8 @@ export class BillingDetails {
   @Prop({ type: String }) gstStateCode?: string; // India: 2-digit GST state code
   @Prop({ type: [SchemaFactory.createForClass(BillingTaxId)] })
   taxIds?: BillingTaxId[];
+  @Prop({ type: SchemaFactory.createForClass(BillingPersonalTaxId) })
+  personalTaxId?: BillingPersonalTaxId;
   @Prop({ type: Date }) confirmedAt?: Date; // saved, or set on KYB approval
   @Prop({ type: Date }) lockedAt?: Date; // first paid invoice
 }

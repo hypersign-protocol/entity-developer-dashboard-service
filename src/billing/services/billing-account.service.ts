@@ -108,7 +108,11 @@ export class BillingAccountService {
       currency: REGION_CURRENCY[region],
       kybStatus: org.companyVerificationStatus,
       kybApprovedAt: org.companyVerificationApprovedAt,
-      taxIdTypes: (org.billing?.taxIds || []).map((t) => t.type),
+      // A personal tax ID counts for coupons too.
+      taxIdTypes: [
+        ...(org.billing?.taxIds || []).map((t) => t.type),
+        ...(org.billing?.personalTaxId ? [org.billing.personalTaxId.type] : []),
+      ],
       profile: buildBillingProfile({
         ...org,
         billing: { ...org.billing, region },

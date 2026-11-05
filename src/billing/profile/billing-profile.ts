@@ -88,6 +88,12 @@ export const normaliseTaxIds = (taxIds: TaxIdValue[] = []): TaxIdValue[] =>
     number: t.number.replace(/\s+/g, '').toUpperCase(),
   }));
 
+/** A tax ID given as a person's, not the company's. Only the end of it is kept. */
+export interface PersonalTaxId {
+  type: string; // PAN (India, in PAN format) or OTHER
+  last4: string;
+}
+
 export interface StoredBilling {
   region?: string;
   currency?: string;
@@ -103,6 +109,7 @@ export interface StoredBilling {
   };
   gstStateCode?: string;
   taxIds?: TaxIdValue[];
+  personalTaxId?: PersonalTaxId;
   confirmedAt?: Date;
   lockedAt?: Date;
 }
@@ -115,6 +122,9 @@ export interface ProfileSource {
   billing?: StoredBilling;
 }
 
+const OTHER_TAX_ID = 'OTHER';
+const PERSONAL_TAX_ID_VISIBLE = 4;
+
 const ADDRESS_FIELDS = [
   'street',
   'city',
@@ -122,6 +132,9 @@ const ADDRESS_FIELDS = [
   'postalCode',
   'country',
 ] as const;
+
+const maskPersonalTaxId = ({ type, last4 }: PersonalTaxId) =>
+  `${type === 'PAN' ? 'XXXXXX' : 'XXXX'}${last4}`;
 
 /** The BillingProfile object of docs/payment/api-contract.md §2. */
 export function buildBillingProfile(org: ProfileSource) {
@@ -147,6 +160,12 @@ export function buildBillingProfile(org: ProfileSource) {
         ? billing.gstStateCode || gstStateFromTaxIds(taxIds)
         : null,
     taxIds: taxIds.map(({ type, number }) => ({ type, number })),
+    personalTaxId: billing.personalTaxId
+      ? {
+          type: billing.personalTaxId.type,
+          number: maskPersonalTaxId(billing.personalTaxId),
+        }
+      : null,
     region,
     currency: (billing.currency || REGION_CURRENCY[region]) as BillingCurrency,
     source: billing.confirmedAt ? 'SAVED' : 'PREFILLED',
@@ -198,24 +217,19 @@ export function kybBillingDefaults(
     address?: StoredBilling['address'];
   },
 ): Record<string, unknown> {
-  if (!company || existing?.confirmedAt) return {};
-  const set: Record<string, unknown> = {};
+  if (!company) return {};
+  const taxIdSet = kybTaxIdSet(company);
+  if (existing?.confirmedAt) {
+    // A saved profile only gains a company tax ID it doesn't have yet.
+    return existing.lockedAt || existing.taxIds?.length ? {} : taxIdSet;
+  }
+  const set: Record<string, unknown> = { ...taxIdSet };
   if (company.name) set['billing.legalName'] = company.name;
   const address = company.address;
   if (address && ADDRESS_FIELDS.every((f) => address[f])) {
     set['billing.address'] = Object.fromEntries(
       ADDRESS_FIELDS.map((f) => [f, String(address[f]).trim()]),
     );
-  }
-  if (company.taxIdType && company.taxIdNumber) {
-    const [taxId] = normaliseTaxIds([
-      { type: company.taxIdType, number: company.taxIdNumber },
-    ]);
-    if (!taxIdProblem(taxId)) {
-      set['billing.taxIds'] = [taxId];
-      const state = gstStateFromTaxIds([taxId]);
-      if (state) set['billing.gstStateCode'] = state;
-    }
   }
   if (!existing?.region) {
     const region =
@@ -227,6 +241,48 @@ export function kybBillingDefaults(
     }
   }
   return set;
+}
+
+/** The company tax ID's fields. OTHER is a personal one, see kybPersonalTaxId. */
+function kybTaxIdSet(company: {
+  taxIdType?: string;
+  taxIdNumber?: string;
+}): Record<string, unknown> {
+  if (!company.taxIdType || !company.taxIdNumber) return {};
+  const [taxId] = normaliseTaxIds([
+    { type: company.taxIdType, number: company.taxIdNumber },
+  ]);
+  if (taxId.type === OTHER_TAX_ID || taxIdProblem(taxId)) return {};
+  const state = gstStateFromTaxIds([taxId]);
+  return {
+    'billing.taxIds': [taxId],
+    ...(state && { 'billing.gstStateCode': state }),
+  };
+}
+
+/**
+ * The personal tax ID in a KYB submission, for a business not registered for
+ * tax. Null otherwise, including a number too short to mask.
+ */
+export function kybPersonalTaxId(company: {
+  countryOfRegistration?: string;
+  taxIdType?: string;
+  taxIdNumber?: string;
+}): PersonalTaxId | null {
+  if (!company?.taxIdType || !company.taxIdNumber) return null;
+  const [{ type, number }] = normaliseTaxIds([
+    { type: company.taxIdType, number: company.taxIdNumber },
+  ]);
+  if (type !== OTHER_TAX_ID || number.length <= PERSONAL_TAX_ID_VISIBLE) {
+    return null;
+  }
+  const isPan =
+    regionFromCountry(company.countryOfRegistration) === BillingRegion.IN &&
+    !taxIdProblem({ type: 'PAN', number });
+  return {
+    type: isPan ? 'PAN' : OTHER_TAX_ID,
+    last4: number.slice(-PERSONAL_TAX_ID_VISIBLE),
+  };
 }
 
 /**

@@ -349,3 +349,56 @@ describe('buildLinkPaidInvoice', () => {
     });
   });
 });
+
+describe('personal tax IDs on invoices', () => {
+  const profileWith = (billing: Record<string, unknown>) =>
+    buildBillingProfile({
+      _id: 'org-1',
+      companyName: 'Acme',
+      customerEmail: 'billing@acme.example',
+      billing: {
+        region: 'GLOBAL',
+        address: {
+          street: '4 Linking Road',
+          city: 'London',
+          province: 'London',
+          postalCode: 'E1',
+          country: 'GB',
+        },
+        confirmedAt: new Date(),
+        ...billing,
+      },
+    });
+  const taxIdsOn = (billing: Record<string, unknown>) =>
+    buildAdminInvoice({
+      credits: 5000,
+      validityDays: 15,
+      amountMinor: 0,
+      profile: profileWith(billing),
+      supplier,
+      app: { appId: 'app-1', appName: 'Acme KYC' },
+      addOnLines: [],
+      now: new Date('2026-11-05T00:00:00.000Z'),
+    }).customer.taxIds;
+
+  it('prints a personal PAN masked', () => {
+    expect(taxIdsOn({ personalTaxId: { type: 'PAN', last4: '234F' } })).toEqual(
+      [{ type: 'PAN', number: 'XXXXXX234F' }],
+    );
+  });
+
+  it('prints any other personal tax ID masked, for foreign customers too', () => {
+    expect(
+      taxIdsOn({ personalTaxId: { type: 'OTHER', last4: '6789' } }),
+    ).toEqual([{ type: 'Tax ID', number: 'XXXX6789' }]);
+  });
+
+  it('prints only the company tax ID when there is one', () => {
+    expect(
+      taxIdsOn({
+        taxIds: [{ type: 'VAT', number: 'GB123456789' }],
+        personalTaxId: { type: 'OTHER', last4: '6789' },
+      }),
+    ).toEqual([{ type: 'VAT', number: 'GB123456789' }]);
+  });
+});

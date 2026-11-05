@@ -368,7 +368,7 @@ CustomerOnboardingSchema.index({ userId: 1 }, { unique: true });
 
 **How it's filled.**
 
-- **On KYB submission.** `submitKybCompany` already has the structured address and tax ID in its request body. If `billing` is still empty, it copies them in, so most accounts are prefilled without calling the ID Service. When KYB is approved, the webhook sets `confirmedAt` on complete prefilled details, unless the customer has already saved their own.
+- **On KYB submission.** `submitKybCompany` already has the structured address and tax ID in its request body. If `billing` is still empty, it copies them in, so most accounts are prefilled without calling the ID Service. When KYB is approved, the webhook sets `confirmedAt` on complete prefilled details, unless the customer has already saved their own. A saved profile with no tax IDs still gains the company tax ID at KYB submission. A personal tax ID (`taxIdType: OTHER`, for a business not registered for tax) goes in `billing.personalTaxId` as type and last 4 only. Coupons accept it, and invoices print it masked when there are no company tax IDs (finance, 2026-11-05).
 - **Accounts that finished KYB before this change** get a one-time backfill from the ID Service company record, or confirm their details in the form.
 - **Otherwise** `billing` is prefilled the first time someone opens the top-up popup, or a super admin first invoices the account:
 

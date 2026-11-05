@@ -85,6 +85,7 @@ Backend:
 - [x] `GET` and `PUT /customer-onboarding/billing` on the existing onboarding controller (§5.1).
 - [x] Copy the address and tax ID into an unconfirmed `billing` when KYB is submitted (`submitKybCompany`).
 - [x] Save complete prefilled details when KYB is approved (the KYB webhook), unless the customer already saved their own.
+- [x] Personal tax ID from KYB (`taxIdType: OTHER`): kept as type and last 4 only in `billing.personalTaxId`, accepted by coupons, printed masked on invoices when there are no company tax IDs. Finance confirmed masking (2026-11-05).
 - [ ] One-time backfill from the ID Service for accounts that finished KYB earlier. Needs calls to the ID Service, so it can't be a mongosh script; until it exists, these customers confirm their details in the billing form.
 - [x] Tax calculation for India: CGST + SGST or IGST from the place of supply (§7). Epic 4 reuses it for super-admin invoices.
 - [x] `Quote` collection with a 15-minute TTL index (§4.4).

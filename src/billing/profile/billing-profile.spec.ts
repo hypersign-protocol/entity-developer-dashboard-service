@@ -2,6 +2,7 @@ import {
   buildBillingProfile,
   kybApprovedBillingUpdate,
   kybBillingDefaults,
+  kybPersonalTaxId,
   paymentMissingFields,
   taxIdProblem,
 } from './billing-profile';
@@ -142,12 +143,47 @@ describe('kybBillingDefaults', () => {
   });
 
   it('never overwrites a saved profile or a stored region', () => {
-    expect(kybBillingDefaults({ confirmedAt: new Date() }, company)).toEqual(
-      {},
-    );
+    expect(
+      kybBillingDefaults(
+        {
+          confirmedAt: new Date(),
+          taxIds: [{ type: 'PAN', number: 'ABCDE1234F' }],
+        },
+        company,
+      ),
+    ).toEqual({});
     expect(
       kybBillingDefaults({ region: 'GLOBAL' }, company),
     ).not.toHaveProperty('billing.region');
+  });
+
+  it('adds only a missing company tax ID to a saved profile', () => {
+    expect(
+      kybBillingDefaults({ confirmedAt: new Date(), taxIds: [] }, company),
+    ).toEqual({
+      'billing.taxIds': [{ type: 'GSTIN', number: '29ABCDE1234F1Z5' }],
+      'billing.gstStateCode': '29',
+    });
+    expect(
+      kybBillingDefaults(
+        { confirmedAt: new Date(), lockedAt: new Date() },
+        company,
+      ),
+    ).toEqual({});
+  });
+
+  it('never copies a personal tax ID into taxIds', () => {
+    const personal = {
+      ...company,
+      taxIdType: 'OTHER',
+      taxIdNumber: 'ABCDE1234F',
+    };
+    expect(kybBillingDefaults(undefined, personal)).not.toHaveProperty([
+      'billing.taxIds',
+    ]);
+    expect(kybBillingDefaults({ confirmedAt: new Date() }, personal)).toEqual(
+      {},
+    );
   });
 
   it('skips an invalid tax ID and an incomplete address', () => {
@@ -231,5 +267,56 @@ describe('kybApprovedBillingUpdate', () => {
     });
     expect(set).toMatchObject({ 'billing.region': 'GLOBAL' });
     expect(set).not.toHaveProperty(['billing.gstStateCode']);
+  });
+});
+
+describe('kybPersonalTaxId', () => {
+  const personal = (countryOfRegistration: string, taxIdNumber: string) =>
+    kybPersonalTaxId({
+      countryOfRegistration,
+      taxIdType: 'OTHER',
+      taxIdNumber,
+    });
+
+  it('keeps only the type and the last 4 characters', () => {
+    expect(personal('IN', 'abcde 1234f')).toEqual({
+      type: 'PAN',
+      last4: '234F',
+    });
+  });
+
+  it('marks anything but an Indian PAN as OTHER', () => {
+    expect(personal('IN', '123456789012')).toEqual({
+      type: 'OTHER',
+      last4: '9012',
+    });
+    expect(personal('US', 'ABCDE1234F')).toEqual({
+      type: 'OTHER',
+      last4: '234F',
+    });
+  });
+
+  it('ignores company tax IDs and numbers too short to mask', () => {
+    expect(
+      kybPersonalTaxId({
+        countryOfRegistration: 'IN',
+        taxIdType: 'PAN',
+        taxIdNumber: 'ABCDE1234F',
+      }),
+    ).toBeNull();
+    expect(personal('US', '1234')).toBeNull();
+    expect(kybPersonalTaxId({ countryOfRegistration: 'US' })).toBeNull();
+  });
+
+  it('shows only the masked number on the profile', () => {
+    const built = buildBillingProfile({
+      _id: 'org-1',
+      billing: { personalTaxId: { type: 'PAN', last4: '234F' } },
+    });
+    expect(built.personalTaxId).toEqual({
+      type: 'PAN',
+      number: 'XXXXXX234F',
+    });
+    expect(built.taxIds).toEqual([]);
   });
 });

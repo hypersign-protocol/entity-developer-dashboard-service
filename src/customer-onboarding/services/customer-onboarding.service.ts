@@ -1096,6 +1096,79 @@ export class CustomerOnboardingService {
     );
   }
 
+  private async createKycWidgetAccessToken(
+    kycService: any,
+    kycRedisKey: string,
+    userAccessList: any,
+  ) {
+    const defaultAccessList = getAccessListForModule(
+      TokenModule.DASHBOARD,
+      SERVICE_TYPES.CAVACH_API,
+    );
+    const accessList = evaluateAccessPolicy(
+      defaultAccessList,
+      SERVICE_TYPES.CAVACH_API,
+      userAccessList,
+      Context.idDashboard,
+    );
+    const kycServiceDetail = await redisClient.get(kycRedisKey);
+    if (!kycServiceDetail) {
+      await this.appAuthService.storeDataInRedis(
+        GRANT_TYPES.access_service_kyc,
+        kycService,
+        accessList,
+        kycRedisKey,
+      );
+    }
+    return this.appAuthService.getAccessToken(
+      {
+        appId: kycService.appId,
+        appName: kycService.appName,
+        grantType: GRANT_TYPES.access_service_kyc,
+        subdomain: kycService.subdomain,
+        sessionId: kycRedisKey,
+      },
+      EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
+      EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
+    );
+  }
+
+  private getKycWidgetConfigUrl(kycTenantUrl: string): string {
+    return `${sanitizeUrl(
+      kycTenantUrl,
+      true,
+    )}api/v1/e-kyc/verification/widget-config`;
+  }
+
+  private async findExistingKycWidgetConfig(
+    kycWidgetConfigUrl: string,
+    kycAccessToken: string,
+  ) {
+    const response = await this.makeExternalRequest(
+      `${kycWidgetConfigUrl}/all?page=1&limit=10`,
+      {
+        method: 'GET',
+        headers: {
+          'x-kyc-access-token': kycAccessToken,
+          'Content-Type': 'application/json',
+        },
+      },
+      'Failed to check existing KYC widget configuration',
+    );
+    const widgetConfigs = Array.isArray(response?.data?.widgetConfigs)
+      ? response.data.widgetConfigs
+      : Array.isArray(response?.widgetConfigs)
+      ? response.widgetConfigs
+      : [];
+    const widgetConfig = widgetConfigs[0];
+    if (widgetConfig && !widgetConfig._id) {
+      throw new InternalServerErrorException([
+        'Existing KYC widget configuration response did not include its ID.',
+      ]);
+    }
+    return widgetConfig;
+  }
+
   private shouldUseBabyJubJubIssuer(interestedService?: InterestedService[]) {
     return [
       InterestedService.PROOF_OF_PERSONHOOD,
@@ -1916,38 +1989,10 @@ export class CustomerOnboardingService {
                   appId: customerOnboardingData.kycServiceId,
                 });
               }
-              const defaultAccessList = getAccessListForModule(
-                TokenModule.DASHBOARD,
-                SERVICE_TYPES.CAVACH_API,
-              );
-              const accessList = evaluateAccessPolicy(
-                defaultAccessList,
-                SERVICE_TYPES.CAVACH_API,
+              kycAccessToken = await this.createKycWidgetAccessToken(
+                kycService,
+                kycRedisKey,
                 userDetail.accessList,
-                Context.idDashboard,
-              );
-              const kycServiceDetail = await redisClient.get(kycRedisKey);
-              if (!kycServiceDetail) {
-                await this.appAuthService.storeDataInRedis(
-                  GRANT_TYPES.access_service_kyc,
-                  kycService,
-                  accessList,
-                  kycRedisKey,
-                );
-              }
-              kycAccessToken = await this.appAuthService.getAccessToken(
-                {
-                  appId:
-                    kycService?.appId || customerOnboardingData.kycServiceId,
-                  appName: kycService.appName,
-                  grantType: GRANT_TYPES.access_service_kyc,
-                  subdomain:
-                    kycService?.subdomain ||
-                    customerOnboardingData.kycSubdomain,
-                  sessionId: kycRedisKey,
-                },
-                EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
-                EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
               );
               const issuerDetails = this.getIssuerDetails(
                 issuerDidData?.did || customerOnboardingData.businessId,
@@ -1997,37 +2042,15 @@ export class CustomerOnboardingService {
                 isVaultEnabled: false,
                 isWidgetLogin: false,
               };
-              const kycWidgetConfigUrl = `${sanitizeUrl(
-                kycTenantUrl,
-                true,
-              )}api/v1/e-kyc/verification/widget-config`;
-              const existingKycWidgetConfigsResponse =
-                await this.makeExternalRequest(
-                  `${kycWidgetConfigUrl}/all?page=1&limit=10`,
-                  {
-                    method: 'GET',
-                    headers: {
-                      'x-kyc-access-token': kycAccessToken.access_token,
-                      'Content-Type': 'application/json',
-                    },
-                  },
-                  'Failed to check existing KYC widget configuration',
+              const kycWidgetConfigUrl =
+                this.getKycWidgetConfigUrl(kycTenantUrl);
+              const existingKycWidgetConfig =
+                await this.findExistingKycWidgetConfig(
+                  kycWidgetConfigUrl,
+                  kycAccessToken.access_token,
                 );
-              const existingKycWidgetConfigs = Array.isArray(
-                existingKycWidgetConfigsResponse?.data?.widgetConfigs,
-              )
-                ? existingKycWidgetConfigsResponse.data.widgetConfigs
-                : Array.isArray(existingKycWidgetConfigsResponse?.widgetConfigs)
-                ? existingKycWidgetConfigsResponse.widgetConfigs
-                : [];
-              const existingKycWidgetConfig = existingKycWidgetConfigs[0];
 
               if (existingKycWidgetConfig) {
-                if (!existingKycWidgetConfig._id) {
-                  throw new InternalServerErrorException([
-                    'Existing KYC widget configuration response did not include its ID.',
-                  ]);
-                }
                 widgetConfigDetail = { data: existingKycWidgetConfig };
                 Logger.log(
                   `KYC widget configuration already exists for service ${
@@ -2069,6 +2092,32 @@ export class CustomerOnboardingService {
                   PageType.KYC,
                 );
               if (!pageExists) {
+                // A retry can start after SETUP_KYC_WIDGET, whose result only
+                // lives in memory, so recover the ID from the KYC service.
+                let widgetConfigId = widgetConfigDetail?.data?._id?.toString();
+                if (!widgetConfigId) {
+                  if (!kycService && customerOnboardingData.kycServiceId) {
+                    kycService = await this.appAuthRepository.findOne({
+                      appId: customerOnboardingData.kycServiceId,
+                    });
+                  }
+                  kycAccessToken = await this.createKycWidgetAccessToken(
+                    kycService,
+                    kycRedisKey,
+                    userDetail.accessList,
+                  );
+                  const existingKycWidgetConfig =
+                    await this.findExistingKycWidgetConfig(
+                      this.getKycWidgetConfigUrl(kycTenantUrl),
+                      kycAccessToken.access_token,
+                    );
+                  if (!existingKycWidgetConfig) {
+                    throw new InternalServerErrorException([
+                      `No KYC widget configuration found for service ${serviceId}.`,
+                    ]);
+                  }
+                  widgetConfigId = existingKycWidgetConfig._id.toString();
+                }
                 await this.webPageConfig.storeWebPageConfigDetial(serviceId, {
                   pageTitle: 'KYC Verification',
                   pageDescription: 'Complete your KYC verification to proceed',
@@ -2076,9 +2125,7 @@ export class CustomerOnboardingService {
                   pageType: PageType.KYC,
                   contactEmail: customerEmail,
                   themeColor: 'vibrant',
-                  linkedWidgetConfigIds: [
-                    widgetConfigDetail?.data?._id?.toString(),
-                  ],
+                  linkedWidgetConfigIds: [widgetConfigId],
                 });
               }
               Logger.debug(
@@ -2750,6 +2797,7 @@ export class CustomerOnboardingService {
     failedStep: string,
     failureReason: string,
   ) {
+    let notificationKey: string | undefined;
     try {
       const admins = await this.userRepository.find({
         role: UserRole.SUPER_ADMIN,
@@ -2762,6 +2810,19 @@ export class CustomerOnboardingService {
         );
         return;
       }
+
+      // Customers can retry at will, so one step alerts admins once per window.
+      const key = `${REDIS_KEYS.CUSTOMER_ONBOARDING_FAILURE_NOTIFIED}${
+        (onboardingData as any)._id
+      }:${failedStep}`;
+      if (!(await this.claimOnboardingFailureNotification(key))) {
+        Logger.log(
+          `Skipping repeat failure notification for ${failedStep}`,
+          'CustomerOnboardingService',
+        );
+        return;
+      }
+      notificationKey = key;
 
       const details =
         typeof (onboardingData as any).toObject === 'function'
@@ -2793,6 +2854,34 @@ export class CustomerOnboardingService {
         error?.stack,
         'CustomerOnboardingService',
       );
+      // Nothing was sent, so let the next failure try again.
+      if (notificationKey) {
+        await redisClient.del(notificationKey).catch(() => undefined);
+      }
+    }
+  }
+
+  private async claimOnboardingFailureNotification(
+    key: string,
+  ): Promise<boolean> {
+    try {
+      const claimed = await redisClient.set(
+        key,
+        '1',
+        'EX',
+        EXPIRY_CONFIG.ONBOARDING_FAILURE_NOTIFICATION.redisExpiryTime,
+        'NX',
+      );
+      return claimed === 'OK';
+    } catch (error: any) {
+      // A duplicate email is better than a missed alert.
+      Logger.warn(
+        `Could not throttle onboarding failure notification: ${
+          error?.message || error
+        }`,
+        'CustomerOnboardingService',
+      );
+      return true;
     }
   }
 

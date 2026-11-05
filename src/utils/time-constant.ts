@@ -82,6 +82,9 @@ export const EXPIRY_CONFIG = {
   ONBOARDING_PROCESSING_LOCK: {
     ...DISTRIBUTED_LOCK_CONFIG,
   },
+  ONBOARDING_FAILURE_NOTIFICATION: {
+    redisExpiryTime: TIME.HOUR,
+  },
 
   // KYC and SSI tokens for context - ID and SSI Dashboard
   DASHBOARD_ACCESS: {

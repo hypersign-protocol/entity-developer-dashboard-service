@@ -56,6 +56,47 @@ export function priceAdminInvoice(
   };
 }
 
+export interface InvoiceFx {
+  inrPerUnit: number; // INR per 1 USD, at the provider's rate
+  totalInrMinor: number; // the invoice total in paise
+  rateDate: Date; // when the provider fixed the rate (payment creation)
+  source: 'PROVIDER';
+}
+
+/** A gateway payment's settlement value, for non-INR invoices. */
+export interface GatewayPaymentInput {
+  provider: string;
+  paymentId: string;
+  method: string | null;
+  paidAt: Date;
+  baseAmountMinor?: number | null; // what the provider converted it to
+  baseCurrency?: string | null;
+}
+
+/**
+ * USD invoices record their INR value for GST and export reporting, at the
+ * rate Razorpay converted the payment at (decided 2026-11-03). Null for INR,
+ * or when the provider didn't report a conversion.
+ */
+export function invoiceFx(
+  currency: string,
+  totalMinor: number,
+  payment: GatewayPaymentInput,
+): InvoiceFx | null {
+  if (currency === 'INR' || !totalMinor) return null;
+  const base = payment.baseAmountMinor;
+  if (payment.baseCurrency !== 'INR' || !Number.isInteger(base) || base <= 0) {
+    return null;
+  }
+  return {
+    // Both amounts are in minor units with 2 decimals, so the ratio is the rate.
+    inrPerUnit: Math.round((base / totalMinor) * 10000) / 10000,
+    totalInrMinor: base,
+    rateDate: payment.paidAt,
+    source: 'PROVIDER',
+  };
+}
+
 /** Who, where and the tax note: the same for every kind of invoice. */
 function parties(profile: BillingProfile, supplier: Supplier) {
   const india = profile.region === BillingRegion.IN;
@@ -150,18 +191,14 @@ export function buildAdminInvoice(input: AdminInvoiceInput) {
     payNowUrl: null,
     voidedAt: null,
     voidReason: null,
+    fx: null as InvoiceFx | null,
   };
 }
 
 /** Collect payment, paid by payment link: a super-admin invoice settled by the gateway. */
 export function buildLinkPaidInvoice(
   input: Omit<AdminInvoiceInput, 'payment'> & {
-    payment: {
-      provider: string;
-      paymentId: string;
-      method: string | null;
-      paidAt: Date;
-    };
+    payment: GatewayPaymentInput;
     orderNumber: string;
   },
 ) {
@@ -185,6 +222,7 @@ export function buildLinkPaidInvoice(
       paymentId: payment.paymentId,
       paidAt: payment.paidAt,
     },
+    fx: invoiceFx(invoice.currency, invoice.totals.totalMinor, payment),
   };
 }
 
@@ -210,12 +248,7 @@ export interface SelfServeInvoiceInput {
   tax: TaxLine[]; // worked out when the order was created
   credits: number;
   validityDays: number;
-  payment: {
-    provider: string;
-    paymentId: string;
-    method: string | null;
-    paidAt: Date;
-  };
+  payment: GatewayPaymentInput;
   profile: BillingProfile; // as stored on the order
   supplier: Supplier;
   app: { appId: string; appName: string };
@@ -303,6 +336,7 @@ export function buildSelfServeInvoice(input: SelfServeInvoiceInput) {
     payNowUrl: null,
     voidedAt: null,
     voidReason: null,
+    fx: invoiceFx(input.profile.currency, totalMinor, input.payment),
   };
 }
 

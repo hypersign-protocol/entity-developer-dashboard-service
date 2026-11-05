@@ -194,10 +194,11 @@ Later in phase 2:
 
 ### Epic 6. Global payments: payments phase 2
 
-- [ ] Razorpay in USD for `GLOBAL` (international payments are enabled on the account).
-- [ ] Customer phone number in the billing details: Razorpay needs a real email and phone for international payments.
+- [x] Razorpay in USD for `GLOBAL` (international payments are enabled on the account): checkout and payment links.
+- [x] Customer phone number in the billing details: Razorpay needs a real email and phone for international payments. Required for Global before paying.
 - [x] Global tax: none is charged (decided 2026-10-31).
-- [ ] The GL invoice series, and the INR value on USD invoices at the rate Razorpay settles at (decided 2026-11-03).
+- [x] The GL invoice series, and the INR value on USD invoices at the rate Razorpay settles at (decided 2026-11-03): `fx` from the payment's `base_amount`.
+- [ ] Sandbox test with an international test card, and Finance: settlement documents Razorpay asks for (invoice, buyer address), LUT and export wording.
 
 ### Epic 7. Refunds, credit notes and compliance
 

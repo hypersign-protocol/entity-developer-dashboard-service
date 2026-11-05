@@ -37,6 +37,7 @@ export class BillingDetails {
   currency?: 'INR' | 'USD';
   @Prop({ type: String }) legalName?: string;
   @Prop({ type: String }) email?: string;
+  @Prop({ type: String }) phone?: string; // international form, e.g. +4930123456
   @Prop({ type: SchemaFactory.createForClass(BillingAddress) })
   address?: BillingAddress;
   @Prop({ type: String }) gstStateCode?: string; // India: 2-digit GST state code

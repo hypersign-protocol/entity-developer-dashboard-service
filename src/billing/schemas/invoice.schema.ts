@@ -95,6 +95,14 @@ export class Invoice {
   } | null;
   @Prop({ type: String, default: null })
   payNowUrl: string | null;
+  // USD invoices: the INR value at the rate Razorpay converted the payment at.
+  @Prop({ type: Object, default: null })
+  fx: {
+    inrPerUnit: number;
+    totalInrMinor: number;
+    rateDate: Date;
+    source: 'PROVIDER';
+  } | null;
   @Prop({ type: String, required: false })
   creditPlanId?: string; // set once the credits are granted
   @Prop({ type: Date, default: null })

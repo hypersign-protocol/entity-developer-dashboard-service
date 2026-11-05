@@ -68,6 +68,16 @@ export class UpdateBillingProfileDto {
   @IsEmail()
   email: string;
 
+  @ApiPropertyOptional({
+    example: '+49 30 12345678',
+    description:
+      'International form (+<country code> …). Needed for Global customers to pay online. Omit or send "" to remove it.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  phone?: string;
+
   @ApiProperty({ type: BillingAddressDto })
   @ValidateNested()
   @Type(() => BillingAddressDto)

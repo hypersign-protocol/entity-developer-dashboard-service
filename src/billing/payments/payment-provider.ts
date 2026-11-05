@@ -15,6 +15,10 @@ export interface NormalizedPayment {
   currency: string;
   method: string | null; // card, upi, netbanking, wallet, …
   international: boolean;
+  // Non-INR payments: what the provider converted the amount to, at its rate
+  // when the payment was created. Fees and settlement use it.
+  baseAmountMinor: number | null;
+  baseCurrency: string | null;
   errorCode: string | null;
   errorDescription: string | null;
   createdAt: Date;
@@ -77,7 +81,7 @@ export interface PaymentProvider {
     currency: string;
     referenceId: string; // our order number
     description: string;
-    customer: { name: string; email: string };
+    customer: { name: string; email: string; contact?: string };
     notifyByEmail: boolean; // false: the admin copies the link and sends it
     expiresAt: Date;
     notes: Record<string, string>;

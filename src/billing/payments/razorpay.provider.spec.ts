@@ -65,9 +65,33 @@ describe('RazorpayProvider', () => {
       currency: 'INR',
       method: 'upi',
       international: false,
+      baseAmountMinor: null,
+      baseCurrency: null,
       errorCode: 'BAD_REQUEST_ERROR',
       errorDescription: 'Payment was declined',
       createdAt: new Date(1762000000 * 1000),
+    });
+  });
+
+  it('keeps the INR amount Razorpay converted a USD payment to', () => {
+    expect(
+      normalizeRazorpayPayment({
+        id: 'pay_2',
+        status: 'captured',
+        amount: 19900,
+        currency: 'USD',
+        method: 'card',
+        international: true,
+        base_amount: 1671600,
+        base_currency: 'INR',
+        created_at: 1762000000,
+      }),
+    ).toMatchObject({
+      amountMinor: 19900,
+      currency: 'USD',
+      international: true,
+      baseAmountMinor: 1671600,
+      baseCurrency: 'INR',
     });
   });
 

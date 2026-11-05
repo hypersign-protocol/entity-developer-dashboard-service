@@ -9,6 +9,7 @@ import {
 import {
   BillingErrorCode,
   BillingRegion,
+  formatCount,
   isPayEnabled,
   REGION_TAX_MODE,
 } from '../billing.constants';
@@ -178,12 +179,14 @@ export class PaymentLinkService {
           amountMinor: order.amountMinor,
           currency: order.currency,
           referenceId: order.orderNumber,
-          description: `${order.quote.credits.toLocaleString(
-            'en-IN',
+          description: `${formatCount(
+            order.quote.credits,
+            order.currency,
           )} verification credits for ${order.appName} (${order.orderNumber})`,
           customer: {
             name: order.customer.legalName,
             email: order.paymentLink.sentTo || order.customer.email,
+            ...(order.customer.phone && { contact: order.customer.phone }),
           },
           notifyByEmail: order.paymentLink.notifyByEmail,
           expiresAt: new Date(order.expiresAt),

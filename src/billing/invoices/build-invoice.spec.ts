@@ -266,6 +266,56 @@ describe('buildSelfServeInvoice', () => {
     expect(invoice.tax.map((t) => t.type)).toEqual(['CGST', 'SGST']);
     expect(invoice.discounts).toEqual({ plan: null, coupon: null });
   });
+
+  it('has no INR value for an INR invoice', () => {
+    expect(buildSelfServeInvoice(input('27')).fx).toBeNull();
+  });
+
+  it('records the INR value of a USD payment at the rate Razorpay converted it at', () => {
+    // $199 plan at 40% off: $119.40, no tax for Global.
+    const paidAt = new Date('2026-11-01T08:59:00Z');
+    const invoice = buildSelfServeInvoice({
+      ...input('27'),
+      lines: {
+        subtotalMinor: 19900,
+        planDiscount: { percentBps: 4000, amountMinor: 7960 },
+        coupon: null,
+        addOns: [],
+        totalBeforeTaxMinor: 11940,
+      },
+      tax: [],
+      profile: profile('GLOBAL'),
+      payment: {
+        provider: 'razorpay',
+        paymentId: 'pay_usd',
+        method: 'card',
+        paidAt,
+        baseAmountMinor: 1003557,
+        baseCurrency: 'INR',
+      },
+    });
+    expect(invoice).toMatchObject({
+      currency: 'USD',
+      tax: [],
+      totals: { totalMinor: 11940, amountPaidMinor: 11940 },
+      placeOfSupply: { code: '96', name: 'Other Countries' },
+      fx: {
+        inrPerUnit: 84.05,
+        totalInrMinor: 1003557,
+        rateDate: paidAt,
+        source: 'PROVIDER',
+      },
+    });
+  });
+
+  it('leaves the INR value empty when the provider reported no conversion', () => {
+    const invoice = buildSelfServeInvoice({
+      ...input('27'),
+      tax: [],
+      profile: profile('GLOBAL'),
+    });
+    expect(invoice.fx).toBeNull();
+  });
 });
 
 describe('buildLinkPaidInvoice', () => {

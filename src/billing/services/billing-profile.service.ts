@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { isPhoneNumber } from 'class-validator';
 import { Model, Types } from 'mongoose';
 import {
   CustomerOnboarding,
@@ -121,6 +122,16 @@ export class BillingProfileService {
     if (gstStateCode && !isGstStateCode(gstStateCode)) {
       fields.gstStateCode = 'Not a valid GST state code';
     }
+    // Stored as +<digits>, which Razorpay's checkout and links accept.
+    const phoneInput = dto.phone?.trim();
+    const phone = phoneInput ? phoneInput.replace(/[^\d+]/g, '') : undefined;
+    if (
+      phoneInput &&
+      !(phoneInput.startsWith('+') && isPhoneNumber(phoneInput))
+    ) {
+      fields.phone =
+        'Enter the number with its country code, for example +49 30 12345678';
+    }
     if (Object.keys(fields).length) {
       throw new BillingException(
         HttpStatus.BAD_REQUEST,
@@ -161,10 +172,12 @@ export class BillingProfileService {
             'billing.currency': REGION_CURRENCY[region],
             'billing.confirmedAt': new Date(),
             ...(gstStateCode && { 'billing.gstStateCode': gstStateCode }),
+            ...(phone && { 'billing.phone': phone }),
           },
-          ...((!gstStateCode || options.unlock) && {
+          ...((!gstStateCode || !phone || options.unlock) && {
             $unset: {
               ...(!gstStateCode && { 'billing.gstStateCode': '' }),
+              ...(!phone && { 'billing.phone': '' }),
               ...(options.unlock && { 'billing.lockedAt': '' }),
             },
           }),

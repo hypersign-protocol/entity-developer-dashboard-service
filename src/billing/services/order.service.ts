@@ -2,13 +2,18 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { redisClient } from 'src/utils/redis.provider';
-import { BillingErrorCode, BillingRegion } from '../billing.constants';
+import {
+  BillingErrorCode,
+  BillingRegion,
+  formatCount,
+} from '../billing.constants';
 import { BillingException } from '../billing.exception';
 import {
   NormalizedPayment,
   PaymentLinkState,
 } from '../payments/payment-provider';
 import { PaymentRouter } from '../payments/payment-router';
+import { paymentMissingFields } from '../profile/billing-profile';
 import {
   BillingCounter,
   BillingCounterDocument,
@@ -117,15 +122,17 @@ export class OrderService {
     const provider = this.router.forRegion(account.region);
     if (!provider?.isConfigured()) throw paymentsUnavailable();
     this.invoices.assertConfigured(); // never take money we can't invoice
-    if (!account.profile.complete) {
+    // Global also needs a phone: Razorpay asks for one on international payments.
+    const missingFields = [
+      ...account.profile.missingFields,
+      ...paymentMissingFields(account.profile),
+    ];
+    if (!account.profile.complete || missingFields.length) {
       throw new BillingException(
         HttpStatus.UNPROCESSABLE_ENTITY,
         BillingErrorCode.BILLING_PROFILE_INCOMPLETE,
         'Complete your billing details first.',
-        {
-          missingFields: account.profile.missingFields,
-          source: account.profile.source,
-        },
+        { missingFields, source: account.profile.source },
       );
     }
 
@@ -451,6 +458,8 @@ export class OrderService {
         amountMinor: p.amountMinor,
         currency: p.currency,
         paidAt: p.createdAt,
+        baseAmountMinor: p.baseAmountMinor,
+        baseCurrency: p.baseCurrency,
       };
       if (
         p.amountMinor !== order.amountMinor ||
@@ -710,12 +719,13 @@ export class OrderService {
               currency: order.currency,
             }),
             name: process.env.BILLING_CHECKOUT_NAME?.trim() || 'Hypersign',
-            description: `${credits.toLocaleString('en-IN')} credits for ${
+            description: `${formatCount(credits, order.currency)} credits for ${
               order.appName
             }`,
             prefill: {
               name: order.customer.legalName,
               email: order.customer.email,
+              ...(order.customer.phone && { contact: order.customer.phone }),
             },
           }
         : null,

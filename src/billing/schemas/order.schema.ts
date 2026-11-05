@@ -100,6 +100,9 @@ export class Order {
     amountMinor: number;
     currency: string;
     paidAt: Date;
+    // USD orders: the INR amount Razorpay converted the payment to.
+    baseAmountMinor?: number | null;
+    baseCurrency?: string | null;
   } | null;
   @Prop({ type: Object, default: null })
   lastPaymentError: { code: string | null; description: string | null } | null;

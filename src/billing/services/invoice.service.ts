@@ -35,7 +35,10 @@ import {
 } from '../invoices/build-invoice';
 import { formatInvoiceNumber, invoiceSeries } from '../invoices/invoice-number';
 import { readSupplier, Supplier, supplierProblems } from '../invoices/supplier';
-import { buildBillingProfile } from '../profile/billing-profile';
+import {
+  buildBillingProfile,
+  paymentMissingFields,
+} from '../profile/billing-profile';
 import {
   BillingCounter,
   BillingCounterDocument,
@@ -193,15 +196,21 @@ export class InvoiceService implements OnModuleInit {
     }
   }
 
+  /** `forPayment`: paid online (Collect payment), which also needs a Global phone. */
   private requireCompleteProfile(
     profile: ReturnType<typeof buildBillingProfile>,
+    forPayment = false,
   ) {
-    if (!profile.complete) {
+    const missingFields = [
+      ...profile.missingFields,
+      ...(forPayment ? paymentMissingFields(profile) : []),
+    ];
+    if (!profile.complete || missingFields.length) {
       throw new BillingException(
         HttpStatus.UNPROCESSABLE_ENTITY,
         BillingErrorCode.BILLING_PROFILE_INCOMPLETE,
         "The customer's billing details are incomplete.",
-        { missingFields: profile.missingFields, source: profile.source },
+        { missingFields, source: profile.source },
       );
     }
   }
@@ -212,7 +221,7 @@ export class InvoiceService implements OnModuleInit {
     const collect = dto.amountMinor > 0 && dto.isPaid === false;
     const supplier = this.supplier();
     const { profile } = await this.appAndOrg(dto.appId);
-    this.requireCompleteProfile(profile);
+    this.requireCompleteProfile(profile, collect);
     const { tax, totals } = priceAdminInvoice(
       dto.amountMinor,
       profile.region,
@@ -254,7 +263,7 @@ export class InvoiceService implements OnModuleInit {
     this.checkRequest(dto, true);
     const supplier = this.supplier();
     const { app, org, profile } = await this.appAndOrg(dto.appId);
-    this.requireCompleteProfile(profile);
+    this.requireCompleteProfile(profile, true);
     const { tax, totals } = priceAdminInvoice(
       dto.amountMinor,
       profile.region,
@@ -484,6 +493,8 @@ export class InvoiceService implements OnModuleInit {
         paymentId: order.payment.paymentId,
         method: order.payment.method,
         paidAt: order.payment.paidAt,
+        baseAmountMinor: order.payment.baseAmountMinor,
+        baseCurrency: order.payment.baseCurrency,
       };
       const app = { appId: order.appId, appName: order.appName };
       const fields =
@@ -787,6 +798,7 @@ export class InvoiceService implements OnModuleInit {
       credits: i.credits,
       validityDays: i.validityDays,
       payment: i.payment,
+      fx: i.fx ?? null,
       payNowUrl: i.payNowUrl,
       voidedAt: i.voidedAt,
       voidReason: i.voidReason,

@@ -93,6 +93,7 @@ export interface StoredBilling {
   currency?: string;
   legalName?: string;
   email?: string;
+  phone?: string; // international form, e.g. +4930123456
   address?: {
     street?: string;
     city?: string;
@@ -139,6 +140,7 @@ export function buildBillingProfile(org: ProfileSource) {
     orgId: String(org._id),
     legalName: billing.legalName || org.companyName || null,
     email: billing.email || org.customerEmail || null,
+    phone: billing.phone || null,
     address,
     gstStateCode:
       region === BillingRegion.IN
@@ -170,6 +172,16 @@ export function buildBillingProfile(org: ProfileSource) {
 }
 
 export type BillingProfile = ReturnType<typeof buildBillingProfile>;
+
+/**
+ * What paying online needs beyond a complete profile: Razorpay wants the
+ * customer's phone for international payments, so Global needs one.
+ */
+export function paymentMissingFields(profile: BillingProfile): string[] {
+  return profile.region === BillingRegion.GLOBAL && !profile.phone
+    ? ['phone']
+    : [];
+}
 
 /**
  * $set fields copying a KYB submission into an unconfirmed billing profile, so

@@ -38,6 +38,8 @@ interface RazorpayPayment {
   currency: string;
   method?: string;
   international?: boolean;
+  base_amount?: number; // only when currency isn't INR
+  base_currency?: string;
   error_code?: string | null;
   error_description?: string | null;
   created_at: number;
@@ -53,6 +55,11 @@ export function normalizeRazorpayPayment(
     currency: p.currency,
     method: p.method ?? null,
     international: !!p.international,
+    baseAmountMinor:
+      p.currency !== 'INR' && Number.isInteger(p.base_amount)
+        ? p.base_amount
+        : null,
+    baseCurrency: p.currency !== 'INR' ? p.base_currency ?? null : null,
     errorCode: p.error_code ?? null,
     errorDescription: p.error_description ?? null,
     createdAt: new Date(p.created_at * 1000),
@@ -152,7 +159,7 @@ export class RazorpayProvider implements PaymentProvider {
     currency: string;
     referenceId: string;
     description: string;
-    customer: { name: string; email: string };
+    customer: { name: string; email: string; contact?: string };
     notifyByEmail: boolean;
     expiresAt: Date;
     notes: Record<string, string>;

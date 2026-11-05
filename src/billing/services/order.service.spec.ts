@@ -285,6 +285,85 @@ describe('OrderService', () => {
         ),
       ).rejects.toMatchObject({ code: 'BILLING_PROFILE_INCOMPLETE' });
     });
+
+    describe('Global (USD)', () => {
+      const globalProfile = {
+        ...profile,
+        region: 'GLOBAL',
+        currency: 'USD',
+        gstStateCode: null,
+        phone: '+493012345678',
+      };
+      const globalAccount = {
+        ...account,
+        region: 'GLOBAL',
+        currency: 'USD',
+        profile: globalProfile,
+      };
+      // $199 plan at 40% off, no tax.
+      const usdLines = {
+        ...quoteLines,
+        subtotalMinor: 19900,
+        planDiscount: { percentBps: 4000, amountMinor: 7960, ruleId: 'r' },
+        coupon: null,
+        totalBeforeTaxMinor: 11940,
+        tax: { mode: 'NONE', amountMinor: 0, lines: [] },
+        totalMinor: 11940,
+      };
+
+      it('creates a USD Razorpay order with no tax and prefills the phone', async () => {
+        quoteModel.findOne.mockReturnValue(
+          lean(quote({ region: 'GLOBAL', lines: usdLines })),
+        );
+        // The stored order, as the create above wrote it.
+        orderModel.findOneAndUpdate.mockImplementation((filter, update) =>
+          lean({
+            ...orderModel.create.mock.calls[0][0],
+            _id: orderId,
+            ...update.$set,
+          }),
+        );
+        const result = await service.create(
+          globalAccount,
+          quoteId,
+          'owner@acme.example',
+          'key-usd',
+        );
+
+        expect(orderModel.create.mock.calls[0][0]).toMatchObject({
+          region: 'GLOBAL',
+          currency: 'USD',
+          amountMinor: 11940,
+          tax: [],
+        });
+        expect(razorpay.createOrder).toHaveBeenCalledWith(
+          expect.objectContaining({ amountMinor: 11940, currency: 'USD' }),
+        );
+        expect(result.checkout).toMatchObject({
+          currency: 'USD',
+          prefill: {
+            name: 'Acme',
+            email: 'billing@acme.example',
+            contact: '+493012345678',
+          },
+        });
+      });
+
+      it('asks a Global customer for a phone before paying', async () => {
+        await expect(
+          service.create(
+            { ...globalAccount, profile: { ...globalProfile, phone: null } },
+            quoteId,
+            'u',
+            'key-usd',
+          ),
+        ).rejects.toMatchObject({
+          code: 'BILLING_PROFILE_INCOMPLETE',
+          response: { details: { missingFields: ['phone'] } },
+        });
+        expect(razorpay.createOrder).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('confirm', () => {

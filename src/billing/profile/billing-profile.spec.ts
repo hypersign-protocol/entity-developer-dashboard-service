@@ -1,6 +1,7 @@
 import {
   buildBillingProfile,
   kybBillingDefaults,
+  paymentMissingFields,
   taxIdProblem,
 } from './billing-profile';
 
@@ -74,6 +75,33 @@ describe('buildBillingProfile', () => {
       gstStateCode: null,
       complete: true,
     });
+  });
+});
+
+describe('paymentMissingFields', () => {
+  const saved = (region: 'IN' | 'GLOBAL', phone?: string) =>
+    buildBillingProfile({
+      _id: 'org-1',
+      billing: {
+        region,
+        legalName: 'Acme',
+        email: 'billing@acme.example',
+        phone,
+        address: { ...address, country: region === 'IN' ? 'IN' : 'DE' },
+        gstStateCode: region === 'IN' ? '29' : undefined,
+        confirmedAt: new Date(),
+      },
+    });
+
+  it('asks Global customers for a phone before paying online', () => {
+    expect(saved('GLOBAL').complete).toBe(true); // invoices don't need it
+    expect(paymentMissingFields(saved('GLOBAL'))).toEqual(['phone']);
+    expect(paymentMissingFields(saved('GLOBAL', '+493012345678'))).toEqual([]);
+    expect(saved('GLOBAL', '+493012345678').phone).toBe('+493012345678');
+  });
+
+  it('does not need a phone for India', () => {
+    expect(paymentMissingFields(saved('IN'))).toEqual([]);
   });
 });
 

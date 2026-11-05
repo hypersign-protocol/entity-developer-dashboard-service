@@ -68,12 +68,17 @@ export function isBillingEnabled(region: BillingRegion): boolean {
     .includes(region);
 }
 
-// Online payment per region. Phase 1: India only, through Razorpay.
+// Online payment per region: Razorpay for both (INR for India, USD for Global).
 export const PAY_PROVIDER: Partial<Record<BillingRegion, string>> = {
   [BillingRegion.IN]: 'razorpay',
+  [BillingRegion.GLOBAL]: 'razorpay', // USD; international payments are enabled on the account
 };
 
 /** Pay is offered when BILLING_PAY_ENABLED=true and the region has a provider. */
 export function isPayEnabled(region: BillingRegion): boolean {
   return process.env.BILLING_PAY_ENABLED === 'true' && !!PAY_PROVIDER[region];
 }
+
+/** Number formatting for text the customer reads: lakh grouping only in INR. */
+export const formatCount = (value: number, currency: string) =>
+  value.toLocaleString(currency === 'INR' ? 'en-IN' : 'en-US');

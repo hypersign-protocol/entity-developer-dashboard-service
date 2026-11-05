@@ -27,8 +27,8 @@ export class BillingTaxId {
 }
 
 // The organisation's billing profile (ADR §4.1). Fields are optional because
-// they arrive in steps: region first, then KYB prefill, then the customer's
-// confirmation (confirmedAt).
+// they arrive in steps: region first, then KYB prefill, then confirmedAt, from
+// the customer's save or KYB approval.
 @Schema({ _id: false })
 export class BillingDetails {
   @Prop({ type: String, enum: ['IN', 'GLOBAL'] })
@@ -43,7 +43,7 @@ export class BillingDetails {
   @Prop({ type: String }) gstStateCode?: string; // India: 2-digit GST state code
   @Prop({ type: [SchemaFactory.createForClass(BillingTaxId)] })
   taxIds?: BillingTaxId[];
-  @Prop({ type: Date }) confirmedAt?: Date; // saved by the customer
+  @Prop({ type: Date }) confirmedAt?: Date; // saved, or set on KYB approval
   @Prop({ type: Date }) lockedAt?: Date; // first paid invoice
 }
 export const BillingDetailsSchema =

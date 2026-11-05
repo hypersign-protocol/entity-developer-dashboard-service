@@ -368,7 +368,7 @@ CustomerOnboardingSchema.index({ userId: 1 }, { unique: true });
 
 **How it's filled.**
 
-- **On KYB submission.** `submitKybCompany` already has the structured address and tax ID in its request body. If `billing` is still empty, it copies them in, so most accounts are prefilled without calling the ID Service.
+- **On KYB submission.** `submitKybCompany` already has the structured address and tax ID in its request body. If `billing` is still empty, it copies them in, so most accounts are prefilled without calling the ID Service. When KYB is approved, the webhook sets `confirmedAt` on complete prefilled details, unless the customer has already saved their own.
 - **Accounts that finished KYB before this change** get a one-time backfill from the ID Service company record, or confirm their details in the form.
 - **Otherwise** `billing` is prefilled the first time someone opens the top-up popup, or a super admin first invoices the account:
 

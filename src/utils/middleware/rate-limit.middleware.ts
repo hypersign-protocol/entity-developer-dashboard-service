@@ -14,7 +14,7 @@ export class RateLimitMiddleware implements NestMiddleware {
     if (count === 1) {
       await redisClient.expire(key, 60);
     }
-    if (count > 10) {
+    if (count > 100) {
       throw new ThrottlerException('Too many requests. Try again later.');
     }
     next();

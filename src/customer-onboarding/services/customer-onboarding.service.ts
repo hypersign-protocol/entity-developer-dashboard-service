@@ -16,7 +16,10 @@ import getOnboardingRejectedNotificationMail from 'src/mail-notification/constan
 import { UserRepository } from 'src/user/repository/user.repository';
 import { UserRole } from 'src/user/schema/user.schema';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
-import { kybBillingDefaults } from 'src/billing/profile/billing-profile';
+import {
+  kybApprovedBillingUpdate,
+  kybBillingDefaults,
+} from 'src/billing/profile/billing-profile';
 import { CreditDetail } from '../dto/customer-onboarding-process.dto';
 import {
   AppAuthService,
@@ -121,6 +124,18 @@ export class CustomerOnboardingService {
       onboarding.companyVerificationStatus === status &&
       (isCompleted || (onboarding.companyStatusReason || '') === reason);
     if (isUnchanged) return onboarding;
+
+    // Before the status write, so a retried webhook still gets here. The filter
+    // keeps details the customer saves in the meantime.
+    if (status === KybVerificationEnum.Approved) {
+      const billing = kybApprovedBillingUpdate(onboarding as any);
+      if (Object.keys(billing).length) {
+        await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+          { companyId, 'billing.confirmedAt': { $exists: false } },
+          { $set: billing },
+        );
+      }
+    }
 
     const updated =
       await this.customerOnboardingRepository.updateCustomerOnboardingDetails(

@@ -1,5 +1,6 @@
 import {
   buildBillingProfile,
+  kybApprovedBillingUpdate,
   kybBillingDefaults,
   paymentMissingFields,
   taxIdProblem,
@@ -157,5 +158,78 @@ describe('kybBillingDefaults', () => {
     });
     expect(set).not.toHaveProperty(['billing.taxIds']);
     expect(set).not.toHaveProperty(['billing.address']);
+  });
+});
+
+describe('kybApprovedBillingUpdate', () => {
+  const address = {
+    street: '12 MG Road',
+    city: 'Bengaluru',
+    province: 'Karnataka',
+    postalCode: '560001',
+    country: 'IN',
+  };
+  const org = {
+    _id: 'org-1',
+    companyName: 'Acme',
+    customerEmail: 'Billing@Acme.Example',
+    billing: { region: 'IN', currency: 'INR', address, gstStateCode: '29' },
+  };
+
+  it('saves complete prefilled details, storing the fallbacks', () => {
+    const set = kybApprovedBillingUpdate(org);
+    expect(set).toEqual({
+      'billing.legalName': 'Acme',
+      'billing.email': 'billing@acme.example',
+      'billing.region': 'IN',
+      'billing.currency': 'INR',
+      'billing.gstStateCode': '29',
+      'billing.confirmedAt': expect.any(Date),
+    });
+    const saved = buildBillingProfile({
+      ...org,
+      billing: { ...org.billing, confirmedAt: new Date() },
+    });
+    expect(saved.complete).toBe(true);
+  });
+
+  it('leaves a profile the customer already saved', () => {
+    expect(
+      kybApprovedBillingUpdate({
+        ...org,
+        billing: { ...org.billing, confirmedAt: new Date() },
+      }),
+    ).toEqual({});
+  });
+
+  it('leaves incomplete details for the billing form', () => {
+    expect(
+      kybApprovedBillingUpdate({
+        ...org,
+        billing: { ...org.billing, address: { ...address, postalCode: '' } },
+      }),
+    ).toEqual({});
+    expect(
+      kybApprovedBillingUpdate({
+        ...org,
+        billing: { ...org.billing, gstStateCode: undefined },
+      }),
+    ).toEqual({});
+    expect(kybApprovedBillingUpdate({ ...org, billing: undefined })).toEqual(
+      {},
+    );
+  });
+
+  it('needs no state code outside India', () => {
+    const set = kybApprovedBillingUpdate({
+      ...org,
+      billing: {
+        region: 'GLOBAL',
+        currency: 'USD',
+        address: { ...address, country: 'US' },
+      },
+    });
+    expect(set).toMatchObject({ 'billing.region': 'GLOBAL' });
+    expect(set).not.toHaveProperty(['billing.gstStateCode']);
   });
 });

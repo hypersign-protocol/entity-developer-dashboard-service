@@ -228,3 +228,27 @@ export function kybBillingDefaults(
   }
   return set;
 }
+
+/**
+ * $set fields saving a prefilled profile when KYB is approved, so a verified
+ * customer doesn't have to confirm it. Empty when the profile was already saved
+ * or anything is missing; those customers still use the billing form.
+ */
+export function kybApprovedBillingUpdate(
+  org: ProfileSource,
+): Record<string, unknown> {
+  if (org.billing?.confirmedAt) return {};
+  const profile = buildBillingProfile(org);
+  if (profile.missingFields.length) return {};
+  return {
+    // Values that may only be fallbacks are stored, so they stay as confirmed.
+    'billing.legalName': profile.legalName.trim(),
+    'billing.email': profile.email.trim().toLowerCase(),
+    'billing.region': profile.region,
+    'billing.currency': profile.currency,
+    ...(profile.gstStateCode && {
+      'billing.gstStateCode': profile.gstStateCode,
+    }),
+    'billing.confirmedAt': new Date(),
+  };
+}

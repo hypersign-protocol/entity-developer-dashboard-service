@@ -25,7 +25,7 @@ Every epic ships behind the `billing.selfServe` flag per region: the `BILLING_EN
 
 Staging data scripts (mongosh) are in [scripts/](scripts/).
 
-Everything needed to switch on in production (settings, Razorpay setup, scripts, sign-offs, tests, switch-on order, rollback) is in [go-live-checklist.md](go-live-checklist.md). Add new items there as features land.
+The environment variables, database scripts and Razorpay setup needed to go live are in [go-live-checklist.md](go-live-checklist.md). Add new items there as features land.
 
 ---
 

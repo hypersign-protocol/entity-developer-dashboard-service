@@ -25,6 +25,8 @@ Every epic ships behind the `billing.selfServe` flag per region: the `BILLING_EN
 
 Staging data scripts (mongosh) are in [scripts/](scripts/).
 
+Everything needed to switch on in production (settings, Razorpay setup, scripts, sign-offs, tests, switch-on order, rollback) is in [go-live-checklist.md](go-live-checklist.md). Add new items there as features land.
+
 ---
 
 ## Stage 1: Invoicing (no gateway)
@@ -190,7 +192,7 @@ Dashboard:
 - [ ] Customers: "Awaiting payment" rows with **Pay now** in Credit Purchase History.
 
 Later in phase 2:
-- [ ] Webhooks: `POST /billing/webhooks/razorpay` with the raw body and signature check, calling the same sync (§5.2).
+- [x] Webhooks: `POST /billing/webhooks/razorpay` with the raw body and signature check, calling the same sync (§5.2). Optional (`RAZORPAY_WEBHOOK_SECRET`); polling and reconciliation still run. Events are kept in `webhookEvents`. Needs the webhook added in the Razorpay Dashboard (Test and Live).
 - [ ] Invoice email with the PDF.
 - [ ] Start the credit middleware's revoke command, for epic 7.
 

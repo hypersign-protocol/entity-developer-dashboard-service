@@ -42,7 +42,7 @@ const MINUTE = 60 * 1000;
 export const ORDER_TTL_MS = 30 * MINUTE; // how long Pay is offered for an order
 const POLL_SYNC_EVERY_MS = 5 * 1000; // GET re-checks the provider at most this often
 const SYNC_LOCK_MS = 30 * 1000;
-// Reconciliation (no webhooks yet): what it re-checks, and how often.
+// Reconciliation (also the fallback for missed webhooks): what it re-checks, and how often.
 const RECHECK_PENDING_AFTER_MS = 2 * MINUTE;
 const RECHECK_LINK_AFTER_MS = 15 * MINUTE; // payment links stay open for days
 const FAIL_UNSTARTED_AFTER_MS = 15 * MINUTE;
@@ -79,9 +79,10 @@ const paymentsUnavailable = () =>
     'Payments are temporarily unavailable. Please try again.',
   );
 
-// Self-serve checkout (ADR §4.5, §6.1). Without webhooks, the provider's API is
-// the source of truth: confirm, polling and the reconciliation job all call
-// sync(), the only place that decides what a payment means.
+// Self-serve checkout (ADR §4.5, §6.1). The provider's API is the source of
+// truth: confirm, polling, webhooks and the reconciliation job all call sync(),
+// the only place that decides what a payment means. Webhooks only make it run
+// sooner; the job keeps working without them.
 @Injectable()
 export class OrderService {
   constructor(
@@ -377,9 +378,10 @@ export class OrderService {
 
   /**
    * Reads the order's payments from the provider and moves the order on.
-   * Serialised per order, so confirm, polling and the job never race.
+   * Serialised per order, so confirm, polling, webhooks and the job never
+   * race. Resolves false when another sync held the order and this one didn't run.
    */
-  async sync(orderId: string): Promise<void> {
+  async sync(orderId: string): Promise<boolean> {
     const lockKey = `billing:order-sync:${orderId}`;
     const locked = await redisClient.set(
       lockKey,
@@ -388,9 +390,10 @@ export class OrderService {
       SYNC_LOCK_MS,
       'NX',
     );
-    if (!locked) return; // another sync is on it
+    if (!locked) return false; // another sync is on it
     try {
       await this.syncLocked(orderId);
+      return true;
     } finally {
       await redisClient.del(lockKey);
     }

@@ -1,7 +1,9 @@
 import {
   normalizeRazorpayPayment,
+  parseRazorpayWebhook,
   RazorpayProvider,
   razorpaySignature,
+  razorpayWebhookSignature,
 } from './razorpay.provider';
 
 describe('RazorpayProvider', () => {
@@ -131,5 +133,85 @@ describe('RazorpayProvider', () => {
     await expect(provider.createOrder(input)).rejects.toThrow(
       /400: amount too low/,
     );
+  });
+
+  describe('webhooks', () => {
+    const raw = Buffer.from('{"event":"payment_link.paid","payload":{}}');
+    afterEach(() => delete process.env.RAZORPAY_WEBHOOK_SECRET);
+
+    it('is optional: off without a webhook secret', () => {
+      expect(provider.webhooksConfigured()).toBe(false);
+      expect(
+        provider.verifyWebhook(raw, razorpayWebhookSignature(raw, '')),
+      ).toBe(false);
+      process.env.RAZORPAY_WEBHOOK_SECRET = 'whsec';
+      expect(provider.webhooksConfigured()).toBe(true);
+    });
+
+    it('accepts only a signature over the exact body with the webhook secret', () => {
+      process.env.RAZORPAY_WEBHOOK_SECRET = 'whsec';
+      const signature = razorpayWebhookSignature(raw, 'whsec');
+      expect(provider.verifyWebhook(raw, signature)).toBe(true);
+      // re-serialised JSON, the API key secret, or nothing: refused
+      expect(
+        provider.verifyWebhook(
+          Buffer.from(JSON.stringify(JSON.parse(raw.toString()), null, 1)),
+          signature,
+        ),
+      ).toBe(false);
+      expect(
+        provider.verifyWebhook(raw, razorpayWebhookSignature(raw, 'secret')),
+      ).toBe(false);
+      expect(provider.verifyWebhook(raw, '')).toBe(false);
+    });
+
+    it('finds the link, the Razorpay order and our order id in payment_link.paid', () => {
+      expect(
+        parseRazorpayWebhook({
+          event: 'payment_link.paid',
+          payload: {
+            payment_link: {
+              entity: {
+                id: 'plink_1',
+                order_id: 'order_9',
+                notes: { orderId: 'abc' },
+              },
+            },
+            order: { entity: { id: 'order_9', notes: [] } },
+            payment: { entity: { id: 'pay_1', order_id: 'order_9' } },
+          },
+        }),
+      ).toEqual({
+        type: 'payment_link.paid',
+        relevant: true,
+        linkId: 'plink_1',
+        providerOrderIds: ['order_9'],
+        orderId: 'abc',
+      });
+    });
+
+    it('reads a checkout payment.captured by its order', () => {
+      expect(
+        parseRazorpayWebhook({
+          event: 'payment.captured',
+          payload: {
+            payment: { entity: { id: 'pay_1', order_id: 'order_3' } },
+          },
+        }),
+      ).toMatchObject({
+        relevant: true,
+        linkId: null,
+        providerOrderIds: ['order_3'],
+        orderId: null,
+      });
+    });
+
+    it('marks events that cannot move an order as not relevant', () => {
+      expect(
+        parseRazorpayWebhook({ event: 'settlement.processed', payload: {} })
+          .relevant,
+      ).toBe(false);
+      expect(parseRazorpayWebhook(null).relevant).toBe(false);
+    });
   });
 });

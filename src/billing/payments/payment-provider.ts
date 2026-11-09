@@ -50,6 +50,20 @@ export interface PaymentLinkState {
   providerOrderId: string | null;
 }
 
+/**
+ * What a webhook says, reduced to what finds our order. The event is only a
+ * hint that something changed: sync() still reads the provider's API.
+ */
+export interface PaymentWebhookEvent {
+  type: string; // the provider's event name, e.g. payment_link.paid
+  /** False for events that can't change an order: acknowledged and dropped. */
+  relevant: boolean;
+  linkId: string | null;
+  providerOrderIds: string[];
+  /** Our order id from the notes we attached, when the payload carries them. */
+  orderId: string | null;
+}
+
 export interface PaymentProvider {
   readonly id: string;
   /** False when its keys are missing: Pay then answers 503 PAYMENTS_UNAVAILABLE. */
@@ -71,7 +85,7 @@ export interface PaymentProvider {
     paymentId: string;
     signature: string;
   }): boolean;
-  /** Every payment attempt on the order: the source of truth (no webhooks yet). */
+  /** Every payment attempt on the order: the source of truth, webhooks or not. */
   fetchPayments(providerOrderId: string): Promise<NormalizedPayment[]>;
   capture(payment: NormalizedPayment): Promise<NormalizedPayment>;
 
@@ -89,6 +103,12 @@ export interface PaymentProvider {
   fetchPaymentLink(linkId: string): Promise<PaymentLinkState>;
   cancelPaymentLink(linkId: string): Promise<void>;
   resendPaymentLink(linkId: string): Promise<void>; // by email
+
+  // Webhooks: optional. Without a webhook secret, polling and the job still run.
+  webhooksConfigured(): boolean;
+  /** Checks the signature over the exact bytes received. */
+  verifyWebhook(rawBody: Buffer, signature: string): boolean;
+  parseWebhook(body: unknown): PaymentWebhookEvent;
 }
 
 export class PaymentProviderError extends Error {

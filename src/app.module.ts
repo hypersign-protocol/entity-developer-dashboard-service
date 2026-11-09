@@ -81,6 +81,11 @@ export class AppModule implements NestModule {
           path: '/api/v1/credits/authz/:appId',
           method: RequestMethod.GET,
         },
+        // Payment gateway webhooks: server to server, signed
+        {
+          path: '/api/v1/billing/webhooks/razorpay',
+          method: RequestMethod.POST,
+        },
       )
       .forRoutes('*');
   }

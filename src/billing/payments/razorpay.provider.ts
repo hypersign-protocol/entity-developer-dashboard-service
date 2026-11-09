@@ -10,6 +10,7 @@ import {
   PaymentProvider,
   PaymentProviderError,
   PaymentStatus,
+  PaymentWebhookEvent,
 } from './payment-provider';
 
 const API = 'https://api.razorpay.com/v1';
@@ -77,6 +78,67 @@ export function razorpaySignature(
     .digest('hex');
 }
 
+/** Webhook signature: HMAC-SHA256 of the raw body with the webhook secret, hex. */
+export function razorpayWebhookSignature(
+  rawBody: Buffer | string,
+  secret: string,
+) {
+  return createHmac('sha256', secret).update(rawBody).digest('hex');
+}
+
+// Events that can move an order. Everything else is acknowledged and dropped.
+// https://razorpay.com/docs/webhooks/payloads/payments/ and /payment-links/
+const WEBHOOK_EVENTS = new Set([
+  'payment.authorized',
+  'payment.captured',
+  'payment.failed',
+  'order.paid',
+  'payment_link.paid',
+  'payment_link.partially_paid',
+  'payment_link.expired',
+  'payment_link.cancelled',
+]);
+
+type WebhookEntity = { id?: string; order_id?: string; notes?: unknown };
+
+const entityOf = (payload: any, key: string): WebhookEntity | null => {
+  const entity = payload?.[key]?.entity;
+  return entity && typeof entity === 'object' ? entity : null;
+};
+
+// Notes are an object, or [] when empty.
+const noteOf = (entity: WebhookEntity | null, key: string): string | null => {
+  const notes = entity?.notes;
+  if (!notes || Array.isArray(notes) || typeof notes !== 'object') return null;
+  const value = (notes as Record<string, unknown>)[key];
+  return typeof value === 'string' && value ? value : null;
+};
+
+export function parseRazorpayWebhook(body: any): PaymentWebhookEvent {
+  const type = typeof body?.event === 'string' ? body.event : '';
+  const payload = body?.payload;
+  const link = entityOf(payload, 'payment_link');
+  const order = entityOf(payload, 'order');
+  const payment = entityOf(payload, 'payment');
+  const providerOrderIds = [
+    ...new Set(
+      [order?.id, payment?.order_id, link?.order_id].filter(
+        (id): id is string => typeof id === 'string' && id.startsWith('order_'),
+      ),
+    ),
+  ];
+  return {
+    type,
+    relevant: WEBHOOK_EVENTS.has(type),
+    linkId: typeof link?.id === 'string' ? link.id : null,
+    providerOrderIds,
+    orderId:
+      noteOf(link, 'orderId') ||
+      noteOf(order, 'orderId') ||
+      noteOf(payment, 'orderId'),
+  };
+}
+
 @Injectable()
 export class RazorpayProvider implements PaymentProvider {
   readonly id = 'razorpay';
@@ -88,8 +150,30 @@ export class RazorpayProvider implements PaymentProvider {
     return process.env.RAZORPAY_KEY_SECRET?.trim() || '';
   }
 
+  /** Set in Razorpay Dashboard → Webhooks; not the API key secret. */
+  private get webhookSecret() {
+    return process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || '';
+  }
+
   isConfigured() {
     return !!this.keyId && !!this.keySecret;
+  }
+
+  webhooksConfigured() {
+    return !!this.webhookSecret;
+  }
+
+  verifyWebhook(rawBody: Buffer, signature: string) {
+    if (!rawBody || !signature || !this.webhookSecret) return false;
+    const expected = Buffer.from(
+      razorpayWebhookSignature(rawBody, this.webhookSecret),
+    );
+    const given = Buffer.from(signature);
+    return expected.length === given.length && timingSafeEqual(expected, given);
+  }
+
+  parseWebhook(body: unknown) {
+    return parseRazorpayWebhook(body);
   }
 
   async createOrder(input: {

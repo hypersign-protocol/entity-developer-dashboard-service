@@ -53,6 +53,12 @@ import { CouponService } from './services/coupon.service';
 import { BillingProfileService } from './services/billing-profile.service';
 import { QuoteService } from './services/quote.service';
 import { PromotionService } from './services/promotion.service';
+import { PaymentWebhookService } from './services/payment-webhook.service';
+import { BillingWebhookController } from './billing-webhook.controller';
+import {
+  WebhookEvent,
+  WebhookEventSchema,
+} from './schemas/webhook-event.schema';
 
 // Self-serve credit top-up and invoicing (docs/payment/credits-top-up-payment.md).
 @Module({
@@ -69,13 +75,19 @@ import { PromotionService } from './services/promotion.service';
       { name: BillingCounter.name, schema: BillingCounterSchema },
       { name: Order.name, schema: OrderSchema },
       { name: PaymentAttempt.name, schema: PaymentAttemptSchema },
+      { name: WebhookEvent.name, schema: WebhookEventSchema },
       { name: CreditPlan.name, schema: CreditsSchema },
       { name: CustomerOnboarding.name, schema: CustomerOnboardingSchema },
       { name: App.name, schema: AppSchema },
       { name: AdminPeople.name, schema: AdminPeopleSchema },
     ]),
   ],
-  controllers: [BillingController, AdminBillingController],
+  // BillingWebhookController has no auth middleware: the gateway signs its calls.
+  controllers: [
+    BillingController,
+    AdminBillingController,
+    BillingWebhookController,
+  ],
   providers: [
     AdminPeopleRepository,
     BillingAccountService,
@@ -90,6 +102,7 @@ import { PromotionService } from './services/promotion.service';
     OrderService,
     PaymentLinkService,
     PaymentReconciliationService,
+    PaymentWebhookService,
     PromotionService,
   ],
   exports: [BillingProfileService],

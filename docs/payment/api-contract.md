@@ -647,7 +647,7 @@ The same `InvoiceDocument` as the customer endpoint (§4), for any organisation,
 
 **Phase 1:** Indian customers top up themselves, paying through Razorpay Standard Checkout (a popup on our page). Global payments and super-admin payment links come in phase 2. `features.pay` in the catalog is `true` only where Pay works (today: `IN`, once switched on).
 
-There are no gateway webhooks yet. The server asks Razorpay for the payment status itself: when the popup reports success, when the dashboard polls, and in a background job every 5 minutes. Credits are granted only after the server has seen a captured payment of the right amount.
+The server asks Razorpay for the payment status itself: when the popup reports success, when the dashboard polls, in a background job every 5 minutes, and, when webhooks are set up, as soon as Razorpay reports an event (§6.5). Webhooks are optional and only make this faster. Credits are granted only after the server has seen a captured payment of the right amount.
 
 ### 6. Checkout
 
@@ -812,11 +812,38 @@ The customer gives up on an unpaid order: frees the coupon straight away. No bod
 - **200:** the `Order`, normally `CANCELLED`. If the payment went through meanwhile, it comes back `FULFILLED` instead: show success.
 - **409 `ORDER_NOT_CANCELLABLE`:** the order is already paid.
 
+#### 6.5 Webhooks: `POST /api/v1/billing/webhooks/razorpay`
+
+Called by Razorpay, not the dashboard: no JWT and no origin check. **Optional.** Without `RAZORPAY_WEBHOOK_SECRET` the endpoint answers `503 PAYMENTS_UNAVAILABLE` and nothing else changes: confirm, polling and the reconciliation jobs keep moving every order.
+
+A webhook never decides what a payment means. The server checks the signature, finds the order, and runs the same sync as every other path, which reads the payment from Razorpay's API. A missed, late, repeated or out-of-order event can at most delay or repeat a check.
+
+**Setup (Razorpay Dashboard → Account & Settings → Webhooks, once in Test mode and once in Live mode):**
+- URL: `https://<api host>/api/v1/billing/webhooks/razorpay`
+- Secret: any random string, also set as `RAZORPAY_WEBHOOK_SECRET` on the server (not the API key secret)
+- Events: `payment.authorized`, `payment.captured`, `payment.failed`, `order.paid`, `payment_link.paid`, `payment_link.partially_paid`, `payment_link.expired`, `payment_link.cancelled`. Others are acknowledged and dropped.
+
+**Request:** Razorpay's JSON body, `X-Razorpay-Signature` (hex HMAC-SHA256 of the raw body with the webhook secret) and `X-Razorpay-Event-Id`.
+
+**Handling:**
+1. Signature over the exact bytes received; a mismatch answers `400 PAYMENT_VERIFICATION_FAILED`.
+2. The event is stored in `webhookEvents`, unique per provider and event id (a body hash when there is no id). A redelivery of a `PROCESSED` or `IGNORED` event answers 200 with `duplicate: true` and does nothing; one that `FAILED` is tried again.
+3. The order is found by payment link id, Razorpay order id, or the `orderId` note we attach. No match (for example another environment on the same Razorpay account): `IGNORED`.
+4. The response goes out, then the order is synced. While another sync holds the order, it tries again up to 5 times, 3 seconds apart. A sync that fails is `FAILED` and left to the reconciliation job.
+
+**200:**
+
+```json
+{ "received": true, "status": "RECEIVED" }
+```
+
+`status` is `RECEIVED` (sync started), `IGNORED` (no order of ours), `SKIPPED` (an event type we don't use, not stored), or, with `duplicate: true`, the earlier delivery's status.
+
 ### 7. Collect payment (payment links)
 
 The super admin's third option on **Recharge Service Credits**. It creates a Razorpay payment link for the amount with tax. Razorpay can email it to the customer, and the super admin can copy it and send it any way they like. **No invoice exists until the customer pays.** Then the server issues the invoice (`source: "ADMIN"`, `settlement: "GATEWAY"`) and grants the credits, exactly as for **Already paid**. An expired or voided link leaves nothing behind.
 
-Payment status comes from Razorpay's API (no webhooks yet): the server checks open links every 15 minutes, and whenever a link is opened with `GET`. India (INR) and Global (USD). A Global customer needs a phone in their billing details first.
+Payment status comes from Razorpay's API: the server checks open links every 15 minutes, whenever a link is opened with `GET`, and, when webhooks are set up, within seconds of a `payment_link.*` event (§6.5). India (INR) and Global (USD). A Global customer needs a phone in their billing details first.
 
 #### `PaymentLink` object
 
@@ -1042,6 +1069,7 @@ Body `{ "appId": "…" }`; the server sets the amount and validity. Needs `WRITE
 | 2026-11-04 | Global payments: §6 checkout and §7 payment links in USD through Razorpay. `BillingProfile` gains `phone` (international form), needed for Global customers to pay (`BILLING_PROFILE_INCOMPLETE` with `missingFields: ["phone"]`). `checkout.prefill.contact`. `InvoiceDocument` gains `fx`, the INR value at Razorpay's conversion rate. |
 | 2026-11-03 | §6 agreed for phase 1 (India, Razorpay Standard Checkout, no webhooks): `POST /billing/orders` returns `checkout` options instead of `checkoutUrl`; new `POST /billing/orders/:id/confirm`; the `Order` object gains `validityDays`, `checkout`, `payment`, `lastPaymentError`, `creditPlanId`, `creditsActive`; cancel is 6.4. New codes `IDEMPOTENCY_KEY_REUSED`, `PAYMENT_VERIFICATION_FAILED`, `ORDER_NOT_FOUND`, `ORDER_NOT_PAYABLE`, `ORDER_NOT_CANCELLABLE`. §7 stays provisional (phase 2). |
 | 2026-11-05 | §2, §4: new read-only `personalTaxId` on the profile, from a KYB submission with `taxIdType: "OTHER"`. It stays out of `taxIds`, counts for coupons that need a PAN when it's an Indian PAN, and prints masked on invoices when there are no `taxIds` (`customer.taxIds` holds `{ "type": "PAN", "number": "XXXXXX234F" }`, or `"type": "Tax ID"` outside that). A saved profile with no `taxIds` now gains the company tax ID from KYB. |
+| 2026-11-09 | §6.5 added: optional Razorpay webhooks at `POST /billing/webhooks/razorpay` (signature checked over the raw body, `RAZORPAY_WEBHOOK_SECRET`). They only trigger the existing sync sooner; polling and reconciliation are unchanged and still cover every order without them. |
 | 2026-11-05 | §2, §8: when KYB is approved, complete prefilled billing details are saved automatically (`source: "SAVED"`, `complete: true`), unless the customer already saved their own. Incomplete details still need the billing form. Global customers still need a phone number before paying. |
 | 2026-11-04 | §8 added: free-credit promotion. New `GET /billing/promotion` and `POST /billing/promotion/claim`, which replaces customers calling `POST /app/:appId/credits` `{ source: PROMOTION }`; that endpoint is super-admin only again and refuses `PROMOTION`. A claim is once per organisation and service, answers `409 PROMOTION_ALREADY_CLAIMED` on a repeat (was a 200), and always issues a ₹0 `PROMOTION` invoice for ID Service (not tied to `BILLING_INVOICED_GRANTS`); SSI is not invoiced. Claims need saved, complete billing details for every service (`BILLING_PROFILE_INCOMPLETE`); KYB approval is not required. Invoice `source` gains `PROMOTION`. |
 | 2026-11-03 | §7 agreed: Collect payment creates a Razorpay payment link (`POST /admin/billing/invoices` with `isPaid: false` returns `{ invoice: null, paymentLink }`). The invoice is issued only when the link is paid (Q11: no unpaid invoices). `recipients` is replaced by `notifyByEmail`, `notifyEmail` and `linkExpiresInDays`. New `GET /admin/billing/payment-links`, `GET …/:id`, `POST …/:id/resend`, `POST …/:id/cancel`, and customer `GET /billing/payment-links`. `mark-paid` is dropped: void the link and use Already paid. Preview: `willIssueAs.status: AWAITING_PAYMENT`, `creditsActive: WHEN_PAID`. |

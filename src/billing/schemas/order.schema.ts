@@ -131,6 +131,11 @@ OrderSchema.index(
     partialFilterExpression: { providerOrderId: { $type: 'string' } },
   },
 );
+// Webhooks find a Collect payment order by its link.
+OrderSchema.index(
+  { provider: 1, 'paymentLink.linkId': 1 },
+  { partialFilterExpression: { 'paymentLink.linkId': { $type: 'string' } } },
+);
 
 export type PaymentAttemptDocument = PaymentAttempt & Document;
 

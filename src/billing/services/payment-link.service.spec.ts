@@ -110,7 +110,7 @@ describe('PaymentLinkService', () => {
       expect.objectContaining({
         amountMinor: 4720000,
         currency: 'INR',
-        referenceId: 'ORD-2026-000009',
+        referenceId: String(orderId),
         customer: { name: 'Acme', email: 'billing@acme.example' },
         notifyByEmail: true,
       }),

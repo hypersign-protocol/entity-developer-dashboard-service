@@ -79,7 +79,7 @@ export interface PaymentProvider {
   createPaymentLink(input: {
     amountMinor: number;
     currency: string;
-    referenceId: string; // our order number
+    referenceId: string; // our order id: unique per provider account
     description: string;
     customer: { name: string; email: string; contact?: string };
     notifyByEmail: boolean; // false: the admin copies the link and sends it

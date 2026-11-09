@@ -178,7 +178,9 @@ export class PaymentLinkService {
         link = await provider.createPaymentLink({
           amountMinor: order.amountMinor,
           currency: order.currency,
-          referenceId: order.orderNumber,
+          // Unique across databases sharing one Razorpay account; order
+          // numbers restart per database and Razorpay rejects a reused reference_id.
+          referenceId: String(order._id),
           description: `${formatCount(
             order.quote.credits,
             order.currency,

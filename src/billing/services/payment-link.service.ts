@@ -398,17 +398,41 @@ export class PaymentLinkService {
 
   /** GET /billing/payment-links: the organisation's open links ("Awaiting payment"). */
   async listOpenForOrg(orgId: string, appId?: string) {
-    const rows = await this.orderModel
-      .find({
-        source: 'ADMIN',
-        orgId,
-        ...(appId && { appId }),
-        status: OrderStatus.PENDING_PAYMENT,
-        expiresAt: { $gt: new Date() },
-      })
-      .sort({ createdAt: -1 })
-      .limit(MAX_PAGE_SIZE)
-      .lean();
+    const openLinks = () =>
+      this.orderModel
+        .find({
+          source: 'ADMIN',
+          orgId,
+          ...(appId && { appId }),
+          status: OrderStatus.PENDING_PAYMENT,
+          expiresAt: { $gt: new Date() },
+        })
+        .sort({ createdAt: -1 })
+        .limit(MAX_PAGE_SIZE)
+        .lean();
+    let rows = await openLinks();
+    // The customer comes back here after paying on Razorpay's page: re-check
+    // the links now rather than waiting for the reconciliation job (up to 20 min).
+    const due = rows.filter(
+      (o) =>
+        !o.lastSyncedAt ||
+        Date.now() - new Date(o.lastSyncedAt).getTime() >= GET_SYNC_EVERY_MS,
+    );
+    if (due.length) {
+      await Promise.all(
+        due.map((o) =>
+          this.orders
+            .sync(String(o._id))
+            .catch((error) =>
+              Logger.warn(
+                `Payment link ${o.orderNumber}: sync failed: ${error?.message}`,
+                'PaymentLinkService',
+              ),
+            ),
+        ),
+      );
+      rows = await openLinks();
+    }
     return {
       data: rows.map((o) => ({
         orderId: String(o._id),

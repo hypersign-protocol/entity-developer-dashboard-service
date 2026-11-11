@@ -1,6 +1,39 @@
 # Changelog
 
 ## [Unreleased]
+
+### Added — Billing module (`src/billing`)
+
+- Added a price book catalog and coupons: `GET /api/v1/billing/catalog` returns the published prices for the caller's region, and `GET /api/v1/billing/coupons` returns the coupons the caller is eligible for.
+- Added billing profiles with India GST support. `GET` and `PUT /api/v1/customer-onboarding/billing` read and save the profile. The tax split (CGST + SGST, or IGST) is worked out from the supplier and customer state codes.
+- Added `POST /api/v1/billing/quotes`, which prices a credit top-up with the coupon and tax applied.
+- Added invoices with sequential invoice numbers, our supplier details ("Billed by") and the SAC code. Users can list and fetch their invoices with `GET /api/v1/billing/invoices` and `GET /api/v1/billing/invoices/:invoiceId`.
+- Added super-admin billing APIs under `/api/v1/admin/billing`: list and update billing profiles, preview and issue invoices for free or offline-paid credits, list invoices, and list, cancel or resend payment links.
+- Added a free-credit promotion that each organisation can claim once: `GET /api/v1/billing/promotion` and `POST /api/v1/billing/promotion/claim`.
+- KYB approval now saves the full KYB details into the billing profile, including personal tax IDs. Coupons and invoices use these details.
+- Added `BILLING_INVOICED_GRANTS`. When it is `true`, ID Service credits can only be granted through invoices, and `POST /api/v1/app/:appId/credits` returns 409.
+- Added the `READ_BILLING` and `WRITE_BILLING` dashboard access types.
+
+### Added — Payments (Razorpay)
+
+- Added Razorpay as the first payment gateway, behind a payment-provider interface so that more gateways can be added later. Payments are offered in India first.
+- Added orders: `POST /api/v1/billing/orders`, `GET /api/v1/billing/orders/:orderId`, `POST /api/v1/billing/orders/:orderId/confirm` (checks the checkout signature, then grants credits and issues an invoice) and `POST /api/v1/billing/orders/:orderId/cancel`.
+- Coupons are reserved while an order is pending and released when it is cancelled or fails.
+- Added payment links for global (non-India) customers. Users can list theirs with `GET /api/v1/billing/payment-links`.
+- Added a payment-reconciliation job that runs every 5 minutes. It settles orders and payment links whose confirmation never arrived.
+- Added an optional Razorpay webhook at `POST /api/v1/billing/webhooks/razorpay`. It checks the signature against `RAZORPAY_WEBHOOK_SECRET` and records each event once, so a repeated event is not processed twice.
+
+### Configuration
+
+- New environment variables (see `env.sample`): `BILLING_ENABLED_REGIONS`, `BILLING_PAY_ENABLED`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `BILLING_CHECKOUT_NAME`, `BILLING_SUPPLIER_*` (legal name, address, GSTIN, PAN, CIN, LUT ARN, state code), `BILLING_SAC_CODE`, `BILLING_INVOICE_PREFIX` and `BILLING_INVOICED_GRANTS`. Redis (`REDIS_URL` or `REDIS_HOST`/`REDIS_PORT`) is needed for the reconciliation job.
+- Seed and backfill scripts are in `docs/payment/scripts/`: price books and coupons, the KYB-approved date backfill, and a staging test account.
+- The design, API contract, epics and go-live checklist are in `docs/payment/`.
+
+### Fixed
+
+- Fixed payment-link creation for global payments.
+- Fixed payment-link reconciliation.
+
 ## [3.18.0] 
 
 - Updated access control for `/customer-onboarding/{id}/process`: superadmins and the onboarding owner can now access the endpoint.

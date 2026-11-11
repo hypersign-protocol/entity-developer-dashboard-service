@@ -1684,6 +1684,10 @@ export class CustomerOnboardingService {
                         this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
                         false,
                       ),
+                      urlSanitizer(
+                        this.config.get<string>('KYC_WIDGET_URL'),
+                        false,
+                      ),
                     ],
                     env: APP_ENVIRONMENT.dev,
                     hasDomainVerified: false,

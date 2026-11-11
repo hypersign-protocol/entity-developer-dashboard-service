@@ -182,5 +182,39 @@ jobs:
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__FILE_MAX_SIZE__#${{ secrets.FILE_MAX_SIZE }}#" {} \;
     - name: "Replace secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYB_APP_ID__#${{ secrets.KYB_APP_ID }}#" {} \;      
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_SUPPLIER_LEGAL_NAME__|${{ secrets.BILLING_SUPPLIER_LEGAL_NAME }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_SUPPLIER_EMAIL__|${{ secrets.BILLING_SUPPLIER_EMAIL }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_SUPPLIER_STREET__|${{ secrets.BILLING_SUPPLIER_STREET }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_SUPPLIER_CITY__|${{ secrets.BILLING_SUPPLIER_CITY }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_SUPPLIER_PROVINCE__|${{ secrets.BILLING_SUPPLIER_PROVINCE }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_SUPPLIER_POSTAL_CODE__|${{ secrets.BILLING_SUPPLIER_POSTAL_CODE }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_SUPPLIER_COUNTRY__|${{ secrets.BILLING_SUPPLIER_COUNTRY }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_SUPPLIER_GSTIN__|${{ secrets.BILLING_SUPPLIER_GSTIN }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_SUPPLIER_STATE_CODE__|${{ secrets.BILLING_SUPPLIER_STATE_CODE }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_SUPPLIER_CIN__|${{ secrets.BILLING_SUPPLIER_CIN }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_ENABLED_REGIONS__|${{ secrets.BILLING_ENABLED_REGIONS }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_SAC_CODE__|${{ secrets.BILLING_SAC_CODE }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_INVOICE_PREFIX__|${{ secrets.BILLING_INVOICE_PREFIX }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__BILLING_SUPPLIER_LUT_ARN__|${{ secrets.BILLING_SUPPLIER_LUT_ARN }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__RAZORPAY_WEBHOOK_SECRET__|${{ secrets.RAZORPAY_WEBHOOK_SECRET }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__RAZORPAY_KEY_ID__|${{ secrets.RAZORPAY_KEY_ID }}|g" {} \;
+    - name: "Replace secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed -i -e "s|__RAZORPAY_KEY_SECRET__|${{ secrets.RAZORPAY_KEY_SECRET }}|g" {} \;
     - name: "Deploy to GKE"
       run: kubectl apply -f .deploy/deployment.yaml

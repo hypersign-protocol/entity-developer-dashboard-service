@@ -141,6 +141,40 @@ spec:
           value: '__FILE_MAX_SIZE__'
         - name: KYB_APP_ID
           value: __KYB_APP_ID__
+        - name: BILLING_SUPPLIER_LEGAL_NAME
+          value: "__BILLING_SUPPLIER_LEGAL_NAME__"
+        - name: BILLING_SUPPLIER_EMAIL
+          value: "__BILLING_SUPPLIER_EMAIL__"
+        - name: BILLING_SUPPLIER_STREET
+          value: "__BILLING_SUPPLIER_STREET__"
+        - name: BILLING_SUPPLIER_CITY
+          value: "__BILLING_SUPPLIER_CITY__"
+        - name: BILLING_SUPPLIER_PROVINCE
+          value: "__BILLING_SUPPLIER_PROVINCE__"
+        - name: BILLING_SUPPLIER_POSTAL_CODE
+          value: "__BILLING_SUPPLIER_POSTAL_CODE__"
+        - name: BILLING_SUPPLIER_COUNTRY
+          value: "__BILLING_SUPPLIER_COUNTRY__"
+        - name: BILLING_SUPPLIER_GSTIN
+          value: "__BILLING_SUPPLIER_GSTIN__"
+        - name: BILLING_SUPPLIER_STATE_CODE
+          value: "__BILLING_SUPPLIER_STATE_CODE__"
+        - name: BILLING_SUPPLIER_CIN
+          value: "__BILLING_SUPPLIER_CIN__"
+        - name: BILLING_ENABLED_REGIONS
+          value: "__BILLING_ENABLED_REGIONS__"
+        - name: BILLING_SAC_CODE
+          value: "__BILLING_SAC_CODE__"
+        - name: BILLING_INVOICE_PREFIX
+          value: "__BILLING_INVOICE_PREFIX__"
+        - name: BILLING_SUPPLIER_LUT_ARN
+          value: "__BILLING_SUPPLIER_LUT_ARN__"
+        - name: RAZORPAY_WEBHOOK_SECRET
+          value: "__RAZORPAY_WEBHOOK_SECRET__"
+        - name: RAZORPAY_KEY_ID
+          value: "__RAZORPAY_KEY_ID__"
+        - name: RAZORPAY_KEY_SECRET
+          value: "__RAZORPAY_KEY_SECRET__"
         volumeMounts:
         - name: mongo
           mountPath: "/data"

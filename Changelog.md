@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [3.18.0] - 2026-11-11
+
+### Added — Auto customer onboarding
+
+- Updated access control for `/customer-onboarding/{id}/process`: superadmins and the onboarding owner can now access the endpoint.
+- Added a reusable function to calculate SSI and KYC credits based on the service type.
+- Removed credit details from the request body of `POST /api/v1/customer-onboarding/{id}/process`.
+- Updated `POST /api/v1/customer-onboarding` to automatically process credits based on the type of service requested by the user.
+- Added an L1 support email to superadmins to trigger re-onboarding in case of onboarding failure.
+- Implemented Redis to display the live status of the onboarding process.
+- Removed `kyc-credit` allocation during onboarding, as credits are not required in dev mode.
+- Added free credit allocation for production mode.
+
 ### Added — Billing module (`src/billing`)
 
 - Added a price book catalog and coupons: `GET /api/v1/billing/catalog` returns the published prices for the caller's region, and `GET /api/v1/billing/coupons` returns the coupons the caller is eligible for.
@@ -33,28 +46,17 @@
 
 - Fixed payment-link creation for global payments.
 - Fixed payment-link reconciliation.
-
-## [3.18.0] 
-
-- Updated access control for `/customer-onboarding/{id}/process`: superadmins and the onboarding owner can now access the endpoint.
-- Added a reusable function to calculate SSI and KYC credits based on the service type.
-- Removed credit details from the request body of `POST /api/v1/customer-onboarding/{id}/process`.
-- Updated `POST /api/v1/customer-onboarding` to automatically process credits based on the type of service requested by the user.
-- Added an L1 support email to superadmins to trigger re-onboarding in case of onboarding failure.
-- Implemented Redis to display the live status of the onboarding process.
-- Removed `kyc-credit` allocation during onboarding, as credits are not required in dev mode.
-- Added free credit allocation for production mode.
-
-### Fixed
-
 - Fixed onboarding recovery so users can retry from the next incomplete step after an interrupted process.
+
 ## [3.17.0] - 2026-10-07
+
 ### Added
 
 - Added new access to the /oauth API for third-party customers to access KYB APIs.
 - Added businessId as an optional query parameter to the /oauth API.
 - Implemented PATCH /customer-onboarding to verify the company when moving an app to production.
 - Implemented checks for MFA setup and company verification when moving an app to production.
+
 ## [3.16.5] - 2026-10-06
 
 ### Updated
@@ -116,6 +118,7 @@
 ## [3.14.0] - 2026-07-14
 
 ### Changed
+
 - Added a way to trak credit issuer.
 
 ## [3.13.1] - 2026-07-06

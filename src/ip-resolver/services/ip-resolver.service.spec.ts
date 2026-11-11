@@ -7,7 +7,10 @@ describe('IpResolverService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [IpResolverService],
-    }).compile();
+    })
+      // Auto-mock constructor dependencies these smoke tests don't exercise.
+      .useMocker(() => ({}))
+      .compile();
 
     service = module.get<IpResolverService>(IpResolverService);
   });

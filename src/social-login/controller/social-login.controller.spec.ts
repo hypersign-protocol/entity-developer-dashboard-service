@@ -9,7 +9,10 @@ describe('SocialLoginController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [SocialLoginController],
       providers: [SocialLoginService],
-    }).compile();
+    })
+      // Auto-mock constructor dependencies these smoke tests don't exercise.
+      .useMocker(() => ({}))
+      .compile();
 
     controller = module.get<SocialLoginController>(SocialLoginController);
   });

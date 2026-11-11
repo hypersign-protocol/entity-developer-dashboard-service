@@ -6,6 +6,17 @@ import { SupportedServiceList } from 'src/supported-service/services/service-lis
 import { UserRepository } from 'src/user/repository/user.repository';
 import { SocialLoginService } from './social-login.service';
 import { AuthneticatorType } from '../dto/response.dto';
+import { redisClient } from 'src/utils/redis.provider';
+
+// The real provider opens a Redis connection on import.
+jest.mock('src/utils/redis.provider', () => ({
+  redisClient: {
+    ttl: jest.fn(),
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
+  },
+}));
 
 describe('SocialLoginService', () => {
   let service: SocialLoginService;
@@ -52,10 +63,14 @@ describe('SocialLoginService', () => {
       };
 
       await expect(
-        service.removeMFA(user, {
-          authenticatorType: AuthneticatorType.google,
-          twoFactorAuthenticationCode: '123456',
-        }),
+        service.removeMFA(
+          user,
+          {
+            authenticatorType: AuthneticatorType.google,
+            twoFactorAuthenticationCode: '123456',
+          },
+          'session-1',
+        ),
       ).resolves.toEqual({ message: 'Removed authenticator successfully' });
 
       expect(authenticator.verify).toHaveBeenCalledWith({
@@ -83,10 +98,14 @@ describe('SocialLoginService', () => {
       };
 
       await expect(
-        service.removeMFA(user, {
-          authenticatorType: AuthneticatorType.google,
-          twoFactorAuthenticationCode: '123456',
-        }),
+        service.removeMFA(
+          user,
+          {
+            authenticatorType: AuthneticatorType.google,
+            twoFactorAuthenticationCode: '123456',
+          },
+          'session-1',
+        ),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(userRepository.findOneUpdate).not.toHaveBeenCalled();
     });
@@ -105,10 +124,14 @@ describe('SocialLoginService', () => {
       };
 
       await expect(
-        service.removeMFA(user, {
-          authenticatorType: AuthneticatorType.google,
-          twoFactorAuthenticationCode: '123456',
-        }),
+        service.removeMFA(
+          user,
+          {
+            authenticatorType: AuthneticatorType.google,
+            twoFactorAuthenticationCode: '123456',
+          },
+          'session-1',
+        ),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(userRepository.findOneUpdate).not.toHaveBeenCalled();
     });

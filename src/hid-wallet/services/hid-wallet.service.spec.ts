@@ -10,7 +10,8 @@ describe('HidWalletService', () => {
       providers: [HidWalletService, ConfigService],
     }).compile();
 
-    service = module.get<HidWalletService>(HidWalletService);
+    // HidWalletService is request-scoped, so it must be resolved, not fetched.
+    service = await module.resolve<HidWalletService>(HidWalletService);
   });
 
   it('should be defined', () => {

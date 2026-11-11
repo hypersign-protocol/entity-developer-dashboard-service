@@ -208,7 +208,13 @@ export class CreditNotificationService
         Math.ceil((plan.expiresAt.getTime() - now.getTime()) / DAY_IN_MS),
       );
       const threshold = this.creditExpiryThresholds
-        .filter((value) => remainingDays <= value)
+        // A threshold as long as the plan itself would fire right after
+        // activation (e.g. a 30-day reminder on a one-month plan), so skip it.
+        .filter(
+          (value) =>
+            remainingDays <= value &&
+            (!plan.validityDays || value < plan.validityDays - 1),
+        )
         .pop();
       if (threshold === undefined) continue;
 

@@ -7,7 +7,10 @@ describe('MailNotificationService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [MailNotificationService],
-    }).compile();
+    })
+      // Auto-mock constructor dependencies these smoke tests don't exercise.
+      .useMocker(() => ({}))
+      .compile();
 
     service = module.get<MailNotificationService>(MailNotificationService);
   });

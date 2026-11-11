@@ -19,17 +19,20 @@ describe('mail templates render', () => {
     const errors: Array<{ name: string; error: any }> = [];
 
     try {
-      const html = creditRequest(
-        'user-1',
-        'req@example.com',
-        'svc',
-        'onb-1',
-        'Example Co',
-        'standard',
-        'req@example.com',
-        'tw',
-        'tg',
-      );
+      const html = creditRequest({
+        customerId: 'user-1',
+        customerName: 'Requester',
+        customerEmail: 'req@example.com',
+        onboardingId: 'onb-1',
+        companyName: 'Example Co',
+        companyType: 'standard',
+        twitterUrl: 'tw',
+        telegramUrl: 'tg',
+        interestedService: ['svc'],
+        yearlyVolume: '1000',
+        businessField: ['identity'],
+        loggedInEmail: 'req@example.com',
+      });
       expect(typeof html).toBe('string');
       expect(html.length).toBeGreaterThan(20);
       writePreview('credit-request', html);

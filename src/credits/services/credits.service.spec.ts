@@ -15,6 +15,8 @@ import {
 } from '../../utils/authz';
 import { BasicAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/feegrant';
 
+const DAY_IN_MS = 24 * 60 * 60 * 1_000;
+
 describe('CreditService', () => {
   let repository: jest.Mocked<CreditRepository>;
   let commandService: jest.Mocked<CreditCommandService>;
@@ -135,7 +137,7 @@ describe('CreditService', () => {
       status: CreditStatus.ACTIVE,
       apiCredit: { total: 150000, used: 0 },
       criticalBalance: 60000,
-      onChainAllowance: { amount: 600000000, denom: 'uhid', usedAmount: 0 },
+      onChainAllowance: { amount: 300000000, denom: 'uhid', usedAmount: 0 },
       source: CreditSourceEnum.MANUAL_RECHARGE,
     });
     repository.create.mockResolvedValue(createdCredit as never);
@@ -147,9 +149,9 @@ describe('CreditService', () => {
     const grantSSIAllowance = jest
       .spyOn(service, 'grantSSIAllowance')
       .mockResolvedValue({
-        credit: { amount: '600000000', denom: 'uhid' },
+        credit: { amount: '300000000', denom: 'uhid' },
         feegrant: {
-          amount: '600000000',
+          amount: '300000000',
           previousRemainingAmount: '0',
           denom: 'uhid',
         },
@@ -175,7 +177,7 @@ describe('CreditService', () => {
         apiCredit: { total: 150000, used: 0 },
         criticalBalance: 60000,
         onChainAllowance: {
-          amount: 600000000,
+          amount: 300000000,
           denom: 'uhid',
           usedAmount: 0,
         },
@@ -183,7 +185,7 @@ describe('CreditService', () => {
     );
     expect(grantSSIAllowance).toHaveBeenCalledWith(
       'app-1',
-      '600000000',
+      '300000000',
       30 / 365,
     );
     expect(commandService.grantCreditPlan).toHaveBeenCalledWith(
@@ -309,7 +311,7 @@ describe('CreditService', () => {
     const activatedCredit = plan({
       status: CreditStatus.ACTIVE,
       criticalBalance: 40,
-      onChainAllowance: { amount: 400000, denom: 'uhid', usedAmount: 0 },
+      onChainAllowance: { amount: 200000, denom: 'uhid', usedAmount: 0 },
     });
     repository.findOneAndUpdate.mockResolvedValueOnce(
       normalizedCredit as never,
@@ -325,9 +327,9 @@ describe('CreditService', () => {
     const grantSSIAllowance = jest
       .spyOn(service, 'grantSSIAllowance')
       .mockResolvedValue({
-        credit: { amount: '400000', denom: 'uhid' },
+        credit: { amount: '200000', denom: 'uhid' },
         feegrant: {
-          amount: '400000',
+          amount: '200000',
           previousRemainingAmount: '0',
           denom: 'uhid',
         },
@@ -336,7 +338,7 @@ describe('CreditService', () => {
 
     await service.activateCredit(credit._id as string, 'app-1');
 
-    expect(grantSSIAllowance).toHaveBeenCalledWith('app-1', '400000', 30 / 365);
+    expect(grantSSIAllowance).toHaveBeenCalledWith('app-1', '200000', 30 / 365);
     expect(repository.findOneAndUpdate).toHaveBeenCalledWith(
       {
         _id: credit._id,
@@ -354,13 +356,13 @@ describe('CreditService', () => {
       credit._id,
       expect.any(Date),
       40,
-      { amount: 400000, denom: 'uhid', usedAmount: 0 },
+      { amount: 200000, denom: 'uhid', usedAmount: 0 },
       [],
     );
     expect(commandService.grantCreditPlan).toHaveBeenCalledWith(
       expect.objectContaining({
         status: CreditStatus.ACTIVE,
-        onChainAllowance: { amount: 400000, denom: 'uhid', usedAmount: 0 },
+        onChainAllowance: { amount: 200000, denom: 'uhid', usedAmount: 0 },
       }),
       SERVICE_TYPES.SSI_API,
       'tenant-1',
@@ -673,8 +675,9 @@ function plan(overrides: Partial<CreditPlan> = {}) {
     criticalBalance: 40,
     referenceId: 'payment-1',
     validityDays: 30,
-    createdAt: new Date('2026-08-01T00:00:00.000Z'),
-    expiresAt: new Date('2026-09-01T00:00:00.000Z'),
+    // Relative to now so the fixture never ages into an expired plan.
+    createdAt: new Date(Date.now() - DAY_IN_MS),
+    expiresAt: new Date(Date.now() + 30 * DAY_IN_MS),
     ...overrides,
   } as CreditPlan & { _id: string };
 }

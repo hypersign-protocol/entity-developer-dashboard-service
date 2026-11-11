@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { CustomerOnboardingController } from '../customer-onboarding.controller';
+import { CustomerOnboardingController } from './customer-onboarding.controller';
 import { CustomerOnboardingService } from '../services/customer-onboarding.service';
 
 describe('CustomerOnboardingController', () => {
@@ -9,7 +9,10 @@ describe('CustomerOnboardingController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CustomerOnboardingController],
       providers: [CustomerOnboardingService],
-    }).compile();
+    })
+      // Auto-mock constructor dependencies these smoke tests don't exercise.
+      .useMocker(() => ({}))
+      .compile();
 
     controller = module.get<CustomerOnboardingController>(
       CustomerOnboardingController,

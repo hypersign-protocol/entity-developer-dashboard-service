@@ -992,7 +992,7 @@ flowchart TD
     - **Billed by:** our legal name, address, GSTIN, PAN and billing email.
     - **Billed to:** the customer's legal name, address, GSTIN and email.
     - **Invoice details:** number, issue date, paid-on or due date, place of supply, order number (self-serve) and app.
-  - **Line items:** "Prepaid verification credits", with the credits, validity and app underneath, the SAC code, quantity and amount. Below that, the add-ons as lighter **Included** rows, with no SAC or quantity.
+  - **Line items:** "Prepaid identity verification credits", with the credits, validity and app underneath, the SAC code, quantity and amount. Below that, the add-ons as lighter **Included** rows, with no SAC or quantity.
   - **Totals:** subtotal, plan discount, coupon, taxable value, GST (IGST 18%, or CGST 9% + SGST 9% within our state), total, amount paid and balance due. Balance due turns amber when it isn't zero.
   - **Amount in words:** Indian numbering (lakh, crore) for INR, and international numbering for USD.
   - **Payment panel:** "Paid on … · UPI via Razorpay · Payment ID …", "Paid on … · Bank transfer · Reference …", "Complimentary credits · No payment is due", or for unpaid invoices "Payment due by …", the payment link and a **QR code** for it.

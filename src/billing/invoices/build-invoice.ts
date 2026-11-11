@@ -7,7 +7,7 @@ import { indiaGst, TaxLine } from '../tax/india-gst';
 import { Supplier } from './supplier';
 
 export const INVOICE_TEMPLATE_VERSION = 'invoice-v1';
-export const CREDITS_LINE_DESCRIPTION = 'Prepaid verification credits';
+export const CREDITS_LINE_DESCRIPTION = 'Prepaid identity verification credits';
 export const TAX_NOTE_INDIA = 'Tax is payable on reverse charge: No.';
 export const TAX_NOTE_EXPORT =
   'Supply meant for export of services under LUT without payment of IGST.';

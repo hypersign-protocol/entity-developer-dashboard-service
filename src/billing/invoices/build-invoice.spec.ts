@@ -86,7 +86,7 @@ describe('buildAdminInvoice', () => {
       supplier: { gstin: '29AAAAA0000A1Z5' },
       lines: [
         {
-          description: 'Prepaid verification credits',
+          description: 'Prepaid identity verification credits',
           sac: '998314',
           quantity: 1,
           unitPriceMinor: 4000000,

@@ -429,7 +429,7 @@ India, **Already paid**, customer in Maharashtra:
   "app": { "appId": "98f0815cf8c2096a2b54ea1746f5b9538a72", "appName": "Acme KYC" },
   "orderNumber": null,
   "lines": [
-    { "description": "Prepaid verification credits", "sac": "998314", "quantity": 1, "unitPriceMinor": 4000000, "discountMinor": 0, "taxableMinor": 4000000 }
+    { "description": "Prepaid identity verification credits", "sac": "998314", "quantity": 1, "unitPriceMinor": 4000000, "discountMinor": 0, "taxableMinor": 4000000 }
   ],
   "addOnLines": [
     { "code": "VALIDITY", "title": "Credit validity" },

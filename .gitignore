@@ -39,3 +39,5 @@ lerna-debug.log*
 
 
 .api-edv-config/*
+# Email template previews written by render-all-templates.spec.ts
+/tmp/

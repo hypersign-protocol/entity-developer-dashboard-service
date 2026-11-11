@@ -50,8 +50,11 @@ describe('AppAuthController', () => {
     };
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AppAuthController],
-      providers: [AppAuthService],
-    }).compile();
+      providers: [AppAuthProvider],
+    })
+      // Auto-mock constructor dependencies these smoke tests don't exercise.
+      .useMocker(() => ({}))
+      .compile();
 
     appAuthcontroller = module.get<AppAuthController>(AppAuthController);
     spyAppAuthService = module.get<AppAuthService>(AppAuthService);

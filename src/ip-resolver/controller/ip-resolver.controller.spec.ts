@@ -9,7 +9,10 @@ describe('IpResolverController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [IpResolverController],
       providers: [IpResolverService],
-    }).compile();
+    })
+      // Auto-mock constructor dependencies these smoke tests don't exercise.
+      .useMocker(() => ({}))
+      .compile();
 
     controller = module.get<IpResolverController>(IpResolverController);
   });

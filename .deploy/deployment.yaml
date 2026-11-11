@@ -99,6 +99,8 @@ spec:
           value: "__GEOLOCATION_DB_PATH__"
         - name: REDIS_HOST
           value: "__REDIS_HOST__"
+        - name: REDIS_PORT
+          value: "__REDIS_PORT__"
         - name: CREDIT_LIFECYCLE_CONCURRENCY
           value: "10"
         - name: RABBIT_MQ_URI

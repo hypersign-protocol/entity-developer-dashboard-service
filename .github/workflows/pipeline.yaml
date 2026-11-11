@@ -131,6 +131,8 @@ jobs:
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__REDIS_HOST__#${{ secrets.REDIS_HOST }}#" {} \;
     - name: "Replace Secrets"
+      run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__REDIS_PORT__#${{ secrets.REDIS_PORT }}#" {} \;
+    - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__RABBIT_MQ_URI__#${{ secrets.RABBIT_MQ_URI }}#" {} \;
     - name: "Replace Secrets"
       run: find .deploy/deployment.yaml -type f -exec sed  -i -e "s#__KYC_VERIFIER_APP_BASE_URL__#${{ secrets.KYC_VERIFIER_APP_BASE_URL }}#" {} \;

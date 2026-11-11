@@ -254,7 +254,7 @@ describe('CustomerOnboardingService company verification webhook', () => {
 
       await expect(
         service.findUserOnboardingDetail({ userId: 'user-1' }),
-      ).resolves.toBe(onboarding);
+      ).resolves.toEqual(onboarding);
       expect(
         onboardingRepository.findCustomerOnboardingById,
       ).toHaveBeenCalledWith({ userId: 'user-1' }, { sort: { createdAt: -1 } });

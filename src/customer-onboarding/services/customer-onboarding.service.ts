@@ -1685,7 +1685,10 @@ export class CustomerOnboardingService {
                         false,
                       ),
                       urlSanitizer(
-                        this.config.get<string>('KYC_WIDGET_URL'),
+                        this.config.get<string>(
+                          'KYC_WIDGET_URL',
+                          'https://verify.hypersign.id',
+                        ),
                         false,
                       ),
                     ],
@@ -1962,7 +1965,10 @@ export class CustomerOnboardingService {
                         false,
                       ),
                       urlSanitizer(
-                        this.config.get<string>('KYC_WIDGET_URL'),
+                        this.config.get<string>(
+                          'KYC_WIDGET_URL',
+                          'https://verify.hypersign.id',
+                        ),
                         false,
                       ),
                       urlSanitizer(

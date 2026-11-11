@@ -178,12 +178,10 @@ describe('supplierProblems', () => {
         ...supplier,
         legalName: '',
         stateCode: '27',
-        pan: 'BBBBB0000B',
       }),
     ).toEqual([
       'BILLING_SUPPLIER_LEGAL_NAME is not set',
       'BILLING_SUPPLIER_GSTIN must start with BILLING_SUPPLIER_STATE_CODE',
-      'BILLING_SUPPLIER_PAN must match characters 3–12 of the GSTIN',
     ]);
   });
 });

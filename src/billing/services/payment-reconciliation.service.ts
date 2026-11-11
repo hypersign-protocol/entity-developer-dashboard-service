@@ -29,12 +29,9 @@ export class PaymentReconciliationService
   ) {}
 
   onModuleInit() {
-    if (
-      process.env.BILLING_PAY_ENABLED !== 'true' ||
-      !this.router.configured().length
-    ) {
+    if (!this.router.configured().length) {
       Logger.log(
-        'Payment reconciliation is off (BILLING_PAY_ENABLED or provider keys not set)',
+        'Payment reconciliation is off (payment provider keys not set)',
         'PaymentReconciliation',
       );
       return;

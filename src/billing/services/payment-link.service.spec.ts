@@ -59,7 +59,6 @@ describe('PaymentLinkService', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
-    process.env.BILLING_PAY_ENABLED = 'true';
     invoices.paymentLinkDraft.mockResolvedValue(draft);
     orders.nextOrderNumber.mockResolvedValue('ORD-2026-000009');
     razorpay.isConfigured.mockReturnValue(true);
@@ -93,7 +92,6 @@ describe('PaymentLinkService', () => {
       router as any,
     );
   });
-  afterEach(() => delete process.env.BILLING_PAY_ENABLED);
 
   it('creates an ADMIN order and a Razorpay link for the total with tax, no invoice', async () => {
     const result = await service.create(dto as any, 'sa-1', 'key-1');
@@ -137,8 +135,8 @@ describe('PaymentLinkService', () => {
     expect(orderModel.create.mock.calls[0][0].paymentLink.sentTo).toBeNull();
   });
 
-  it('refuses where payments are off', async () => {
-    delete process.env.BILLING_PAY_ENABLED;
+  it('refuses where payment keys are not set', async () => {
+    razorpay.isConfigured.mockReturnValue(false);
     await expect(
       service.create(dto as any, 'sa-1', 'key-1'),
     ).rejects.toMatchObject({ code: 'PAYMENTS_NOT_AVAILABLE' });

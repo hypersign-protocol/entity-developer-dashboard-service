@@ -4,7 +4,6 @@ import { Model } from 'mongoose';
 import {
   BillingErrorCode,
   BillingRegion,
-  isPayEnabled,
   REGION_TAX_MODE,
 } from '../billing.constants';
 import { BillingException } from '../billing.exception';
@@ -21,6 +20,7 @@ import {
 } from '../schemas/price-book.schema';
 import { Coupon, CouponDocument, CouponStatus } from '../schemas/coupon.schema';
 import { BillingAccount } from './billing-account.service';
+import { PaymentRouter } from '../payments/payment-router';
 
 export type PublishedPriceBook = PriceBook & { _id: unknown } & PricingBook;
 
@@ -31,7 +31,13 @@ export class CatalogService {
     private readonly priceBookModel: Model<PriceBookDocument>,
     @InjectModel(Coupon.name)
     private readonly couponModel: Model<CouponDocument>,
+    private readonly router: PaymentRouter,
   ) {}
+
+  /** Pay is offered where the region has a provider and its keys are set. */
+  private payAvailable(region: BillingRegion): boolean {
+    return !!this.router.forRegion(region)?.isConfigured();
+  }
 
   async getPublishedBook(region: BillingRegion): Promise<PublishedPriceBook> {
     const book = await this.priceBookModel
@@ -80,7 +86,10 @@ export class CatalogService {
       creditsPerMajorUnit: book.creditsPerMajorUnit,
       validityDays: validityDaysOf(book),
       taxMode: REGION_TAX_MODE[account.region],
-      features: { coupons: !!hasCoupons, pay: isPayEnabled(account.region) },
+      features: {
+        coupons: !!hasCoupons,
+        pay: this.payAvailable(account.region),
+      },
       plans,
       custom: {
         enabled: book.custom.enabled,

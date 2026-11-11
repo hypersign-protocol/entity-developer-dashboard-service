@@ -55,11 +55,6 @@ export enum BillingErrorCode {
   PROMOTION_CLAIM_IN_PROGRESS = 'PROMOTION_CLAIM_IN_PROGRESS',
 }
 
-/** Once true, ID Service credits can only be granted through invoices (POST /app/:appId/credits returns 409). */
-export function invoicedGrantsOnly(): boolean {
-  return process.env.BILLING_INVOICED_GRANTS === 'true';
-}
-
 /** Regions with billing switched on, from BILLING_ENABLED_REGIONS (e.g. "IN,GLOBAL"). Off by default. */
 export function isBillingEnabled(region: BillingRegion): boolean {
   return (process.env.BILLING_ENABLED_REGIONS || '')
@@ -73,11 +68,6 @@ export const PAY_PROVIDER: Partial<Record<BillingRegion, string>> = {
   [BillingRegion.IN]: 'razorpay',
   [BillingRegion.GLOBAL]: 'razorpay', // USD; international payments are enabled on the account
 };
-
-/** Pay is offered when BILLING_PAY_ENABLED=true and the region has a provider. */
-export function isPayEnabled(region: BillingRegion): boolean {
-  return process.env.BILLING_PAY_ENABLED === 'true' && !!PAY_PROVIDER[region];
-}
 
 /** Number formatting for text the customer reads: lakh grouping only in INR. */
 export const formatCount = (value: number, currency: string) =>

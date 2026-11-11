@@ -11,7 +11,7 @@
 - Added super-admin billing APIs under `/api/v1/admin/billing`: list and update billing profiles, preview and issue invoices for free or offline-paid credits, list invoices, and list, cancel or resend payment links.
 - Added a free-credit promotion that each organisation can claim once: `GET /api/v1/billing/promotion` and `POST /api/v1/billing/promotion/claim`.
 - KYB approval now saves the full KYB details into the billing profile, including personal tax IDs. Coupons and invoices use these details.
-- Added `BILLING_INVOICED_GRANTS`. When it is `true`, ID Service credits can only be granted through invoices, and `POST /api/v1/app/:appId/credits` returns 409.
+- ID Service credits can only be granted through invoices: `POST /api/v1/app/:appId/credits` returns 409 `USE_INVOICES` for ID Service apps.
 - Added the `READ_BILLING` and `WRITE_BILLING` dashboard access types.
 
 ### Added — Payments (Razorpay)
@@ -25,7 +25,7 @@
 
 ### Configuration
 
-- New environment variables (see `env.sample`): `BILLING_ENABLED_REGIONS`, `BILLING_PAY_ENABLED`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `BILLING_CHECKOUT_NAME`, `BILLING_SUPPLIER_*` (legal name, address, GSTIN, PAN, CIN, LUT ARN, state code), `BILLING_SAC_CODE`, `BILLING_INVOICE_PREFIX` and `BILLING_INVOICED_GRANTS`. Redis (`REDIS_URL` or `REDIS_HOST`/`REDIS_PORT`) is needed for the reconciliation job.
+- New environment variables (see `env.sample`): `BILLING_ENABLED_REGIONS`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `BILLING_CHECKOUT_NAME`, `BILLING_SUPPLIER_*` (legal name, address, GSTIN, CIN, LUT ARN, state code), `BILLING_SAC_CODE`, `BILLING_INVOICE_PREFIX`. Pay is offered wherever the Razorpay keys are set. Redis (`REDIS_URL` or `REDIS_HOST`/`REDIS_PORT`) is needed for the reconciliation job.
 - Seed and backfill scripts are in `docs/payment/scripts/`: price books and coupons, the KYB-approved date backfill, and a staging test account.
 - The design, API contract, epics and go-live checklist are in `docs/payment/`.
 

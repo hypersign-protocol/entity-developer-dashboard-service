@@ -28,10 +28,7 @@ import {
   GetCreditsQueryDto,
 } from '../dtos/credits.dto';
 import { CreditSourceEnum } from '../schemas/credit.schema';
-import {
-  BillingErrorCode,
-  invoicedGrantsOnly,
-} from 'src/billing/billing.constants';
+import { BillingErrorCode } from 'src/billing/billing.constants';
 import { BillingException } from 'src/billing/billing.exception';
 
 @UseFilters(AllExceptionsFilter)
@@ -97,12 +94,9 @@ export class CreditsController {
         'PROMOTION credits are granted only by the customer claiming them',
       ]);
     }
-    // Once invoicing is switched on, ID Service credits are granted only
-    // through invoices (POST /admin/billing/invoices). SSI is unchanged.
-    if (
-      invoicedGrantsOnly() &&
-      (await this.creditService.isIdServiceApp(appId))
-    ) {
+    // ID Service credits are granted only through invoices
+    // (POST /admin/billing/invoices). SSI is unchanged.
+    if (await this.creditService.isIdServiceApp(appId)) {
       throw new BillingException(
         HttpStatus.CONFLICT,
         BillingErrorCode.USE_INVOICES,

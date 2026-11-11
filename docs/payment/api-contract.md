@@ -5,7 +5,7 @@ The request and response formats for the billing APIs in `entity-developer-dashb
 | Part | Status | Build the UI now? |
 |---|---|---|
 | [Stage 1: invoicing](#stage-1-invoicing) | **Agreed** | Yes |
-| [Stage 2: payments](#stage-2-payments) | **Agreed** for India with Razorpay: §6 checkout, §7 Collect payment (payment links) | Yes, behind `features.pay` (customer) and `BILLING_PAY_ENABLED` (super admin) |
+| [Stage 2: payments](#stage-2-payments) | **Agreed** for India with Razorpay: §6 checkout, §7 Collect payment (payment links) | Yes, behind `features.pay` (customer) and the Razorpay keys (super admin) |
 
 Any change to an agreed endpoint is recorded in the [changelog](#changelog) at the end.
 
@@ -639,7 +639,7 @@ The same `InvoiceDocument` as the customer endpoint (§4), for any organisation,
 
 #### Existing endpoint, changed
 
-`POST /api/v1/app/:appId/credits`: once the `BILLING_INVOICED_GRANTS` setting is `true`, it returns **409 `USE_INVOICES`** for ID Service apps. It stays off until the new recharge page is live, so the current page keeps working. SSI Service apps are unchanged.
+`POST /api/v1/app/:appId/credits` returns **409 `USE_INVOICES`** for ID Service apps. SSI Service apps are unchanged.
 
 ---
 
@@ -988,7 +988,7 @@ Onboarding no longer grants starter credits. Instead the dashboard shows a banne
 
 **Before claiming, the organisation must save complete billing details, for every service.** Details pre-filled from KYB count once the customer has saved them, or automatically when KYB is approved and nothing is missing. Company verification (KYB) is not required to claim. Going live, unlike claiming, does require it.
 
-An ID Service claim is always issued as a ₹0 invoice (`source: PROMOTION`, `settlement: COMPLIMENTARY`) before the credits are granted, whatever `BILLING_INVOICED_GRANTS` says. That needs complete billing details and the `BILLING_SUPPLIER_*` settings. SSI claims are not invoiced, like other SSI credits.
+An ID Service claim is always issued as a ₹0 invoice (`source: PROMOTION`, `settlement: COMPLIMENTARY`) before the credits are granted. That needs complete billing details and the `BILLING_SUPPLIER_*` settings. SSI claims are not invoiced, like other SSI credits.
 
 #### 8.1 `GET /api/v1/billing/promotion?appId=…`
 
@@ -1069,6 +1069,7 @@ Body `{ "appId": "…" }`; the server sets the amount and validity. Needs `WRITE
 | 2026-11-04 | Global payments: §6 checkout and §7 payment links in USD through Razorpay. `BillingProfile` gains `phone` (international form), needed for Global customers to pay (`BILLING_PROFILE_INCOMPLETE` with `missingFields: ["phone"]`). `checkout.prefill.contact`. `InvoiceDocument` gains `fx`, the INR value at Razorpay's conversion rate. |
 | 2026-11-03 | §6 agreed for phase 1 (India, Razorpay Standard Checkout, no webhooks): `POST /billing/orders` returns `checkout` options instead of `checkoutUrl`; new `POST /billing/orders/:id/confirm`; the `Order` object gains `validityDays`, `checkout`, `payment`, `lastPaymentError`, `creditPlanId`, `creditsActive`; cancel is 6.4. New codes `IDEMPOTENCY_KEY_REUSED`, `PAYMENT_VERIFICATION_FAILED`, `ORDER_NOT_FOUND`, `ORDER_NOT_PAYABLE`, `ORDER_NOT_CANCELLABLE`. §7 stays provisional (phase 2). |
 | 2026-11-05 | §2, §4: new read-only `personalTaxId` on the profile, from a KYB submission with `taxIdType: "OTHER"`. It stays out of `taxIds`, counts for coupons that need a PAN when it's an Indian PAN, and prints masked on invoices when there are no `taxIds` (`customer.taxIds` holds `{ "type": "PAN", "number": "XXXXXX234F" }`, or `"type": "Tax ID"` outside that). A saved profile with no `taxIds` now gains the company tax ID from KYB. |
+| 2026-11-11 | Settings removed: `BILLING_PAY_ENABLED` (Pay, `features.pay` and Collect payment are on wherever the region's Razorpay keys are set) and `BILLING_INVOICED_GRANTS` (`POST /app/:appId/credits` now always returns `409 USE_INVOICES` for ID Service apps). `BILLING_SUPPLIER_PAN` removed: `supplier.pan` is taken from the GSTIN. |
 | 2026-11-09 | §6.5 added: optional Razorpay webhooks at `POST /billing/webhooks/razorpay` (signature checked over the raw body, `RAZORPAY_WEBHOOK_SECRET`). They only trigger the existing sync sooner; polling and reconciliation are unchanged and still cover every order without them. |
 | 2026-11-05 | §2, §8: when KYB is approved, complete prefilled billing details are saved automatically (`source: "SAVED"`, `complete: true`), unless the customer already saved their own. Incomplete details still need the billing form. Global customers still need a phone number before paying. |
 | 2026-11-04 | §8 added: free-credit promotion. New `GET /billing/promotion` and `POST /billing/promotion/claim`, which replaces customers calling `POST /app/:appId/credits` `{ source: PROMOTION }`; that endpoint is super-admin only again and refuses `PROMOTION`. A claim is once per organisation and service, answers `409 PROMOTION_ALREADY_CLAIMED` on a repeat (was a 200), and always issues a ₹0 `PROMOTION` invoice for ID Service (not tied to `BILLING_INVOICED_GRANTS`); SSI is not invoiced. Claims need saved, complete billing details for every service (`BILLING_PROFILE_INCOMPLETE`); KYB approval is not required. Invoice `source` gains `PROMOTION`. |

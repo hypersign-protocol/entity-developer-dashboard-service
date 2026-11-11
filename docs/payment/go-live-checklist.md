@@ -19,8 +19,7 @@ If any of these is missing or wrong, the service still starts, but invoice calls
 | `BILLING_SUPPLIER_LEGAL_NAME` | Our legal entity name as printed on invoices | [ ] |
 | `BILLING_SUPPLIER_EMAIL` | Billing contact email | [ ] |
 | `BILLING_SUPPLIER_STREET`, `_CITY`, `_PROVINCE`, `_POSTAL_CODE`, `_COUNTRY` | Registered address | [ ] |
-| `BILLING_SUPPLIER_GSTIN` | Our GSTIN. Must start with the state code | [ ] |
-| `BILLING_SUPPLIER_PAN` | Our PAN. Must match characters 3–12 of the GSTIN | [ ] |
+| `BILLING_SUPPLIER_GSTIN` | Our GSTIN. Must start with the state code. The PAN printed on invoices is taken from it | [ ] |
 | `BILLING_SUPPLIER_STATE_CODE` | `29` (Karnataka). Decides CGST + SGST or IGST | [ ] |
 | `BILLING_SAC_CODE` | Agreed with Finance (likely `998314`) | [ ] |
 | `BILLING_INVOICE_PREFIX` | `HS` (1–8 capital letters or digits) | [ ] |
@@ -43,13 +42,11 @@ If any of these is missing or wrong, the service still starts, but invoice calls
 
 ### Switches
 
-Turn these on in this order, one at a time.
+Pay, Collect payment and the reconciliation job are on wherever the Razorpay keys are set. ID Service credits are always granted through invoices.
 
 | Variable | Value | Done |
 |---|---|---|
 | `BILLING_ENABLED_REGIONS` | `IN`, later `IN,GLOBAL`. Empty means billing is off (`503 BILLING_DISABLED`) | [ ] |
-| `BILLING_PAY_ENABLED` | `true` turns on Pay, Collect payment and the reconciliation job | [ ] |
-| `BILLING_INVOICED_GRANTS` | `true` once super admins use the new recharge page. ID Service credits can then only be granted through invoices | [ ] |
 
 ### Existing (check only)
 

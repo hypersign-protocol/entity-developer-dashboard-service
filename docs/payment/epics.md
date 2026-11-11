@@ -21,7 +21,7 @@ The API request and response formats the dashboard builds against are in [api-co
 
 The organisation prerequisites are done (2026-10-31): one onboarding record per account, and `orgId` on apps, roles and team rows (§4.1).
 
-Every epic ships behind the `billing.selfServe` flag per region: the `BILLING_ENABLED_REGIONS` setting (for example `IN,GLOBAL`). It is empty by default, so billing endpoints return `503 BILLING_DISABLED` until a region is listed. Pay stays off until `BILLING_PAY_ENABLED=true`, and then only in regions with a gateway (phase 1: `IN`) and with `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` set. `BILLING_SUPPLIER_STATE_CODE` is our GST registration state: `29` (Karnataka); without it, Indian quotes show a single "GST 18%" line instead of CGST + SGST or IGST.
+Every epic ships behind the `billing.selfServe` flag per region: the `BILLING_ENABLED_REGIONS` setting (for example `IN,GLOBAL`). It is empty by default, so billing endpoints return `503 BILLING_DISABLED` until a region is listed. Pay is offered in regions with a gateway (phase 1: `IN`) once `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` are set. `BILLING_SUPPLIER_STATE_CODE` is our GST registration state: `29` (Karnataka); without it, Indian quotes show a single "GST 18%" line instead of CGST + SGST or IGST.
 
 Staging data scripts (mongosh) are in [scripts/](scripts/).
 
@@ -117,7 +117,7 @@ Backend:
 - [x] `POST /admin/billing/invoices/preview` for the summary panel's live totals (§5.3).
 - [x] `POST /admin/billing/invoices` with **Free credits** (amount 0) and **Already paid** (`isPaid = true`, with payment reference), and idempotency (§8.2).
 - [x] `GET /admin/billing/invoices`, `GET /admin/billing/invoices/:id` (the `InvoiceDocument`), `PATCH /admin/billing/profiles/:orgId` (§5.3).
-- [x] `POST /app/:appId/credits` returns `409 USE_INVOICES` for ID Service apps once `BILLING_INVOICED_GRANTS=true` (switch it on when the new recharge page is live). SSI Service is unchanged.
+- [x] `POST /app/:appId/credits` returns `409 USE_INVOICES` for ID Service apps. SSI Service is unchanged.
 - [x] Ownership check on `activateCredit`: customers can only activate plans of their own apps (§14.2). The status guard is left out: it would change how the credit pipeline retries, and no unpaid plans exist.
 - [ ] `grantCredit` option to grant straight to `Active`, if Q8 is agreed. Until then invoiced plans follow today's rule: a new plan waits while another is active (preview shows `AFTER_CURRENT_PLAN`).
 - [x] Our legal entity details from `BILLING_SUPPLIER_*` settings, checked on every invoice call (`503 BILLING_NOT_CONFIGURED`) and logged at startup. Not a startup failure, so a missing setting can't take the dashboard down.
@@ -158,7 +158,7 @@ Backend (done, needs sandbox testing):
 
 Setup:
 - [ ] Razorpay Dashboard: **payment capture automatic** (Account & Settings › Payment capture). The server also captures as a fallback.
-- [ ] Staging settings: `BILLING_PAY_ENABLED=true`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` (test keys), `BILLING_CHECKOUT_NAME`.
+- [ ] Staging settings: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` (test keys), `BILLING_CHECKOUT_NAME`.
 
 Dashboard:
 - [ ] Pay → billing form if incomplete → `POST /billing/orders` → Razorpay popup (`checkout.js`) → `confirm` → poll until `FULFILLED` → result with **Download invoice** (contract §6).

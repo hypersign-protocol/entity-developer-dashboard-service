@@ -10,7 +10,6 @@ import {
   BillingErrorCode,
   BillingRegion,
   formatCount,
-  isPayEnabled,
   REGION_TAX_MODE,
 } from '../billing.constants';
 import { BillingException } from '../billing.exception';
@@ -89,7 +88,7 @@ export class PaymentLinkService {
 
     const region = draft.profile.region as BillingRegion;
     const provider = this.router.forRegion(region);
-    if (!isPayEnabled(region) || !provider?.isConfigured()) {
+    if (!provider?.isConfigured()) {
       throw new BillingException(
         HttpStatus.UNPROCESSABLE_ENTITY,
         BillingErrorCode.PAYMENTS_NOT_AVAILABLE,

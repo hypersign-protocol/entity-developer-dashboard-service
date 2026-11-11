@@ -14,7 +14,7 @@ export interface Supplier {
     country: string;
   };
   gstin: string;
-  pan: string;
+  pan: string; // characters 3–12 of the GSTIN
   cin: string | null;
   lutArn: string | null;
   stateCode: string;
@@ -25,6 +25,7 @@ export interface Supplier {
 const env = (name: string) => process.env[name]?.trim() || '';
 
 export function readSupplier(): Supplier {
+  const gstin = env('BILLING_SUPPLIER_GSTIN').toUpperCase();
   return {
     legalName: env('BILLING_SUPPLIER_LEGAL_NAME'),
     email: env('BILLING_SUPPLIER_EMAIL'),
@@ -35,8 +36,8 @@ export function readSupplier(): Supplier {
       postalCode: env('BILLING_SUPPLIER_POSTAL_CODE'),
       country: env('BILLING_SUPPLIER_COUNTRY'),
     },
-    gstin: env('BILLING_SUPPLIER_GSTIN').toUpperCase(),
-    pan: env('BILLING_SUPPLIER_PAN').toUpperCase(),
+    gstin,
+    pan: gstin.slice(2, 12),
     cin: env('BILLING_SUPPLIER_CIN') || null,
     lutArn: env('BILLING_SUPPLIER_LUT_ARN') || null,
     stateCode: env('BILLING_SUPPLIER_STATE_CODE'),
@@ -54,7 +55,6 @@ const REQUIRED: [string, (s: Supplier) => string][] = [
   ['BILLING_SUPPLIER_POSTAL_CODE', (s) => s.address.postalCode],
   ['BILLING_SUPPLIER_COUNTRY', (s) => s.address.country],
   ['BILLING_SUPPLIER_GSTIN', (s) => s.gstin],
-  ['BILLING_SUPPLIER_PAN', (s) => s.pan],
   ['BILLING_SUPPLIER_STATE_CODE', (s) => s.stateCode],
   ['BILLING_SAC_CODE', (s) => s.sac],
   ['BILLING_INVOICE_PREFIX', (s) => s.invoicePrefix],
@@ -74,11 +74,6 @@ export function supplierProblems(s: Supplier): string[] {
   if (s.gstin && s.stateCode && !s.gstin.startsWith(s.stateCode)) {
     problems.push(
       'BILLING_SUPPLIER_GSTIN must start with BILLING_SUPPLIER_STATE_CODE',
-    );
-  }
-  if (s.gstin && s.pan && s.gstin.slice(2, 12) !== s.pan) {
-    problems.push(
-      'BILLING_SUPPLIER_PAN must match characters 3–12 of the GSTIN',
     );
   }
   if (s.invoicePrefix && !/^[A-Z0-9]{1,8}$/.test(s.invoicePrefix)) {

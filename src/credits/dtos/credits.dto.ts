@@ -1,8 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  IsInt,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsPositive,
@@ -217,6 +217,13 @@ export class CreditRequestDto {
   })
   @IsString()
   amountDenom: string;
+
+  // Defaults to MANUAL_RECHARGE. PROMOTION is only granted by the customer's
+  // claim (POST /api/v1/billing/promotion/claim).
+  @ApiPropertyOptional({ enum: CreditSourceEnum })
+  @IsOptional()
+  @IsEnum(CreditSourceEnum)
+  source?: CreditSourceEnum;
 }
 
 export class CreditResponseDto {

@@ -11,6 +11,53 @@ import {
 import { KybVerificationEnum } from '../constants/identifier-types';
 export type CustomerOnboardingDocument = CustomerOnboarding & Document;
 
+@Schema({ _id: false })
+export class BillingAddress {
+  @Prop({ type: String }) street: string;
+  @Prop({ type: String }) city: string;
+  @Prop({ type: String }) province: string;
+  @Prop({ type: String }) postalCode: string;
+  @Prop({ type: String }) country: string; // ISO 3166-1 alpha-2
+}
+
+@Schema({ _id: false })
+export class BillingTaxId {
+  @Prop({ type: String }) type: string; // TaxIdTypes code: GSTIN, PAN, VAT, …
+  @Prop({ type: String }) number: string;
+}
+
+// A personal tax ID from KYB. Only the end of it is kept, for invoices.
+@Schema({ _id: false })
+export class BillingPersonalTaxId {
+  @Prop({ type: String }) type: string; // PAN or OTHER
+  @Prop({ type: String }) last4: string;
+}
+
+// The organisation's billing profile (ADR §4.1). Fields are optional because
+// they arrive in steps: region first, then KYB prefill, then confirmedAt, from
+// the customer's save or KYB approval.
+@Schema({ _id: false })
+export class BillingDetails {
+  @Prop({ type: String, enum: ['IN', 'GLOBAL'] })
+  region?: 'IN' | 'GLOBAL';
+  @Prop({ type: String, enum: ['INR', 'USD'] })
+  currency?: 'INR' | 'USD';
+  @Prop({ type: String }) legalName?: string;
+  @Prop({ type: String }) email?: string;
+  @Prop({ type: String }) phone?: string; // international form, e.g. +4930123456
+  @Prop({ type: SchemaFactory.createForClass(BillingAddress) })
+  address?: BillingAddress;
+  @Prop({ type: String }) gstStateCode?: string; // India: 2-digit GST state code
+  @Prop({ type: [SchemaFactory.createForClass(BillingTaxId)] })
+  taxIds?: BillingTaxId[];
+  @Prop({ type: SchemaFactory.createForClass(BillingPersonalTaxId) })
+  personalTaxId?: BillingPersonalTaxId;
+  @Prop({ type: Date }) confirmedAt?: Date; // saved, or set on KYB approval
+  @Prop({ type: Date }) lockedAt?: Date; // first paid invoice
+}
+export const BillingDetailsSchema =
+  SchemaFactory.createForClass(BillingDetails);
+
 export class LogDetail {
   @Prop({ Type: String, required: true })
   step: OnboardingStep;
@@ -20,6 +67,22 @@ export class LogDetail {
   status: StepStatus;
   @Prop({ Type: String, required: false })
   failureReason?: string;
+}
+
+export interface PromotionClaim {
+  status: 'CLAIMING' | 'GRANTED';
+  appId: string;
+  claimedBy: string;
+  claimedAt: Date;
+  credits: number;
+  validityDays: number;
+  onChainAllowance?: number; // SSI: the HID allowance granted with the credits
+  invoiced: boolean; // fixed at the claim, so a retry takes the same path
+  creditPlanId?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  grantedAt?: Date;
+  legacy?: boolean; // granted before claims were recorded here
 }
 
 @Schema({ timestamps: true })
@@ -89,8 +152,18 @@ export class CustomerOnboarding {
   companyVerificationStatus?: string;
   @Prop({ type: String, required: false })
   companyStatusReason?: string;
+  // Set by the KYB webhook on the first move to Approved. Coupons use it.
+  @Prop({ type: Date, required: false })
+  companyVerificationApprovedAt?: Date;
   @Prop({ type: String, required: true })
   userId: string;
+  // Billing profile. Written only by the billing module (its own $set path).
+  @Prop({ type: BillingDetailsSchema, required: false })
+  billing?: BillingDetails;
+  // Free-credit promotion claims, one per service (SSI_API, CAVACH_API), so a
+  // new app can't claim again. Written only by billing's PromotionService.
+  @Prop({ type: Object, required: false })
+  promotions?: Record<string, PromotionClaim>;
 }
 
 export const CustomerOnboardingSchema =

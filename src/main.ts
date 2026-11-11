@@ -20,6 +20,7 @@ import { WebpageConfigModule } from './webpage-config/webpage-config.module';
 import { CustomerOnboardingModule } from './customer-onboarding/customer-onboarding.module';
 import { CreditModule } from './credits/credits.module';
 import { validateEnv } from './utils/env-validator';
+import { BILLING_WEBHOOK_PATH } from './billing/billing-webhook.controller';
 
 async function bootstrap() {
   // .env is already loaded by ConfigModule.forRoot() when AppModule is imported
@@ -27,7 +28,16 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  app.use(json({ limit: '10mb' }));
+  app.use(
+    json({
+      limit: '10mb',
+      // Payment webhooks are signed over the exact bytes sent: keep them.
+      verify: (req: any, _res, buf: Buffer) => {
+        if (req.originalUrl?.startsWith(BILLING_WEBHOOK_PATH))
+          req.rawBody = buf;
+      },
+    }),
+  );
   app.use(urlencoded({ extended: true, limit: '10mb' }));
   app.use(express.static(path.join(__dirname, '../public')));
   app.use(cookieParser());

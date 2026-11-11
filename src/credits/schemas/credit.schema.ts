@@ -20,6 +20,7 @@ export enum CreditStatus {
 export enum CreditSourceEnum {
   'MANUAL_RECHARGE' = 'MANUAL_RECHARGE',
   'CUSTOMER_ONBOARDING' = 'CUSTOMER_ONBOARDING',
+  'PROMOTION' = 'PROMOTION',
   'MIGRATION' = 'MIGRATION',
   'PAYMENT' = 'PAYMENT',
   'ADJUSTMENT' = 'ADJUSTMENT',
@@ -83,11 +84,25 @@ export class CreditPlan {
   legacyCreditId?: string;
   @Prop({ required: false, type: CreditNotificationState })
   notification?: CreditNotificationState;
+  // The invoice that paid for this plan (billing, ADR §4.6).
+  @Prop({ required: false, type: String })
+  invoiceId?: string;
+  // Set by a refund or a lost dispute. Remaining = total - used - revokedCredits.
+  @Prop({ required: false, type: Number })
+  revokedCredits?: number;
 }
 
 export const CreditsSchema = SchemaFactory.createForClass(CreditPlan);
 CreditsSchema.index({ serviceId: 1, status: 1 });
 CreditsSchema.index({ serviceId: 1, createdAt: 1 });
 CreditsSchema.index({ serviceId: 1, referenceId: 1 }, { unique: true });
+CreditsSchema.index(
+  { serviceId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { source: CreditSourceEnum.PROMOTION },
+  },
+);
 CreditsSchema.index({ legacyCreditId: 1, migrationSource: 1 });
 CreditsSchema.index({ status: 1, expiresAt: 1 });
+CreditsSchema.index({ invoiceId: 1 }, { sparse: true });

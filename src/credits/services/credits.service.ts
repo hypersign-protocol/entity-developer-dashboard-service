@@ -7,11 +7,11 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { Types } from 'mongoose';
-import { randomUUID } from 'node:crypto';
 import { CreditPlan, CreditSourceEnum, scope } from '../schemas/credit.schema';
 import { ConfigService } from '@nestjs/config';
 import { SERVICE_TYPES } from 'src/supported-service/services/iServiceList';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
+import { UserRole } from 'src/user/schema/user.schema';
 import {
   assertIsDeliverTxSuccess,
   QueryClient,
@@ -39,6 +39,7 @@ import { TimeUnit } from 'src/customer-onboarding/constants/enum';
 import { CreditRepository } from '../repositories/credit.repository';
 import { CreditStatus } from '../schemas/credit.schema';
 import { CreditCommandService } from './credit-command.service';
+import { randomUUID } from 'node:crypto';
 
 const SSI_ON_CHAIN_ALLOWANCE_MULTIPLIER = BigInt(2000);
 
@@ -77,7 +78,17 @@ export class CreditService {
     return this.creditRepository.findBasedOnAggregationPipeline(pipeline);
   }
 
-  async activateCredit(creditId: string, appId: string) {
+  /** True for ID Service apps, whose credits are granted through invoices. */
+  async isIdServiceApp(appId: string): Promise<boolean> {
+    const app = await this.appRepository.findOne({ appId });
+    return app?.services?.[0]?.id === SERVICE_TYPES.CAVACH_API;
+  }
+
+  async activateCredit(
+    creditId: string,
+    appId: string,
+    caller?: { userId: string; role?: string },
+  ) {
     Logger.log(
       `Activating credit plan for app with Id: ${appId} and creditId ${creditId}`,
       'CreditService',
@@ -103,6 +114,18 @@ export class CreditService {
       ]);
     }
     const appDetail = await this.appRepository.findOne({ appId });
+    // Customers may only activate plans of their own apps (owner id; team
+    // members are mapped to it). Super admins may activate any.
+    if (
+      caller &&
+      caller.role !== UserRole.SUPER_ADMIN &&
+      appDetail &&
+      appDetail.userId !== caller.userId
+    ) {
+      throw new NotFoundException([
+        `No credit detail found for creditId: ${creditId}`,
+      ]);
+    }
     const serviceType = appDetail?.services?.[0]?.id;
     if (
       !appDetail ||
@@ -540,6 +563,7 @@ export class CreditService {
     superAdminUserId: string,
     source: CreditSourceEnum,
     grantReferenceId?: string,
+    exactOnChainAllowanceAmount?: string,
   ) {
     try {
       const appDetail = await this.appRepository.findOne({ appId });
@@ -555,6 +579,27 @@ export class CreditService {
       const serviceType = serviceInfo.id as SERVICE_TYPES;
       const isSsiService = serviceInfo.id === SERVICE_TYPES.SSI_API;
       const { amount, validityPeriod, validityPeriodUnit } = creditDto;
+
+      let onChainAllowanceAmount: string | undefined;
+      if (exactOnChainAllowanceAmount !== undefined) {
+        if (!isSsiService) {
+          throw new BadRequestException([
+            'onChainAllowanceAmount can only be set for SSI services',
+          ]);
+        }
+        if (!/^[1-9]\d*$/.test(exactOnChainAllowanceAmount)) {
+          throw new BadRequestException([
+            'onChainAllowanceAmount must be a positive integer',
+          ]);
+        }
+        const parsedAllowance = BigInt(exactOnChainAllowanceAmount);
+        if (parsedAllowance > BigInt(Number.MAX_SAFE_INTEGER)) {
+          throw new BadRequestException([
+            'onChainAllowanceAmount exceeds the maximum safe integer',
+          ]);
+        }
+        onChainAllowanceAmount = parsedAllowance.toString();
+      }
 
       const totalCredit = Number(amount);
       if (!Number.isSafeInteger(totalCredit) || totalCredit <= 0) {
@@ -580,7 +625,10 @@ export class CreditService {
           existingCredit.apiCredit.total !== totalCredit ||
           existingCredit.criticalBalance !== criticalBalance ||
           existingCredit.validityDays !== validity.validityDays ||
-          existingCredit.source !== source
+          existingCredit.source !== source ||
+          (onChainAllowanceAmount !== undefined &&
+            String(existingCredit.onChainAllowance?.amount) !==
+              onChainAllowanceAmount)
         ) {
           throw new BadRequestException([
             'referenceId was reused with different credit semantics',
@@ -637,7 +685,7 @@ export class CreditService {
         );
         const authzCreditDetail = await this.grantSSIAllowance(
           appId,
-          this.ssiOnChainAllowance(totalCredit),
+          onChainAllowanceAmount ?? this.ssiOnChainAllowance(totalCredit),
           periodInYears,
         );
         onChainAllowance = {

@@ -97,6 +97,103 @@ describe('CustomerOnboardingService company verification webhook', () => {
     );
   });
 
+  describe('KYB approval and the billing profile', () => {
+    const companyId = '665f17f9c2b4f5a6d7e8f901';
+    const address = {
+      street: '12 MG Road',
+      city: 'Bengaluru',
+      province: 'Karnataka',
+      postalCode: '560001',
+      country: 'IN',
+    };
+    const approve = (billing: Record<string, unknown>) => {
+      onboardingRepository.findCustomerOnboardingById.mockResolvedValue({
+        _id: 'org-1',
+        companyId,
+        companyName: 'Acme',
+        customerEmail: 'billing@acme.example',
+        companyVerificationStatus: KybVerificationEnum.Submitted,
+        billing,
+      });
+      onboardingRepository.updateCustomerOnboardingDetails.mockResolvedValue({
+        companyId,
+      });
+      return service.updateCompanyVerificationStatus(
+        {
+          type: WebhookVerificationType.BUSINESS,
+          success: true,
+          environment: 'prod',
+          data: {
+            event: 'company.verification.updated',
+            companyId,
+            status: KybVerificationEnum.Approved,
+            createdAt: '2026-10-13T10:00:00.000Z',
+          },
+        },
+        'secret',
+      );
+    };
+    const billingWrites = () =>
+      onboardingRepository.updateCustomerOnboardingDetails.mock.calls.filter(
+        ([filter]) => 'billing.confirmedAt' in filter,
+      );
+
+    it('saves complete prefilled details, keeping a concurrent save', async () => {
+      await approve({ region: 'IN', address, gstStateCode: '29' });
+
+      expect(billingWrites()).toEqual([
+        [
+          { companyId, 'billing.confirmedAt': { $exists: false } },
+          {
+            $set: expect.objectContaining({
+              'billing.legalName': 'Acme',
+              'billing.confirmedAt': expect.any(Date),
+            }),
+          },
+        ],
+      ]);
+    });
+
+    it('leaves saved and incomplete details alone', async () => {
+      await approve({
+        region: 'IN',
+        address,
+        gstStateCode: '29',
+        confirmedAt: new Date(),
+      });
+      await approve({ region: 'IN', gstStateCode: '29' });
+
+      expect(billingWrites()).toEqual([]);
+    });
+
+    it('does not save details on any other status', async () => {
+      onboardingRepository.findCustomerOnboardingById.mockResolvedValue({
+        _id: 'org-1',
+        companyId,
+        companyName: 'Acme',
+        customerEmail: 'billing@acme.example',
+        companyVerificationStatus: KybVerificationEnum.Submitted,
+        billing: { region: 'IN', address, gstStateCode: '29' },
+      });
+      await service.updateCompanyVerificationStatus(
+        {
+          type: WebhookVerificationType.BUSINESS,
+          success: true,
+          environment: 'prod',
+          data: {
+            event: 'company.verification.updated',
+            companyId,
+            status: KybVerificationEnum.Completed,
+            createdAt: '2026-10-13T10:00:00.000Z',
+          },
+        },
+        'secret',
+      );
+
+      expect(billingWrites()).toEqual([]);
+    });
+  });
+
   it('does not repeat side effects for an unchanged webhook', async () => {
     onboardingRepository.findCustomerOnboardingById.mockResolvedValue({
       companyId: '665f17f9c2b4f5a6d7e8f901',

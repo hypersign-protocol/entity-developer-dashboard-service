@@ -17,9 +17,11 @@ import { UserRepository } from 'src/user/repository/user.repository';
 import { UserRole } from 'src/user/schema/user.schema';
 import { MailNotificationService } from 'src/mail-notification/services/mail-notification.service';
 import {
-  CreditDetail,
-  CustomerOnboardingProcessDto,
-} from '../dto/customer-onboarding-process.dto';
+  kybApprovedBillingUpdate,
+  kybBillingDefaults,
+  kybPersonalTaxId,
+} from 'src/billing/profile/billing-profile';
+import { CreditDetail } from '../dto/customer-onboarding-process.dto';
 import {
   AppAuthService,
   GRANT_TYPES,
@@ -39,6 +41,7 @@ import {
   StepStatus,
   SupportedKybDocument,
   SupportedDocument,
+  TimeUnit,
 } from '../constants/enum';
 import {
   CustomerOnboarding,
@@ -49,8 +52,10 @@ import {
   evaluateAccessPolicy,
   generateHash,
   getAccessListForModule,
-  sanitizeUrl,
+  ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS,
   SERVICE_ENDPOINTS,
+  REDIS_KEYS,
+  sanitizeUrl,
 } from 'src/utils/utils';
 import { RoleRepository } from 'src/roles/repository/role.repository';
 import { AdminPeopleRepository } from 'src/people/repository/people.repository';
@@ -61,6 +66,7 @@ import {
   PageType,
 } from 'src/webpage-config/dto/create-webpage-config.dto';
 import getOnboardingRetryNotificationMail from 'src/mail-notification/constants/templates/request-retry-onboarding';
+import getOnboardingFailureNotificationMail from 'src/mail-notification/constants/templates/onboarding-failure.template';
 import { redisClient } from 'src/utils/redis.provider';
 import { EXPIRY_CONFIG } from 'src/utils/time-constant';
 import { TokenModule } from 'src/config/access-matrix';
@@ -69,6 +75,7 @@ import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { VerificationMethodTypes } from 'src/utils/generated/client/enums';
 import { Types } from 'mongoose';
 import { CreditSourceEnum } from 'src/credits/schemas/credit.schema';
+import { calculateDidOnboardingCreditAmounts } from 'src/credits/utils/credit-amounts';
 import { v4 as uuidv4 } from 'uuid';
 import { validate, ValidationError } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
@@ -119,6 +126,18 @@ export class CustomerOnboardingService {
       (isCompleted || (onboarding.companyStatusReason || '') === reason);
     if (isUnchanged) return onboarding;
 
+    // Before the status write, so a retried webhook still gets here. The filter
+    // keeps details the customer saves in the meantime.
+    if (status === KybVerificationEnum.Approved) {
+      const billing = kybApprovedBillingUpdate(onboarding as any);
+      if (Object.keys(billing).length) {
+        await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+          { companyId, 'billing.confirmedAt': { $exists: false } },
+          { $set: billing },
+        );
+      }
+    }
+
     const updated =
       await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
         { companyId },
@@ -126,6 +145,11 @@ export class CustomerOnboardingService {
           $set: {
             companyVerificationStatus: status,
             ...(!isCompleted && { companyStatusReason: reason }),
+            // First approval only: FOUNDING coupons count 180 days from it.
+            ...(status === KybVerificationEnum.Approved &&
+              !onboarding.companyVerificationApprovedAt && {
+                companyVerificationApprovedAt: new Date(),
+              }),
           },
         },
       );
@@ -450,6 +474,7 @@ export class CustomerOnboardingService {
     }
     const statusReason = companyData.statusReason;
     const isCompleted = companyData.status === KybVerificationEnum.Completed;
+    const personalTaxId = kybPersonalTaxId(company);
     const updatedOnboarding =
       await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
         { _id: onboardingId, userId: user.userId },
@@ -462,6 +487,9 @@ export class CustomerOnboardingService {
             ...(company.registrationNumber !== undefined && {
               registrationNumber: company.registrationNumber,
             }),
+            // Prefill an unconfirmed billing profile from the KYB company.
+            ...kybBillingDefaults(onboarding.billing, company),
+            ...(personalTaxId && { 'billing.personalTaxId': personalTaxId }),
             ...(!isCompleted &&
               statusReason !== undefined && {
                 companyStatusReason: this.formatStatusReason(statusReason),
@@ -472,6 +500,10 @@ export class CustomerOnboardingService {
                 companyStatusReason: '',
               }),
           },
+          // A resubmission can replace it with the company's own tax ID.
+          ...(!personalTaxId && {
+            $unset: { 'billing.personalTaxId': '' },
+          }),
         },
       );
     return updatedOnboarding;
@@ -737,6 +769,17 @@ export class CustomerOnboardingService {
         onboardingData['_id'].toString(),
       );
 
+      void this.processCustomerOnboarding(
+        onboardingData['_id'].toString(),
+        user.userId,
+      ).catch((processingError: any) => {
+        Logger.error(
+          `Automatic onboarding processing failed for ${onboardingData['_id']}: ${processingError.message}`,
+          processingError.stack,
+          'CustomerOnboardingService',
+        );
+      });
+
       const customerName =
         user?.name || loggedInUserEmail?.split('@')[0] || 'User';
       const message = getCreditRequestNotificationMail({
@@ -760,20 +803,30 @@ export class CustomerOnboardingService {
         loggedInEmail: loggedInUserEmail,
         referralSource: createCustomerOnboardingDto.referralSource || '',
       });
-      const superAdminDetails = await this.userRepository.find({
-        role: UserRole.SUPER_ADMIN,
-      });
-      const superAdminEmails = superAdminDetails.map((admin) => admin.email);
-      const subject = 'New Customer Onboarding Request Received';
-      Logger.log(
-        'Before sending mail to super admin',
-        'CustomerOnboardingService',
-      );
-      await this.sendOnboardingRequestMailToSuperAdmin(
-        message,
-        superAdminEmails,
-        subject,
-      );
+      try {
+        const superAdminDetails = await this.userRepository.find({
+          role: UserRole.SUPER_ADMIN,
+        });
+        const superAdminEmails = superAdminDetails.map((admin) => admin.email);
+        const subject = 'New Customer Onboarding Request Received';
+        Logger.log(
+          'Before sending mail to super admin',
+          'CustomerOnboardingService',
+        );
+        await this.sendOnboardingRequestMailToSuperAdmin(
+          message,
+          superAdminEmails,
+          subject,
+        );
+      } catch (notificationError: any) {
+        Logger.error(
+          `Could not notify super admins about onboarding ${
+            onboardingData['_id']
+          }: ${notificationError?.message || notificationError}`,
+          notificationError?.stack,
+          'CustomerOnboardingService',
+        );
+      }
 
       return onboardingData;
     } catch (e: any) {
@@ -834,7 +887,7 @@ export class CustomerOnboardingService {
           'You are not authorized to access this resource',
         ]);
       }
-      return customerOnboardingData;
+      return this.withLiveOnboardingProgress(customerOnboardingData);
     } catch (e: any) {
       Logger.error(
         'Error occured while fetching onboarding detail',
@@ -885,9 +938,18 @@ export class CustomerOnboardingService {
     handleKybErrors = false,
   ) {
     Logger.log('Inside makeExternalRequest()', 'CustomerOnboardingService');
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS,
+    );
     try {
       Logger.log(`Making request to ${url}`, 'CustomerOnboardingService');
-      const response = await fetch(url, options);
+      // Keep the deadline active through response body parsing as well as fetch.
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
       Logger.log(
         `Received response with status ${response.status}`,
         'CustomerOnboardingService',
@@ -969,6 +1031,22 @@ export class CustomerOnboardingService {
       }
       return detail;
     } catch (error: any) {
+      if (controller.signal.aborted) {
+        const timeoutError = new Error(
+          `External request timed out after ${ONBOARDING_EXTERNAL_REQUEST_TIMEOUT_MS}ms: ${errorMessage}`,
+        );
+        Logger.error(
+          timeoutError,
+          timeoutError.stack,
+          'CustomerOnboardingService',
+        );
+        if (handleKybErrors) {
+          throw new InternalServerErrorException([
+            `${errorMessage}: upstream service timed out`,
+          ]);
+        }
+        throw timeoutError;
+      }
       if (handleKybErrors && error instanceof HttpException) {
         throw error;
       }
@@ -984,6 +1062,8 @@ export class CustomerOnboardingService {
       }
       Logger.error(error, error?.stack, 'CustomerOnboardingService');
       throw error;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -1017,6 +1097,7 @@ export class CustomerOnboardingService {
     serviceInfo: { appId: string; subdomain: string },
     superAdminUserId: string,
     referenceId: string,
+    onChainAllowanceAmount?: number,
   ) {
     Logger.log(
       `Inside handleCreditService() to fund credit to the service with appId ${serviceInfo.appId}`,
@@ -1033,43 +1114,81 @@ export class CustomerOnboardingService {
       superAdminUserId,
       CreditSourceEnum.CUSTOMER_ONBOARDING,
       referenceId,
+      onChainAllowanceAmount?.toString(),
     );
-    // const creditPayload = {
-    //   serviceId: serviceInfo.appId,
-    //   purpose: 'CreditRecharge',
-    //   amount: creditDetail.amount,
-    //   validityPeriod: creditDetail.validityPeriod,
-    //   validityPeriodUnit: creditDetail.validityPeriodUnit,
-    //   amountDenom: creditDetail.amountDenom,
-    //   subdomain: serviceInfo.subdomain,
-    //   grantType,
-    //   whitelistedCors,
-    //   accessList,
-    //   creditedBy: superAdminUserId,
-    // };
-    // const creditToken = await this.generateCreditToken(creditPayload, secret);
-    // const headers: Record<string, string> = {
-    //   'Content-Type': 'application/json',
-    //   'x-api-credit-token': creditToken,
-    // };
-    // const requestOptions: any = {
-    //   method: 'POST',
-    //   headers,
-    // };
-    // if (grantType === GRANT_TYPES.access_service_ssi) {
-    //   const authzCreditDetail = await this.creditService.grantSSIAllowance(
-    //     serviceInfo.appId,
-    //     '5000000',
-    //   );
-    //   requestOptions.body = JSON.stringify({
-    //     ...authzCreditDetail,
-    //   });
-    // }
-    // await this.makeExternalRequest(
-    //   `${sanitizeUrl(tenantUrl, true)}api/v1/credit`,
-    //   requestOptions,
-    //   'Failed to credit service',
-    // );
+  }
+
+  private async createKycWidgetAccessToken(
+    kycService: any,
+    kycRedisKey: string,
+    userAccessList: any,
+  ) {
+    const defaultAccessList = getAccessListForModule(
+      TokenModule.DASHBOARD,
+      SERVICE_TYPES.CAVACH_API,
+    );
+    const accessList = evaluateAccessPolicy(
+      defaultAccessList,
+      SERVICE_TYPES.CAVACH_API,
+      userAccessList,
+      Context.idDashboard,
+    );
+    const kycServiceDetail = await redisClient.get(kycRedisKey);
+    if (!kycServiceDetail) {
+      await this.appAuthService.storeDataInRedis(
+        GRANT_TYPES.access_service_kyc,
+        kycService,
+        accessList,
+        kycRedisKey,
+      );
+    }
+    return this.appAuthService.getAccessToken(
+      {
+        appId: kycService.appId,
+        appName: kycService.appName,
+        grantType: GRANT_TYPES.access_service_kyc,
+        subdomain: kycService.subdomain,
+        sessionId: kycRedisKey,
+      },
+      EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
+      EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
+    );
+  }
+
+  private getKycWidgetConfigUrl(kycTenantUrl: string): string {
+    return `${sanitizeUrl(
+      kycTenantUrl,
+      true,
+    )}api/v1/e-kyc/verification/widget-config`;
+  }
+
+  private async findExistingKycWidgetConfig(
+    kycWidgetConfigUrl: string,
+    kycAccessToken: string,
+  ) {
+    const response = await this.makeExternalRequest(
+      `${kycWidgetConfigUrl}/all?page=1&limit=10`,
+      {
+        method: 'GET',
+        headers: {
+          'x-kyc-access-token': kycAccessToken,
+          'Content-Type': 'application/json',
+        },
+      },
+      'Failed to check existing KYC widget configuration',
+    );
+    const widgetConfigs = Array.isArray(response?.data?.widgetConfigs)
+      ? response.data.widgetConfigs
+      : Array.isArray(response?.widgetConfigs)
+      ? response.widgetConfigs
+      : [];
+    const widgetConfig = widgetConfigs[0];
+    if (widgetConfig && !widgetConfig._id) {
+      throw new InternalServerErrorException([
+        'Existing KYC widget configuration response did not include its ID.',
+      ]);
+    }
+    return widgetConfig;
   }
 
   private shouldUseBabyJubJubIssuer(interestedService?: InterestedService[]) {
@@ -1121,17 +1240,12 @@ export class CustomerOnboardingService {
    * 3. Creating and registering DID
    * 4. Creating KYC service
    * 5. Granting KYC dashboard access
-   * 6. Crediting KYC service
    * @param id - ID of the customer onboarding record to process
    * @param customerOnboardingProcessDto - DTO containing process details including credit information
    * @returns Success message upon completion
    * @throws BadRequestException if any step fails or validation errors occur
    */
-  async processCustomerOnboarding(
-    id: string,
-    customerOnboardingProcessDto: CustomerOnboardingProcessDto,
-    superAdminUserId,
-  ) {
+  async processCustomerOnboarding(id: string, superAdminUserId: string) {
     Logger.log(
       'Inside processCustomerOnboarding() to approve customer onboarding request',
       'CustomerOnboardingService',
@@ -1139,8 +1253,25 @@ export class CustomerOnboardingService {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException(['Invalid customer onboarding ID']);
     }
+    const retryableOptionalSteps: OnboardingStep[] = [
+      OnboardingStep.CREDIT_SSI_SERVICE,
+      OnboardingStep.REGISTER_DID,
+    ];
     const onboardingLogs: LogDetail[] = [];
     const onboardingUpdateData: Partial<CustomerOnboarding> = {};
+    const processingExecutionId = uuidv4();
+    const processingLockKey = `${REDIS_KEYS.CUSTOMER_ONBOARDING_LOCK}${id}`;
+    const processingLeaseMs =
+      EXPIRY_CONFIG.ONBOARDING_PROCESSING_LOCK.redisExpiryTime * 1000;
+    const processingHeartbeatMs =
+      EXPIRY_CONFIG.ONBOARDING_PROCESSING_LOCK.lockRenewalInterval * 1000;
+    let processingClaimed = false;
+    let processingLeaseLost = false;
+    let processingVersion: number | undefined;
+    let processingHeartbeat: ReturnType<typeof setInterval> | undefined;
+    let heartbeatInFlight = false;
+    let retryingOptionalSteps = false;
+    let failedOptionalStepsToRetry: OnboardingStep[] = [];
     let ssiService: any,
       widgetConfigDetail: any,
       kycAccessToken: any,
@@ -1150,22 +1281,130 @@ export class CustomerOnboardingService {
       didDocument: any;
 
     try {
-      const ssiCreditDetail: CreditDetail =
-        customerOnboardingProcessDto.ssiCreditDetail;
-      const kycCreditDetail: CreditDetail =
-        customerOnboardingProcessDto.kycCreditDetail;
+      // A dedicated Redis key serializes processing across service instances.
+      // Keep it separate from the progress snapshot, which has its own TTL.
+      processingClaimed = await this.acquireOnboardingProcessingLock(
+        processingLockKey,
+        processingExecutionId,
+        processingLeaseMs,
+      );
+      if (!processingClaimed) {
+        throw new ConflictException([
+          'Customer onboarding is already being processed. Retry after the active attempt finishes.',
+        ]);
+      }
 
-      // Validate and fetch customer onboarding details
-      const customerOnboardingData =
+      const currentOnboarding =
         await this.customerOnboardingRepository.findCustomerOnboardingById({
           _id: id,
         });
-
-      if (!customerOnboardingData) {
+      if (!currentOnboarding) {
         throw new BadRequestException([
           `Customer onboarding detail not found for id: ${id}`,
         ]);
       }
+      const alreadyApproved =
+        currentOnboarding.onboardingStatus === CreditStatus.APPROVED;
+      if (alreadyApproved) {
+        failedOptionalStepsToRetry = retryableOptionalSteps.filter((step) =>
+          this.isLatestStepFailure(currentOnboarding.logs || [], step),
+        );
+        if (failedOptionalStepsToRetry.length === 0) {
+          processingClaimed = false;
+          await this.releaseOnboardingProcessingLock(
+            processingLockKey,
+            processingExecutionId,
+          );
+          return { message: 'Customer onboarding completed successfully' };
+        }
+      }
+      retryingOptionalSteps = alreadyApproved;
+      const customerOnboardingData =
+        await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+          alreadyApproved
+            ? {
+                _id: id,
+                __v: Number((currentOnboarding as any).__v || 0),
+                onboardingStatus: CreditStatus.APPROVED,
+              }
+            : { _id: id, onboardingStatus: { $ne: CreditStatus.APPROVED } },
+          {
+            ...(alreadyApproved
+              ? {}
+              : { $set: { onboardingStatus: CreditStatus.PROCESSING } }),
+            // Use Mongoose's existing version key as a final-write fencing token.
+            $inc: { __v: 1 },
+          } as any,
+        );
+      if (!customerOnboardingData) {
+        const currentOnboarding =
+          await this.customerOnboardingRepository.findCustomerOnboardingById({
+            _id: id,
+          });
+        if (
+          !retryingOptionalSteps &&
+          currentOnboarding?.onboardingStatus === CreditStatus.APPROVED
+        ) {
+          processingClaimed = false;
+          await this.releaseOnboardingProcessingLock(
+            processingLockKey,
+            processingExecutionId,
+          );
+          return { message: 'Customer onboarding completed successfully' };
+        }
+        if (!currentOnboarding) {
+          throw new BadRequestException([
+            `Customer onboarding detail not found for id: ${id}`,
+          ]);
+        }
+        throw new ConflictException([
+          'Customer onboarding changed while processing was being claimed. Retry the request.',
+        ]);
+      }
+      processingVersion = Number((customerOnboardingData as any).__v || 0);
+
+      processingHeartbeat = setInterval(async () => {
+        if (heartbeatInFlight || !processingClaimed) return;
+        heartbeatInFlight = true;
+        try {
+          const renewed = await this.renewOnboardingProcessingLock(
+            processingLockKey,
+            processingExecutionId,
+            processingLeaseMs,
+          );
+          if (!renewed) {
+            processingLeaseLost = true;
+            clearInterval(processingHeartbeat);
+            Logger.error(
+              `Lost processing lease for onboarding ${id}`,
+              'CustomerOnboardingService',
+            );
+          }
+        } catch (error: any) {
+          processingLeaseLost = true;
+          clearInterval(processingHeartbeat);
+          Logger.error(
+            `Could not renew processing lease for onboarding ${id}: ${
+              error?.message || error
+            }`,
+            error?.stack,
+            'CustomerOnboardingService',
+          );
+        } finally {
+          heartbeatInFlight = false;
+        }
+      }, processingHeartbeatMs);
+      (processingHeartbeat as any).unref?.();
+
+      const { ssiCreditAmount, ssiHidAllowanceAmount, validityPeriod } =
+        calculateDidOnboardingCreditAmounts(1);
+      const ssiCreditDetail = {
+        amount: ssiCreditAmount,
+        validityPeriod,
+        validityPeriodUnit: TimeUnit.Days,
+        amountDenom: 'uhid',
+      };
+
       // Initialize configuration
       const { companyName, domain, userId, companyLogo, customerEmail } =
         customerOnboardingData;
@@ -1184,35 +1423,119 @@ export class CustomerOnboardingService {
         `${customerOnboardingData?.kycServiceId}_${Context.idDashboard}`,
       );
 
-      // Get remaining steps
-      const lastStep =
-        customerOnboardingData.logs
-          ?.filter((log) => log.status === StepStatus.SUCCESS)
-          .pop()?.step ?? null;
+      const progressKey = `${REDIS_KEYS.CUSTOMER_ONBOARDING_PROGRESS}${id}`;
+      const progressExpiresAt =
+        Date.now() + EXPIRY_CONFIG.ONBOARDING_PROGRESS.redisExpiryTime * 1000;
+      const persistedOutputs = {
+        ssiSubdomain: customerOnboardingData.ssiSubdomain,
+        ssiServiceId: customerOnboardingData.ssiServiceId,
+        kycSubdomain: customerOnboardingData.kycSubdomain,
+        kycServiceId: customerOnboardingData.kycServiceId,
+        businessId: customerOnboardingData.businessId,
+      };
+      Object.assign(onboardingUpdateData, persistedOutputs);
+      const resumeLogs = customerOnboardingData.logs || [];
+      onboardingLogs.splice(0, onboardingLogs.length, ...resumeLogs);
 
-      const startIndex = lastStep
-        ? Object.values(OnboardingStep).indexOf(lastStep) + 1
-        : 0;
+      // MongoDB is the durable recovery source; Redis only serves live progress.
       const allSteps = Object.values(OnboardingStep);
-      const filteredSteps = allSteps.filter((step) => {
-        if (
-          step === OnboardingStep.CONFIGURE_KYB_VERIFIER_PAGE ||
-          step === OnboardingStep.SETUP_KYB_WIDGET
-        ) {
-          return customerOnboardingData.interestedService?.includes(
-            InterestedService.KYB,
+      const filteredSteps = retryingOptionalSteps
+        ? failedOptionalStepsToRetry
+        : allSteps.filter((step) => {
+            if (
+              step === OnboardingStep.CONFIGURE_KYB_VERIFIER_PAGE ||
+              step === OnboardingStep.SETUP_KYB_WIDGET
+            ) {
+              return customerOnboardingData.interestedService?.includes(
+                InterestedService.KYB,
+              );
+            }
+            return true;
+          });
+      const lastSuccessfulStep = [...resumeLogs]
+        .reverse()
+        .find(
+          (log) =>
+            log.status === StepStatus.SUCCESS &&
+            filteredSteps.includes(log.step),
+        )?.step;
+      const lastStepIndex = lastSuccessfulStep
+        ? filteredSteps.indexOf(lastSuccessfulStep)
+        : -1;
+      const remainingSteps = retryingOptionalSteps
+        ? filteredSteps
+        : filteredSteps.slice(lastStepIndex + 1);
+      const completedStepPersisted =
+        [...resumeLogs]
+          .reverse()
+          .find((log) => log.step === OnboardingStep.COMPLETED)?.status ===
+        StepStatus.SUCCESS;
+      if (completedStepPersisted && remainingSteps.length === 0) {
+        await this.assertOnboardingProcessingLock(
+          processingLockKey,
+          processingExecutionId,
+        );
+        const completed =
+          await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+            { _id: id, __v: processingVersion } as any,
+            {
+              $set: {
+                ...persistedOutputs,
+                onboardingStatus: CreditStatus.APPROVED,
+                logs: resumeLogs,
+              },
+              $inc: { __v: 1 },
+            } as any,
           );
+        if (!completed) {
+          throw new ConflictException([
+            'Onboarding state changed before completion could be committed.',
+          ]);
         }
-        return true;
-      });
-      const remainingSteps = filteredSteps.slice(startIndex);
+        processingVersion = undefined;
+        processingClaimed = false;
+        clearInterval(processingHeartbeat);
+        await this.releaseOnboardingProcessingLock(
+          processingLockKey,
+          processingExecutionId,
+        );
+        await redisClient.del(progressKey);
+        return { message: 'Customer onboarding completed successfully' };
+      }
       if (remainingSteps.length === 0) {
         throw new BadRequestException(['Customer onboarding is already done']);
       }
-      let onboardingStatus;
+      let onboardingStatus = retryingOptionalSteps
+        ? CreditStatus.APPROVED
+        : undefined;
       let userDetail = await this.userRepository.findOne({ userId });
+      await this.assertOnboardingProcessingLock(
+        processingLockKey,
+        processingExecutionId,
+      );
+      await this.storeOnboardingProgress(
+        progressKey,
+        customerOnboardingData,
+        resumeLogs,
+        CreditStatus.PROCESSING,
+        onboardingUpdateData,
+        progressExpiresAt,
+        { lockKey: processingLockKey, executionId: processingExecutionId },
+      );
       // Process each step
       for (const step of remainingSteps) {
+        if (
+          processingLeaseLost ||
+          !(await this.ownsOnboardingProcessingLock(
+            processingLockKey,
+            processingExecutionId,
+          ))
+        ) {
+          processingLeaseLost = true;
+          throw new ConflictException([
+            'Onboarding processing lease was lost. Retry the onboarding.',
+          ]);
+        }
         try {
           switch (step) {
             case OnboardingStep.GIVE_DASHBOARD_ACCESS: {
@@ -1220,45 +1543,62 @@ export class CustomerOnboardingService {
                 'GIVE_DASHBOARD_ACCESS step started',
                 'CustomerOnboardingService',
               );
+              const requiredAccess = [
+                {
+                  serviceType: SERVICE_TYPES.CAVACH_API,
+                  access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
+                  expiryDate: null,
+                },
+                {
+                  serviceType: SERVICE_TYPES.SSI_API,
+                  access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
+                  expiryDate: null,
+                },
+                {
+                  serviceType: SERVICE_TYPES.DASHBOARD,
+                  access: SERVICES.DASHBOARD.ACCESS_TYPES.ALL,
+                  expiryDate: null,
+                },
+              ];
               userDetail = await this.userRepository.findOneUpdate({ userId }, [
                 {
                   $set: {
                     accessList: {
                       $concatArrays: [
-                        '$accessList',
+                        { $ifNull: ['$accessList', []] },
                         {
                           $filter: {
-                            input: [
-                              {
-                                serviceType: SERVICE_TYPES.CAVACH_API,
-                                access: SERVICES.CAVACH_API.ACCESS_TYPES.ALL,
-                                expiryDate: null,
-                              },
-                              {
-                                serviceType: SERVICE_TYPES.SSI_API,
-                                access: SERVICES.SSI_API.ACCESS_TYPES.ALL,
-                                expiryDate: null,
-                              },
-                              {
-                                serviceType: SERVICE_TYPES.DASHBOARD,
-                                access: SERVICES.DASHBOARD.ACCESS_TYPES.ALL,
-                                expiryDate: null,
-                              },
-                            ],
-                            as: 'newAccess',
+                            input: { $literal: requiredAccess },
+                            as: 'required',
                             cond: {
-                              $not: {
-                                $in: [
-                                  '$$newAccess.serviceType',
-                                  {
-                                    $map: {
-                                      input: '$accessList',
-                                      as: 'existing',
-                                      in: '$$existing.serviceType',
+                              $not: [
+                                {
+                                  $in: [
+                                    {
+                                      $concat: [
+                                        '$$required.serviceType',
+                                        ':',
+                                        '$$required.access',
+                                      ],
                                     },
-                                  },
-                                ],
-                              },
+                                    {
+                                      $map: {
+                                        input: {
+                                          $ifNull: ['$accessList', []],
+                                        },
+                                        as: 'existing',
+                                        in: {
+                                          $concat: [
+                                            '$$existing.serviceType',
+                                            ':',
+                                            '$$existing.access',
+                                          ],
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              ],
                             },
                           },
                         },
@@ -1310,35 +1650,55 @@ export class CustomerOnboardingService {
                 'CREATE_SSI_SERVICE step started',
                 'CustomerOnboardingService',
               );
-              ssiService = await this.appAuthService.createAnApp(
-                {
-                  appName: `${companyName}`,
-                  domain,
-                  serviceIds: [SERVICE_TYPES.SSI_API],
-                  whitelistedCors: [
-                    sanitizeUrl(
-                      this.config.get<string>('CLIENT_APP_URL'),
-                      false,
-                    ),
-                    sanitizeUrl(
-                      this.config.get<string>('CAVACH_API_DOMAIN'),
-                      false,
-                    ),
-                    sanitizeUrl(
-                      this.config.get<string>('SSI_API_DOMAIN'),
-                      false,
-                    ),
-                    urlSanitizer(
-                      this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
-                      false,
-                    ),
-                  ],
-                  env: APP_ENVIRONMENT.dev,
-                  hasDomainVerified: false,
-                  logoUrl: companyLogo,
-                },
-                userId,
-              );
+              if (customerOnboardingData.ssiServiceId) {
+                ssiService = await this.appAuthRepository.findOne({
+                  appId: customerOnboardingData.ssiServiceId,
+                  userId,
+                  'services.id': SERVICE_TYPES.SSI_API,
+                });
+                if (!ssiService) {
+                  throw new InternalServerErrorException([
+                    `Persisted SSI service ${customerOnboardingData.ssiServiceId} was not found.`,
+                  ]);
+                }
+              } else {
+                ssiService = await this.appAuthService.createAnApp(
+                  {
+                    appName: `${companyName}`,
+                    domain,
+                    serviceIds: [SERVICE_TYPES.SSI_API],
+                    whitelistedCors: [
+                      sanitizeUrl(
+                        this.config.get<string>('CLIENT_APP_URL'),
+                        false,
+                      ),
+                      sanitizeUrl(
+                        this.config.get<string>('CAVACH_API_DOMAIN'),
+                        false,
+                      ),
+                      sanitizeUrl(
+                        this.config.get<string>('SSI_API_DOMAIN'),
+                        false,
+                      ),
+                      urlSanitizer(
+                        this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
+                        false,
+                      ),
+                      urlSanitizer(
+                        this.config.get<string>(
+                          'KYC_WIDGET_URL',
+                          'https://verify.hypersign.id',
+                        ),
+                        false,
+                      ),
+                    ],
+                    env: APP_ENVIRONMENT.dev,
+                    hasDomainVerified: false,
+                    logoUrl: companyLogo,
+                  },
+                  userId,
+                );
+              }
               onboardingUpdateData.ssiSubdomain = ssiService.subdomain;
               onboardingUpdateData.ssiServiceId = ssiService.appId;
               ssiTenantUrl = ssiBaseDomain;
@@ -1368,6 +1728,7 @@ export class CustomerOnboardingService {
                 },
                 superAdminUserId,
                 `customer-onboarding:${id}:ssi`,
+                ssiHidAllowanceAmount,
               );
               Logger.debug(
                 'CREDIT_SSI_SERVICE step ends',
@@ -1508,6 +1869,7 @@ export class CustomerOnboardingService {
 
               const didToRegister =
                 issuerDidData?.did || customerOnboardingData.businessId;
+              let didAlreadyRegistered = false;
 
               if (!didDocument) {
                 const resolvedDidData = await this.makeExternalRequest(
@@ -1526,26 +1888,44 @@ export class CustomerOnboardingService {
                   'Failed to resolve DID',
                 );
                 didDocument = resolvedDidData.didDocument;
-              }
+                Logger.debug(
+                  `DID resolve response: ${JSON.stringify(resolvedDidData)}`,
+                  'CustomerOnboardingService',
+                );
 
-              await this.makeExternalRequest(
-                `${sanitizeUrl(ssiTenantUrl, true)}api/v1/did/register/v2`,
-                {
-                  method: 'POST',
-                  headers: {
-                    authorization: `Bearer ${ssiAccessToken.access_token}`,
-                    'Content-Type': 'application/json',
+                const hasRegisteredMetadata =
+                  resolvedDidData?.didDocumentMetadata !== null &&
+                  typeof resolvedDidData?.didDocumentMetadata === 'object' &&
+                  Object.keys(resolvedDidData.didDocumentMetadata).length > 0;
+
+                if (hasRegisteredMetadata) {
+                  didAlreadyRegistered = true;
+                  Logger.log(
+                    `DID ${didToRegister} is already registered; skipping registration request`,
+                    'CustomerOnboardingService',
+                  );
+                }
+              }
+              if (!didAlreadyRegistered) {
+                await this.makeExternalRequest(
+                  `${sanitizeUrl(ssiTenantUrl, true)}api/v1/did/register/v2`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      authorization: `Bearer ${ssiAccessToken.access_token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      didDocument,
+                      signInfos: this.getDidRegisterSignInfos(
+                        didToRegister,
+                        useBabyJubJubIssuer,
+                      ),
+                    }),
                   },
-                  body: JSON.stringify({
-                    didDocument,
-                    signInfos: this.getDidRegisterSignInfos(
-                      didToRegister,
-                      useBabyJubJubIssuer,
-                    ),
-                  }),
-                },
-                'Failed to register DID',
-              );
+                  'Failed to register DID',
+                );
+              }
               Logger.debug(
                 'REGISTER_DID step ends',
                 'CustomerOnboardingService',
@@ -1562,45 +1942,61 @@ export class CustomerOnboardingService {
                 issuerDidData?.did || customerOnboardingData.businessId,
                 useBabyJubJubIssuer,
               );
-              kycService = await this.appAuthService.createAnApp(
-                {
-                  appName: `${companyName}`,
-                  domain: domain,
-                  serviceIds: [SERVICE_TYPES.CAVACH_API],
-                  whitelistedCors: [
-                    sanitizeUrl(
-                      this.config.get<string>('CAVACH_API_DOMAIN'),
-                      false,
-                    ),
-                    urlSanitizer(
-                      this.config.get<string>('KYC_WIDGET_URL'),
-                      false,
-                    ),
-                    urlSanitizer(
-                      this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
-                      false,
-                    ),
-                    urlSanitizer(
-                      this.config.get<string>('CLIENT_APP_URL'),
-                      false,
-                    ),
-                    urlSanitizer(
-                      this.config.get<string>('KYB_WIDGET_URL'),
-                      false,
-                    ),
-                  ],
-                  env: APP_ENVIRONMENT.dev,
-                  hasDomainVerified: false,
-                  dependentServices: [
-                    ssiService?.appId || customerOnboardingData.ssiServiceId,
-                  ],
-                  logoUrl: companyLogo,
-                  issuerDid: issuerDetails.issuerDid,
-                  issuerVerificationMethodId:
-                    issuerDetails.issuerVerificationMethodId,
-                },
-                userId,
-              );
+              if (customerOnboardingData.kycServiceId) {
+                kycService = await this.appAuthRepository.findOne({
+                  appId: customerOnboardingData.kycServiceId,
+                  userId,
+                  'services.id': SERVICE_TYPES.CAVACH_API,
+                });
+                if (!kycService) {
+                  throw new InternalServerErrorException([
+                    `Persisted KYC service ${customerOnboardingData.kycServiceId} was not found.`,
+                  ]);
+                }
+              } else {
+                kycService = await this.appAuthService.createAnApp(
+                  {
+                    appName: `${companyName}`,
+                    domain: domain,
+                    serviceIds: [SERVICE_TYPES.CAVACH_API],
+                    whitelistedCors: [
+                      sanitizeUrl(
+                        this.config.get<string>('CAVACH_API_DOMAIN'),
+                        false,
+                      ),
+                      urlSanitizer(
+                        this.config.get<string>(
+                          'KYC_WIDGET_URL',
+                          'https://verify.hypersign.id',
+                        ),
+                        false,
+                      ),
+                      urlSanitizer(
+                        this.config.get<string>('KYC_VERIFIER_APP_BASE_URL'),
+                        false,
+                      ),
+                      urlSanitizer(
+                        this.config.get<string>('CLIENT_APP_URL'),
+                        false,
+                      ),
+                      urlSanitizer(
+                        this.config.get<string>('KYB_WIDGET_URL'),
+                        false,
+                      ),
+                    ],
+                    env: APP_ENVIRONMENT.dev,
+                    hasDomainVerified: false,
+                    dependentServices: [
+                      ssiService?.appId || customerOnboardingData.ssiServiceId,
+                    ],
+                    logoUrl: companyLogo,
+                    issuerDid: issuerDetails.issuerDid,
+                    issuerVerificationMethodId:
+                      issuerDetails.issuerVerificationMethodId,
+                  },
+                  userId,
+                );
+              }
 
               // kycSubdomain = kycService.subdomain;
               onboardingUpdateData.kycSubdomain = kycService.subdomain;
@@ -1615,36 +2011,6 @@ export class CustomerOnboardingService {
               );
               break;
             }
-            case OnboardingStep.CREDIT_KYC_SERVICE: {
-              Logger.log(
-                'CREDIT_KYC_SERVICE step started',
-                'CustomerOnboardingService',
-              );
-
-              if (!kycService && customerOnboardingData.kycServiceId) {
-                kycService = await this.appAuthRepository.findOne({
-                  appId: customerOnboardingData.kycServiceId,
-                });
-              }
-
-              await this.handleCreditService(
-                kycCreditDetail,
-                {
-                  appId:
-                    kycService?.appId || customerOnboardingData?.kycServiceId,
-                  subdomain:
-                    kycService?.subdomain ||
-                    customerOnboardingData.kycSubdomain,
-                },
-                superAdminUserId,
-                `customer-onboarding:${id}:kyc`,
-              );
-              Logger.debug(
-                'CREDIT_KYC_SERVICE step ends',
-                'CustomerOnboardingService',
-              );
-              break;
-            }
             case OnboardingStep.SETUP_KYC_WIDGET: {
               Logger.log(
                 'SETUP_KYC_WIDGET step started',
@@ -1655,38 +2021,10 @@ export class CustomerOnboardingService {
                   appId: customerOnboardingData.kycServiceId,
                 });
               }
-              const defaultAccessList = getAccessListForModule(
-                TokenModule.DASHBOARD,
-                SERVICE_TYPES.CAVACH_API,
-              );
-              const accessList = evaluateAccessPolicy(
-                defaultAccessList,
-                SERVICE_TYPES.CAVACH_API,
+              kycAccessToken = await this.createKycWidgetAccessToken(
+                kycService,
+                kycRedisKey,
                 userDetail.accessList,
-                Context.idDashboard,
-              );
-              const kycServiceDetail = await redisClient.get(kycRedisKey);
-              if (!kycServiceDetail) {
-                await this.appAuthService.storeDataInRedis(
-                  GRANT_TYPES.access_service_kyc,
-                  kycService,
-                  accessList,
-                  kycRedisKey,
-                );
-              }
-              kycAccessToken = await this.appAuthService.getAccessToken(
-                {
-                  appId:
-                    kycService?.appId || customerOnboardingData.kycServiceId,
-                  appName: kycService.appName,
-                  grantType: GRANT_TYPES.access_service_kyc,
-                  subdomain:
-                    kycService?.subdomain ||
-                    customerOnboardingData.kycSubdomain,
-                  sessionId: kycRedisKey,
-                },
-                EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtTime,
-                EXPIRY_CONFIG.ONBOARDING_ACCESS.jwtUnit,
               );
               const issuerDetails = this.getIssuerDetails(
                 issuerDidData?.did || customerOnboardingData.businessId,
@@ -1736,21 +2074,36 @@ export class CustomerOnboardingService {
                 isVaultEnabled: false,
                 isWidgetLogin: false,
               };
-              widgetConfigDetail = await this.makeExternalRequest(
-                `${sanitizeUrl(
-                  kycTenantUrl,
-                  true,
-                )}api/v1/e-kyc/verification/widget-config`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'x-kyc-access-token': kycAccessToken.access_token,
-                    'Content-Type': 'application/json',
+              const kycWidgetConfigUrl =
+                this.getKycWidgetConfigUrl(kycTenantUrl);
+              const existingKycWidgetConfig =
+                await this.findExistingKycWidgetConfig(
+                  kycWidgetConfigUrl,
+                  kycAccessToken.access_token,
+                );
+
+              if (existingKycWidgetConfig) {
+                widgetConfigDetail = { data: existingKycWidgetConfig };
+                Logger.log(
+                  `KYC widget configuration already exists for service ${
+                    kycService?.appId || customerOnboardingData.kycServiceId
+                  }; reusing it`,
+                  'CustomerOnboardingService',
+                );
+              } else {
+                widgetConfigDetail = await this.makeExternalRequest(
+                  kycWidgetConfigUrl,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'x-kyc-access-token': kycAccessToken.access_token,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody),
                   },
-                  body: JSON.stringify(requestBody),
-                },
-                'Failed to set up widget configuration',
-              );
+                  'Failed to set up widget configuration',
+                );
+              }
               Logger.debug(
                 'SETUP_KYC_WIDGET step ends',
                 'CustomerOnboardingService',
@@ -1765,17 +2118,48 @@ export class CustomerOnboardingService {
 
               const serviceId =
                 kycService?.appId || customerOnboardingData.kycServiceId;
-              await this.webPageConfig.storeWebPageConfigDetial(serviceId, {
-                pageTitle: 'KYC Verification',
-                pageDescription: 'Complete your KYC verification to proceed',
-                expiryType: ExpiryType.ONE_MONTH,
-                pageType: PageType.KYC,
-                contactEmail: customerEmail,
-                themeColor: 'vibrant',
-                linkedWidgetConfigIds: [
-                  widgetConfigDetail?.data?._id?.toString(),
-                ],
-              });
+              const pageExists =
+                await this.webPageConfig.fetchParticularWebpage(
+                  serviceId,
+                  PageType.KYC,
+                );
+              if (!pageExists) {
+                // A retry can start after SETUP_KYC_WIDGET, whose result only
+                // lives in memory, so recover the ID from the KYC service.
+                let widgetConfigId = widgetConfigDetail?.data?._id?.toString();
+                if (!widgetConfigId) {
+                  if (!kycService && customerOnboardingData.kycServiceId) {
+                    kycService = await this.appAuthRepository.findOne({
+                      appId: customerOnboardingData.kycServiceId,
+                    });
+                  }
+                  kycAccessToken = await this.createKycWidgetAccessToken(
+                    kycService,
+                    kycRedisKey,
+                    userDetail.accessList,
+                  );
+                  const existingKycWidgetConfig =
+                    await this.findExistingKycWidgetConfig(
+                      this.getKycWidgetConfigUrl(kycTenantUrl),
+                      kycAccessToken.access_token,
+                    );
+                  if (!existingKycWidgetConfig) {
+                    throw new InternalServerErrorException([
+                      `No KYC widget configuration found for service ${serviceId}.`,
+                    ]);
+                  }
+                  widgetConfigId = existingKycWidgetConfig._id.toString();
+                }
+                await this.webPageConfig.storeWebPageConfigDetial(serviceId, {
+                  pageTitle: 'KYC Verification',
+                  pageDescription: 'Complete your KYC verification to proceed',
+                  expiryType: ExpiryType.ONE_MONTH,
+                  pageType: PageType.KYC,
+                  contactEmail: customerEmail,
+                  themeColor: 'vibrant',
+                  linkedWidgetConfigIds: [widgetConfigId],
+                });
+              }
               Logger.debug(
                 'CONFIGURE_KYC_VERIFIER_PAGE step ends',
                 'CustomerOnboardingService',
@@ -1860,21 +2244,56 @@ export class CustomerOnboardingService {
                   themeColor: '#1A73E8',
                 },
               };
-              await this.makeExternalRequest(
-                `${sanitizeUrl(
-                  kycTenantUrl,
-                  true,
-                )}api/v1/e-kyb/verification/widget-config`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'x-kyc-access-token': kycAccessToken.access_token,
-                    'Content-Type': 'application/json',
+              const kybWidgetConfigUrl = `${sanitizeUrl(
+                kycTenantUrl,
+                true,
+              )}api/v1/e-kyb/verification/widget-config`;
+              const existingKybWidgetConfigResponse =
+                await this.makeExternalRequest(
+                  kybWidgetConfigUrl,
+                  {
+                    method: 'GET',
+                    headers: {
+                      'x-kyc-access-token': kycAccessToken.access_token,
+                      'Content-Type': 'application/json',
+                    },
                   },
-                  body: JSON.stringify(requestBody),
-                },
-                'Failed to set up widget configuration',
-              );
+                  'Failed to check existing KYB widget configuration',
+                );
+              const existingKybWidgetConfig =
+                existingKybWidgetConfigResponse &&
+                Object.prototype.hasOwnProperty.call(
+                  existingKybWidgetConfigResponse,
+                  'data',
+                )
+                  ? existingKybWidgetConfigResponse.data
+                  : existingKybWidgetConfigResponse;
+
+              if (
+                !existingKybWidgetConfig ||
+                typeof existingKybWidgetConfig !== 'object' ||
+                Object.keys(existingKybWidgetConfig).length === 0
+              ) {
+                await this.makeExternalRequest(
+                  kybWidgetConfigUrl,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'x-kyc-access-token': kycAccessToken.access_token,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody),
+                  },
+                  'Failed to set up widget configuration',
+                );
+              } else {
+                Logger.log(
+                  `KYB widget configuration already exists for service ${
+                    kycService?.appId || customerOnboardingData.kycServiceId
+                  }; skipping creation`,
+                  'CustomerOnboardingService',
+                );
+              }
               Logger.debug(
                 'SETUP_KYC_WIDGET step ends',
                 'CustomerOnboardingService',
@@ -1892,14 +2311,21 @@ export class CustomerOnboardingService {
               Logger.log('CONFIGURE_KYB_VERIFIER_PAGE started');
               const serviceId =
                 kycService?.appId || customerOnboardingData.kycServiceId;
-              await this.webPageConfig.storeWebPageConfigDetial(serviceId, {
-                pageTitle: 'KYB Verification',
-                pageDescription: 'Complete your KYB verification to proceed',
-                expiryType: ExpiryType.ONE_MONTH,
-                pageType: PageType.KYB,
-                contactEmail: customerEmail,
-                themeColor: 'vibrant',
-              });
+              const pageExists =
+                await this.webPageConfig.fetchParticularWebpage(
+                  serviceId,
+                  PageType.KYB,
+                );
+              if (!pageExists) {
+                await this.webPageConfig.storeWebPageConfigDetial(serviceId, {
+                  pageTitle: 'KYB Verification',
+                  pageDescription: 'Complete your KYB verification to proceed',
+                  expiryType: ExpiryType.ONE_MONTH,
+                  pageType: PageType.KYB,
+                  contactEmail: customerEmail,
+                  themeColor: 'vibrant',
+                });
+              }
               Logger.debug('CONFIGURE_KYB_VERIFIER_PAGE done');
               break;
             }
@@ -1910,36 +2336,152 @@ export class CustomerOnboardingService {
               break;
             }
           }
+          if (
+            processingLeaseLost ||
+            !(await this.ownsOnboardingProcessingLock(
+              processingLockKey,
+              processingExecutionId,
+            ))
+          ) {
+            processingLeaseLost = true;
+            throw new ConflictException([
+              'Onboarding processing lease was lost. Retry the onboarding.',
+            ]);
+          }
           this.logStepSuccess(onboardingLogs, step as OnboardingStep);
+          processingVersion = await this.persistOnboardingCheckpoint(
+            id,
+            processingVersion,
+            onboardingUpdateData,
+            onboardingLogs,
+          );
+          await this.storeOnboardingProgress(
+            progressKey,
+            customerOnboardingData,
+            onboardingLogs,
+            onboardingStatus || CreditStatus.PROCESSING,
+            onboardingUpdateData,
+            progressExpiresAt,
+            { lockKey: processingLockKey, executionId: processingExecutionId },
+          );
         } catch (error: any) {
+          if (processingLeaseLost || error instanceof ConflictException) {
+            throw error;
+          }
           Logger.error(error, error?.stack, 'CustomerOnboardingService');
           this.logStepFailure(onboardingLogs, step as OnboardingStep, error);
-          onboardingStatus = CreditStatus.FAILED;
-          break;
+          const isOptionalStep = retryableOptionalSteps.includes(
+            step as OnboardingStep,
+          );
+          onboardingStatus = retryingOptionalSteps
+            ? CreditStatus.APPROVED
+            : isOptionalStep
+            ? CreditStatus.PROCESSING
+            : CreditStatus.FAILED;
+          processingVersion = await this.persistOnboardingCheckpoint(
+            id,
+            processingVersion,
+            onboardingUpdateData,
+            onboardingLogs,
+          );
+          await this.storeOnboardingProgress(
+            progressKey,
+            customerOnboardingData,
+            onboardingLogs,
+            onboardingStatus,
+            onboardingUpdateData,
+            progressExpiresAt,
+            { lockKey: processingLockKey, executionId: processingExecutionId },
+          );
+          if (!isOptionalStep) break;
         }
       }
 
-      // Update onboarding details
-      await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
-        { _id: id },
-        {
-          ...onboardingUpdateData,
-          onboardingStatus,
-          logs: this.mergeLogs(
-            customerOnboardingData.logs || [],
-            onboardingLogs,
-          ),
-        },
+      if (
+        processingLeaseLost ||
+        !(await this.ownsOnboardingProcessingLock(
+          processingLockKey,
+          processingExecutionId,
+        ))
+      ) {
+        processingLeaseLost = true;
+        throw new ConflictException([
+          'Onboarding processing lease was lost. Retry the onboarding.',
+        ]);
+      }
+      const finalizedLogs = this.mergeLogs(
+        customerOnboardingData.logs || [],
+        onboardingLogs,
       );
-      // Check for failures
-      const failed = onboardingLogs.find((l) => l.status === StepStatus.FAILED);
+      // Verify ownership immediately before committing the final result.
+      const finalized =
+        await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+          { _id: id, __v: processingVersion } as any,
+          {
+            $set: {
+              ...onboardingUpdateData,
+              onboardingStatus,
+              logs: finalizedLogs,
+            },
+            $inc: { __v: 1 },
+          } as any,
+        );
+      if (!finalized) {
+        throw new ConflictException([
+          'Onboarding state changed before the final result could be committed.',
+        ]);
+      }
+      processingVersion = undefined;
+      processingClaimed = false;
+      clearInterval(processingHeartbeat);
+      await this.releaseOnboardingProcessingLock(
+        processingLockKey,
+        processingExecutionId,
+      );
+      try {
+        await redisClient.del(progressKey);
+      } catch (error: any) {
+        Logger.warn(
+          `Could not clear live onboarding progress: ${
+            error?.message || error
+          }`,
+          'CustomerOnboardingService',
+        );
+      }
+      // Optional step failures are visible and emailed but do not fail onboarding.
+      const failedLogs = finalizedLogs.filter(
+        (log) => log.status === StepStatus.FAILED,
+      );
+      const optionalFailures = failedLogs.filter((log) =>
+        retryableOptionalSteps.includes(log.step as OnboardingStep),
+      );
+      for (const failed of optionalFailures) {
+        await this.notifySuperAdminsOnOnboardingFailure(
+          customerOnboardingData,
+          failed.step,
+          failed.failureReason || 'Failure reason not recorded',
+        );
+      }
+      const failed = failedLogs.find(
+        (log) => !retryableOptionalSteps.includes(log.step as OnboardingStep),
+      );
       if (failed) {
+        if (!retryableOptionalSteps.includes(failed.step as OnboardingStep)) {
+          await this.notifySuperAdminsOnOnboardingFailure(
+            customerOnboardingData,
+            failed.step,
+            failed.failureReason || 'Failure reason not recorded',
+          );
+        }
         throw new InternalServerErrorException([
           `Step ${failed.step} failed: ${failed.failureReason}`,
         ]);
       }
 
-      if (onboardingStatus === CreditStatus.APPROVED) {
+      if (
+        onboardingStatus === CreditStatus.APPROVED &&
+        !retryingOptionalSteps
+      ) {
         const userDetail = await this.userRepository.findOne({ userId });
         const { email, name } = userDetail;
         const message = getOnboardingApprovedNotificationMail(name);
@@ -1953,9 +2495,115 @@ export class CustomerOnboardingService {
       }
       return { message: 'Customer onboarding completed successfully' };
     } catch (e: any) {
+      if (processingClaimed) {
+        try {
+          if (
+            await this.ownsOnboardingProcessingLock(
+              processingLockKey,
+              processingExecutionId,
+            )
+          ) {
+            if (!retryingOptionalSteps) {
+              await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+                { _id: id, __v: processingVersion } as any,
+                {
+                  $set: { onboardingStatus: CreditStatus.FAILED },
+                  $inc: { __v: 1 },
+                } as any,
+              );
+            }
+          }
+          await this.releaseOnboardingProcessingLock(
+            processingLockKey,
+            processingExecutionId,
+          );
+          processingClaimed = false;
+        } catch (releaseError: any) {
+          Logger.error(
+            `Could not release onboarding processing lock ${id}: ${
+              releaseError?.message || releaseError
+            }`,
+            releaseError?.stack,
+            'CustomerOnboardingService',
+          );
+        }
+      }
+      clearInterval(processingHeartbeat);
       Logger.error(e, 'CustomerOnboardingService');
       if (e instanceof HttpException) throw e;
       throw new InternalServerErrorException([e.message]);
+    }
+  }
+
+  private async acquireOnboardingProcessingLock(
+    key: string,
+    executionId: string,
+    leaseMs: number,
+  ): Promise<boolean> {
+    const result = await redisClient.set(key, executionId, 'PX', leaseMs, 'NX');
+    return result === 'OK';
+  }
+
+  private async renewOnboardingProcessingLock(
+    key: string,
+    executionId: string,
+    leaseMs: number,
+  ): Promise<boolean> {
+    const result = await redisClient.eval(
+      `if redis.call('get', KEYS[1]) == ARGV[1] then
+        return redis.call('pexpire', KEYS[1], ARGV[2])
+      end
+      return 0`,
+      1,
+      key,
+      executionId,
+      String(leaseMs),
+    );
+    return Number(result) === 1;
+  }
+
+  private async releaseOnboardingProcessingLock(
+    key: string,
+    executionId: string,
+  ): Promise<boolean> {
+    const result = await redisClient.eval(
+      `if redis.call('get', KEYS[1]) == ARGV[1] then
+        return redis.call('del', KEYS[1])
+      end
+      return 0`,
+      1,
+      key,
+      executionId,
+    );
+    return Number(result) === 1;
+  }
+
+  private async ownsOnboardingProcessingLock(
+    key: string,
+    executionId: string,
+  ): Promise<boolean> {
+    try {
+      return (await redisClient.get(key)) === executionId;
+    } catch (error: any) {
+      Logger.error(
+        `Could not verify onboarding processing lock: ${
+          error?.message || error
+        }`,
+        error?.stack,
+        'CustomerOnboardingService',
+      );
+      return false;
+    }
+  }
+
+  private async assertOnboardingProcessingLock(
+    key: string,
+    executionId: string,
+  ): Promise<void> {
+    if (!(await this.ownsOnboardingProcessingLock(key, executionId))) {
+      throw new ConflictException([
+        'Onboarding processing lease was lost. Retry the onboarding.',
+      ]);
     }
   }
 
@@ -1976,6 +2624,299 @@ export class CustomerOnboardingService {
     );
   }
 
+  private async storeOnboardingProgress(
+    key: string,
+    onboardingData: CustomerOnboarding,
+    logs: LogDetail[],
+    onboardingStatus: CreditStatus,
+    outputs: Partial<CustomerOnboarding>,
+    expiresAt: number,
+    processingLock?: { lockKey: string; executionId: string },
+  ): Promise<void> {
+    try {
+      const remainingTtlMs = expiresAt - Date.now();
+      if (remainingTtlMs <= 0) {
+        Logger.warn(
+          `Onboarding progress snapshot expired before it could be updated: ${key}`,
+          'CustomerOnboardingService',
+        );
+        return;
+      }
+      const savedOutputs = {
+        ssiSubdomain: outputs.ssiSubdomain || onboardingData.ssiSubdomain,
+        ssiServiceId: outputs.ssiServiceId || onboardingData.ssiServiceId,
+        kycSubdomain: outputs.kycSubdomain || onboardingData.kycSubdomain,
+        kycServiceId: outputs.kycServiceId || onboardingData.kycServiceId,
+        businessId: outputs.businessId || onboardingData.businessId,
+      };
+      const progress = {
+        version: 1,
+        onboardingStatus:
+          onboardingStatus === CreditStatus.APPROVED
+            ? CreditStatus.PROCESSING
+            : onboardingStatus,
+        completed: onboardingStatus === CreditStatus.APPROVED,
+        logs: this.mergeLogs((onboardingData.logs || []) as LogDetail[], logs),
+        outputs: savedOutputs,
+        updatedAt: new Date().toISOString(),
+        expiresAt: new Date(expiresAt).toISOString(),
+      };
+      // Keep a fixed deadline for this attempt; step updates do not extend it.
+      const progressJson = JSON.stringify(progress);
+      if (processingLock) {
+        const stored = await redisClient.eval(
+          `if redis.call('get', KEYS[1]) == ARGV[1] then
+            return redis.call('set', KEYS[2], ARGV[2], 'PX', ARGV[3])
+          end
+          return 0`,
+          2,
+          processingLock.lockKey,
+          key,
+          processingLock.executionId,
+          progressJson,
+          String(remainingTtlMs),
+        );
+        if (stored !== 'OK') {
+          throw new ConflictException([
+            'Onboarding processing lease was lost before progress could be saved.',
+          ]);
+        }
+      } else {
+        await redisClient.set(key, progressJson, 'PX', remainingTtlMs);
+      }
+    } catch (error: any) {
+      if (error instanceof ConflictException) throw error;
+      Logger.warn(
+        `Could not store live onboarding progress: ${error?.message || error}`,
+        'CustomerOnboardingService',
+      );
+      // MongoDB checkpoints are authoritative. Redis is only the live progress
+      // cache, so a cache write failure must not rewrite a completed step as
+      // failed. Lock ownership conflicts remain fatal above.
+    }
+  }
+
+  private async persistOnboardingCheckpoint(
+    onboardingId: string,
+    expectedVersion: number | undefined,
+    outputs: Partial<CustomerOnboarding>,
+    logs: LogDetail[],
+  ): Promise<number> {
+    if (expectedVersion === undefined) {
+      throw new ConflictException([
+        'Onboarding checkpoint cannot be saved without a processing version.',
+      ]);
+    }
+    const checkpointOutputs = Object.fromEntries(
+      Object.entries(outputs).filter(([, value]) => value !== undefined),
+    ) as Partial<CustomerOnboarding>;
+    delete checkpointOutputs.onboardingStatus;
+    const checkpoint =
+      await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+        { _id: onboardingId, __v: expectedVersion } as any,
+        {
+          $set: {
+            ...checkpointOutputs,
+            logs: this.mergeLogs(logs, []),
+          },
+          $inc: { __v: 1 },
+        } as any,
+      );
+    if (!checkpoint) {
+      throw new ConflictException([
+        'Onboarding state changed before a step checkpoint could be saved.',
+      ]);
+    }
+    return Number((checkpoint as any).__v || 0);
+  }
+
+  private async loadOnboardingProgress(key: string): Promise<{
+    onboardingStatus: CreditStatus;
+    completed: boolean;
+    logs: LogDetail[];
+    outputs: Partial<CustomerOnboarding>;
+  } | null> {
+    try {
+      const progressJson = await redisClient.get(key);
+      if (!progressJson) return null;
+      const progress = JSON.parse(progressJson);
+      const validStatuses = Object.values(CreditStatus);
+      if (
+        progress?.version !== 1 ||
+        !validStatuses.includes(progress.onboardingStatus) ||
+        !Array.isArray(progress.logs) ||
+        !progress.outputs ||
+        typeof progress.outputs !== 'object'
+      ) {
+        await redisClient.del(key);
+        return null;
+      }
+      return progress;
+    } catch (error: any) {
+      try {
+        await redisClient.del(key);
+      } catch {
+        // Best-effort cleanup; processing falls back to MongoDB state.
+      }
+      Logger.warn(
+        `Could not read onboarding recovery snapshot: ${
+          error?.message || error
+        }`,
+        'CustomerOnboardingService',
+      );
+      return null;
+    }
+  }
+
+  private async withLiveOnboardingProgress<T extends object>(
+    onboardingData: T,
+  ): Promise<T> {
+    let data: Record<string, any> =
+      typeof (onboardingData as any).toObject === 'function'
+        ? (onboardingData as any).toObject()
+        : { ...(onboardingData as any) };
+    const id = data._id?.toString();
+    if (!id) return data as T;
+
+    const progressKey = `${REDIS_KEYS.CUSTOMER_ONBOARDING_PROGRESS}${id}`;
+    try {
+      if (data.onboardingStatus === CreditStatus.APPROVED) {
+        await redisClient.del(progressKey);
+        return data as T;
+      }
+      const progress = await this.loadOnboardingProgress(progressKey);
+      if (progress) {
+        data = {
+          ...data,
+          onboardingStatus: progress.completed
+            ? CreditStatus.PROCESSING
+            : progress.onboardingStatus,
+          logs: progress.logs,
+          ...(progress.outputs || {}),
+        };
+      }
+    } catch (error: any) {
+      Logger.warn(
+        `Could not read live onboarding progress for ${id}: ${
+          error?.message || error
+        }`,
+        'CustomerOnboardingService',
+      );
+    }
+
+    // This is transient UI state, not a persisted onboarding status. Omit it
+    // when Redis cannot be read so clients do not mistake an unknown lock for
+    // an inactive process.
+    try {
+      const lockKey = `${REDIS_KEYS.CUSTOMER_ONBOARDING_LOCK}${id}`;
+      const activeExecution = await redisClient.get(lockKey);
+      data.processingActive = Boolean(activeExecution);
+    } catch (error: any) {
+      Logger.warn(
+        `Could not read onboarding processing lock for ${id}: ${
+          error?.message || error
+        }`,
+        'CustomerOnboardingService',
+      );
+      delete data.processingActive;
+    }
+
+    return data as T;
+  }
+
+  private async notifySuperAdminsOnOnboardingFailure(
+    onboardingData: CustomerOnboarding,
+    failedStep: string,
+    failureReason: string,
+  ) {
+    let notificationKey: string | undefined;
+    try {
+      const admins = await this.userRepository.find({
+        role: UserRole.SUPER_ADMIN,
+      });
+      const emails = admins.map((admin) => admin.email).filter(Boolean);
+      if (!emails.length) {
+        Logger.warn(
+          'Onboarding failed but no super admin email addresses were found',
+          'CustomerOnboardingService',
+        );
+        return;
+      }
+
+      // Customers can retry at will, so one step alerts admins once per window.
+      const key = `${REDIS_KEYS.CUSTOMER_ONBOARDING_FAILURE_NOTIFIED}${
+        (onboardingData as any)._id
+      }:${failedStep}`;
+      if (!(await this.claimOnboardingFailureNotification(key))) {
+        Logger.log(
+          `Skipping repeat failure notification for ${failedStep}`,
+          'CustomerOnboardingService',
+        );
+        return;
+      }
+      notificationKey = key;
+
+      const details =
+        typeof (onboardingData as any).toObject === 'function'
+          ? (onboardingData as any).toObject()
+          : { ...(onboardingData as any) };
+      const message = getOnboardingFailureNotificationMail(
+        details,
+        failedStep,
+        failureReason,
+      );
+      await this.sendOnboardingRequestMailToSuperAdmin(
+        message,
+        emails,
+        `L1 Support Required: Customer Onboarding Failed at ${failedStep.replace(
+          /_/g,
+          ' ',
+        )}`,
+      );
+      Logger.log(
+        `Onboarding failure notification queued for ${emails.length} super admin(s)`,
+        'CustomerOnboardingService',
+      );
+    } catch (error: any) {
+      // Keep notification errors from masking the original onboarding failure.
+      Logger.error(
+        `Could not queue onboarding failure notification: ${
+          error?.message || error
+        }`,
+        error?.stack,
+        'CustomerOnboardingService',
+      );
+      // Nothing was sent, so let the next failure try again.
+      if (notificationKey) {
+        await redisClient.del(notificationKey).catch(() => undefined);
+      }
+    }
+  }
+
+  private async claimOnboardingFailureNotification(
+    key: string,
+  ): Promise<boolean> {
+    try {
+      const claimed = await redisClient.set(
+        key,
+        '1',
+        'EX',
+        EXPIRY_CONFIG.ONBOARDING_FAILURE_NOTIFICATION.redisExpiryTime,
+        'NX',
+      );
+      return claimed === 'OK';
+    } catch (error: any) {
+      // A duplicate email is better than a missed alert.
+      Logger.warn(
+        `Could not throttle onboarding failure notification: ${
+          error?.message || error
+        }`,
+        'CustomerOnboardingService',
+      );
+      return true;
+    }
+  }
+
   /**
    * Merges existing logs with new logs, maintaining chronological order and deduplication
    * @param existing - Array of existing log details
@@ -1990,6 +2931,16 @@ export class CustomerOnboardingService {
     for (const log of newOnes) map.set(log.step, log);
     return Array.from(map.values()).sort(
       (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
+    );
+  }
+
+  private isLatestStepFailure(
+    logs: LogDetail[],
+    step: OnboardingStep,
+  ): boolean {
+    return (
+      [...logs].reverse().find((log) => log.step === step)?.status ===
+      StepStatus.FAILED
     );
   }
 
@@ -2114,16 +3065,17 @@ export class CustomerOnboardingService {
           `No onboarding detail found for user with id: ${user.userId}`,
         ]);
       }
-
+      let result: Record<string, any> =
+        typeof userOnboardingDetail.toObject === 'function'
+          ? userOnboardingDetail.toObject()
+          : { ...userOnboardingDetail };
       if (
-        userOnboardingDetail.companyId &&
-        userOnboardingDetail.companyVerificationStatus !==
-          KybVerificationEnum.Approved &&
-        userOnboardingDetail.companyVerificationStatus !==
-          KybVerificationEnum.Completed
+        result.companyId &&
+        result.companyVerificationStatus !== KybVerificationEnum.Approved &&
+        result.companyVerificationStatus !== KybVerificationEnum.Completed
       ) {
         const kybAppId =
-          userOnboardingDetail.companyIDPAppId ||
+          result.companyIDPAppId ||
           this.config.get<string>('KYB_APP_ID')?.trim();
         const cavachApiDomain = this.config
           .get<string>('CAVACH_API_DOMAIN')
@@ -2154,7 +3106,7 @@ export class CustomerOnboardingService {
         const companyResult = await this.makeExternalRequest(
           `${sanitizeUrl(cavachApiDomain, true)}${
             SERVICE_ENDPOINTS.ID_KYB_COMPANY_VERIFICATION
-          }/${encodeURIComponent(userOnboardingDetail.companyId)}`,
+          }/${encodeURIComponent(result.companyId)}`,
           {
             method: 'GET',
             headers: {
@@ -2173,15 +3125,13 @@ export class CustomerOnboardingService {
 
         const companyData = companyResult?.data || companyResult;
         const companyDetail = this.toDashboardCompanyDetail(companyData);
-        return {
-          ...(typeof userOnboardingDetail.toObject === 'function'
-            ? userOnboardingDetail.toObject()
-            : userOnboardingDetail),
+        result = {
+          ...result,
           companyDetail,
         };
       }
 
-      return userOnboardingDetail;
+      return this.withLiveOnboardingProgress(result);
     } catch (e: any) {
       Logger.error(
         'Issue while fetching userOnboardingDetail',
@@ -2202,9 +3152,9 @@ export class CustomerOnboardingService {
       'CustomerOnboardingService',
     );
     const customerOnboardingData =
-      await this.customerOnboardingRepository.findCustomerOnboardingById({
+      await this.customerOnboardingRepository.findLatestCustomerOnboardingByUserId(
         userId,
-      });
+      );
     if (!customerOnboardingData) {
       throw new BadRequestException([
         `No customer onboarding detail found for userId: ${userId}`,

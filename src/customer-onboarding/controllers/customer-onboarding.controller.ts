@@ -10,12 +10,15 @@ import {
   Req,
   ValidationPipe,
   UsePipes,
+  ForbiddenException,
   UploadedFiles,
   UseInterceptors,
   Headers,
   ParseFilePipe,
   MaxFileSizeValidator,
   FileTypeValidator,
+  Put,
+  UseGuards,
 } from '@nestjs/common';
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import {
@@ -37,17 +40,22 @@ import {
 import { CustomerOnboardingService } from '../services/customer-onboarding.service';
 import { Request } from 'express';
 import { AppError } from 'src/app-auth/dtos/fetch-app.dto';
+import { UserRole } from 'src/user/schema/user.schema';
 import { SubmitKybCompanyMultipartDto } from '../dto/submit-kyb-company.dto';
-import {
-  CustomerOnboardingProcessDto,
-  ProcessCustomerOnboardingRespDto,
-} from '../dto/customer-onboarding-process.dto';
+import { ProcessCustomerOnboardingRespDto } from '../dto/customer-onboarding-process.dto';
 import { CompanyVerificationWebhookDto } from '../dto/company-verification-webhook.dto';
+import { DashboardAccessGuard } from 'src/app-auth/guard/validate-dashboard-access.guard';
+import { RequireDashboardAccess } from 'src/app-auth/decorator/dashboard-access.decorator';
+import { SERVICES } from 'src/supported-service/services/iServiceList';
+import { BillingProfileService } from 'src/billing/services/billing-profile.service';
+import { UpdateBillingProfileDto } from 'src/billing/dto/update-billing-profile.dto';
+import { billingValidationPipe } from 'src/billing/billing.exception';
 @ApiTags('Customer-Onboarding')
 @Controller('api/v1/customer-onboarding')
 export class CustomerOnboardingController {
   constructor(
     private readonly customerOnboardingService: CustomerOnboardingService,
+    private readonly billingProfileService: BillingProfileService,
   ) {}
   @ApiBearerAuth('Authorization')
   @ApiCreatedResponse({
@@ -58,7 +66,7 @@ export class CustomerOnboardingController {
     description: 'Error occured while storing onboarding detail',
     type: AppError,
   })
-  @UsePipes(new ValidationPipe())
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @Post()
   create(
     @Body() createCustomerOnboardingDto: CreateCustomerOnboardingDto,
@@ -106,6 +114,28 @@ export class CustomerOnboardingController {
       secret,
     );
   }
+  // Billing profile (docs/payment/api-contract.md §2). Declared before ':id' so
+  // 'billing' isn't taken for an onboarding id.
+  @ApiOkResponse({ description: 'Billing profile, prefilled if never saved' })
+  @UseGuards(DashboardAccessGuard)
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.READ_BILLING)
+  @Get('billing')
+  getBillingProfile(@Req() req: Request) {
+    return this.billingProfileService.get(req.user['userId']);
+  }
+
+  @ApiOkResponse({ description: 'Billing profile saved' })
+  @UseGuards(DashboardAccessGuard)
+  @RequireDashboardAccess(SERVICES.DASHBOARD.ACCESS_TYPES.WRITE_BILLING)
+  @UsePipes(billingValidationPipe())
+  @Put('billing')
+  saveBillingProfile(
+    @Body() dto: UpdateBillingProfileDto,
+    @Req() req: Request,
+  ) {
+    return this.billingProfileService.save(req.user['userId'], dto);
+  }
+
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({
     description: 'Customer Onboarding detail fetched successfully',
@@ -119,7 +149,6 @@ export class CustomerOnboardingController {
   findOne(@Param('id') id: string, @Req() req: Request) {
     return this.customerOnboardingService.findOne(id, req.user);
   }
-  @UsePipes(new ValidationPipe())
   @ApiBearerAuth('Authorization')
   @ApiOkResponse({
     description: 'Customer Onboarding detail updated successfully',
@@ -130,14 +159,19 @@ export class CustomerOnboardingController {
     type: AppError,
   })
   @Post(':id/process')
-  processCustomerOnboarding(
-    @Param('id') id: string,
-    @Body() customerOnboardingProcessDto: CustomerOnboardingProcessDto,
-    @Req() req: any,
-  ) {
+  async processCustomerOnboarding(@Param('id') id: string, @Req() req: any) {
+    const { user } = req;
+    if (user.role !== UserRole.SUPER_ADMIN) {
+      const onboarding = await this.customerOnboardingService.findOne(id, user);
+
+      if (onboarding.userId !== user.userId) {
+        throw new ForbiddenException([
+          'You are not authorized to access this resource',
+        ]);
+      }
+    }
     return this.customerOnboardingService.processCustomerOnboarding(
       id,
-      customerOnboardingProcessDto,
       req.user.userId,
     );
   }

@@ -24,6 +24,7 @@ import { AllowedOriginMiddleware } from './utils/middleware/allowedOrigin.middle
 import { IpResolverModule } from './ip-resolver/ip-resolver.module';
 import { WebpageConfigModule } from './webpage-config/webpage-config.module';
 import { CustomerOnboardingModule } from './customer-onboarding/customer-onboarding.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { CustomerOnboardingModule } from './customer-onboarding/customer-onboard
     IpResolverModule,
     WebpageConfigModule,
     CustomerOnboardingModule,
+    BillingModule,
   ],
   controllers: [],
   providers: [
@@ -78,6 +80,11 @@ export class AppModule implements NestModule {
         {
           path: '/api/v1/credits/authz/:appId',
           method: RequestMethod.GET,
+        },
+        // Payment gateway webhooks: server to server, signed
+        {
+          path: '/api/v1/billing/webhooks/razorpay',
+          method: RequestMethod.POST,
         },
       )
       .forRoutes('*');

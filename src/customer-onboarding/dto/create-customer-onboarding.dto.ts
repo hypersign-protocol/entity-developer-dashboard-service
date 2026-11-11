@@ -89,7 +89,7 @@ export class CustomerOnboardingBasicDto {
     description: 'domain of the company',
     example: 'hypermine.in',
   })
-  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
+  @ValidateIf((o) => o.type === CustomerType[CustomerType.BUSINESS])
   @IsNotEmpty()
   @IsString()
   @Matches(/^(?!:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/, {
@@ -113,7 +113,7 @@ export class CustomerOnboardingBasicDto {
       'Country where the company is located (ISO Alpha-2 code preferred)',
     enum: CountryCode,
   })
-  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
+  @ValidateIf((o) => o.type === CustomerType[CustomerType.BUSINESS])
   @IsNotEmpty()
   @IsString()
   @IsIn(CountryCode)
@@ -122,9 +122,9 @@ export class CustomerOnboardingBasicDto {
     name: 'registrationNumber',
     description: 'registration number of the company',
     example: '1234567890',
+    required: false,
   })
-  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
   registrationNumber?: string;
   @ApiProperty({
@@ -198,14 +198,21 @@ export class CustomerOnboardingBasicDto {
   referralSource?: string;
   @ApiProperty({
     name: 'phoneNumber',
-    description: 'Contact phone number of the company',
-    example: '6234572090',
+    description:
+      'Contact phone number of the company: national format for the selected country (030 12345678) or international (+49 30 12345678). Spaces and dashes are allowed.',
+    example: '+91 6234572090',
+    required: false,
   })
-  @ValidateIf((o) => o.type === CustomerType.BUSINESS)
-  @IsNotEmpty()
+  @ValidateIf(
+    (o, value) =>
+      o.type === CustomerType[CustomerType.BUSINESS] &&
+      value !== undefined &&
+      value !== null &&
+      value !== '',
+  )
   @IsString()
   @IsPhoneNumberByCountry()
-  phoneNumber: string;
+  phoneNumber?: string;
   @ApiProperty({
     name: 'interestedService',
     description: 'Services interested by customer',
@@ -390,6 +397,14 @@ export class KybCompanyDetailRespDto {
 }
 
 export class FetchCustomerOnboardingRespDto extends CreateCustomerOnboardingRespDto {
+  @ApiPropertyOptional({
+    description:
+      'Whether a live onboarding processor currently holds the Redis processing lock. Omitted when the lock state cannot be checked.',
+    type: Boolean,
+  })
+  @IsOptional()
+  processingActive?: boolean;
+
   @ApiPropertyOptional({
     description:
       'Company details required by the dashboard for KYB review and resubmission',

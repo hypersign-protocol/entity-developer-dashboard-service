@@ -19,6 +19,7 @@ import {
 } from '../dto/update-billing-profile.dto';
 import {
   buildBillingProfile,
+  gstStateFromProvince,
   gstStateFromTaxIds,
   isGstStateCode,
   normaliseTaxIds,
@@ -131,10 +132,14 @@ export class BillingProfileService {
           : null);
       if (problem) fields[`taxIds[${i}].number`] = problem;
     });
-    // A GSTIN fixes the state; otherwise the customer picks it.
+    // A GSTIN fixes the state. Otherwise it's the state the customer picked,
+    // which the dashboard sends as gstStateCode, or the province's name.
     const gstStateCode =
       region === BillingRegion.IN
-        ? gstStateFromTaxIds(taxIds) || dto.gstStateCode
+        ? gstStateFromTaxIds(taxIds) ||
+          dto.gstStateCode ||
+          gstStateFromProvince(dto.address.province) ||
+          undefined
         : undefined;
     if (gstStateCode && !isGstStateCode(gstStateCode)) {
       fields.gstStateCode = 'Not a valid GST state code';

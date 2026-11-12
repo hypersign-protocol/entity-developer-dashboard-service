@@ -126,6 +126,35 @@ describe('BillingProfileService region from the billing country', () => {
     expect(orderModel.find).not.toHaveBeenCalled();
   });
 
+  it('takes the GST state from the province when none is sent', async () => {
+    givenOrg();
+
+    await service.save(
+      'user-1',
+      dto({
+        gstStateCode: undefined,
+        address: { ...inAddress, province: 'West Bengal' },
+      }),
+    );
+
+    expect(savedSet()).toMatchObject({ 'billing.gstStateCode': '19' });
+  });
+
+  it('prefers the GSTIN state over the province', async () => {
+    givenOrg();
+
+    await service.save(
+      'user-1',
+      dto({
+        gstStateCode: undefined,
+        address: { ...inAddress, province: 'West Bengal' },
+        taxIds: [{ type: 'GSTIN', number: '29ABCDE1234F1Z5' }],
+      }),
+    );
+
+    expect(savedSet()).toMatchObject({ 'billing.gstStateCode': '29' });
+  });
+
   it('refuses a GSTIN with a billing address outside India', async () => {
     givenOrg();
 

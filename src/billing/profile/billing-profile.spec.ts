@@ -1,5 +1,6 @@
 import {
   buildBillingProfile,
+  gstStateFromProvince,
   kybApprovedBillingUpdate,
   kybBillingDefaults,
   kybPersonalTaxId,
@@ -120,6 +121,45 @@ describe('taxIdProblem', () => {
     expect(taxIdProblem({ type: 'NOPE', number: '1' })).toBe(
       'Unknown tax ID type NOPE',
     );
+  });
+});
+
+describe('gstStateFromProvince', () => {
+  it('matches state names however they are written', () => {
+    expect(gstStateFromProvince('West Bengal')).toBe('19');
+    expect(gstStateFromProvince('WEST BENGAL')).toBe('19');
+    expect(gstStateFromProvince(' west  bengal ')).toBe('19');
+    expect(gstStateFromProvince('Jammu & Kashmir')).toBe('01');
+    expect(gstStateFromProvince('Jammu and Kashmir')).toBe('01');
+    expect(gstStateFromProvince('Orissa')).toBe('21');
+    expect(gstStateFromProvince('New Delhi')).toBe('07');
+  });
+
+  it('gives the current Andhra Pradesh code, never a legacy one', () => {
+    expect(gstStateFromProvince('Andhra Pradesh')).toBe('37');
+    expect(gstStateFromProvince('Andhra Pradesh (old)')).toBeNull();
+    expect(gstStateFromProvince('Other Territory')).toBeNull();
+  });
+
+  it('returns null for anything else', () => {
+    expect(gstStateFromProvince('WB')).toBeNull();
+    expect(gstStateFromProvince('Bavaria')).toBeNull();
+    expect(gstStateFromProvince('')).toBeNull();
+    expect(gstStateFromProvince(undefined)).toBeNull();
+  });
+
+  it('completes an Indian profile from the province alone', () => {
+    const profile = buildBillingProfile({
+      _id: 'org-1',
+      billing: {
+        legalName: 'Acme',
+        email: 'billing@acme.test',
+        address: { ...address, province: 'KARNATAKA' },
+        confirmedAt: new Date(),
+      },
+    });
+    expect(profile.gstStateCode).toBe('29');
+    expect(profile.missingFields).not.toContain('gstStateCode');
   });
 });
 
@@ -340,7 +380,12 @@ describe('kybApprovedBillingUpdate', () => {
     expect(
       kybApprovedBillingUpdate({
         ...org,
-        billing: { ...org.billing, gstStateCode: undefined },
+        // No code, and a province that isn't a state name to take it from
+        billing: {
+          ...org.billing,
+          gstStateCode: undefined,
+          address: { ...address, province: 'KA' },
+        },
       }),
     ).toEqual({});
     expect(kybApprovedBillingUpdate({ ...org, billing: undefined })).toEqual(

@@ -59,6 +59,33 @@ export const GST_STATES: Record<string, string> = {
 };
 export const isGstStateCode = (code?: string) => !!code && code in GST_STATES;
 
+// "Jammu & Kashmir", "jammu and kashmir" → "jammuandkashmir"
+const stateKey = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z]/g, '');
+
+// State name → code. The legacy codes (25, 28) and "Other Territory" (97) are
+// never matched by name: "Andhra Pradesh" is 37, not the old 28.
+const GST_STATE_BY_NAME = new Map<string, string>([
+  ...Object.entries(GST_STATES)
+    .filter(([code]) => !['25', '28', '97'].includes(code))
+    .map(([code, name]) => [stateKey(name), code] as [string, string]),
+  // Older or common spellings
+  ['orissa', '21'],
+  ['pondicherry', '34'],
+  ['uttaranchal', '05'],
+  ['newdelhi', '07'],
+  ['nctofdelhi', '07'],
+  ['andamanandnicobar', '35'],
+]);
+
+/** The GST state code of a state name, or null when it isn't one we know. */
+export function gstStateFromProvince(province?: string): string | null {
+  return province ? GST_STATE_BY_NAME.get(stateKey(province)) ?? null : null;
+}
+
 /** The first two digits of a GSTIN are the registrant's state code. */
 export function gstStateFromTaxIds(taxIds: TaxIdValue[] = []): string | null {
   const gstin = taxIds.find((t) => t.type === 'GSTIN')?.number;
@@ -167,7 +194,9 @@ export function buildBillingProfile(org: ProfileSource) {
     address,
     gstStateCode:
       region === BillingRegion.IN
-        ? billing.gstStateCode || gstStateFromTaxIds(taxIds)
+        ? billing.gstStateCode ||
+          gstStateFromTaxIds(taxIds) ||
+          gstStateFromProvince(billing.address?.province)
         : null,
     taxIds: taxIds.map(({ type, number }) => ({ type, number })),
     personalTaxId: billing.personalTaxId

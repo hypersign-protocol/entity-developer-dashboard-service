@@ -208,7 +208,6 @@ The published prices for the caller's region. Replaces `creditTopUpPricing.js`. 
   },
   "addOns": [
     { "code": "VALIDITY", "title": "Credit validity", "shortTitle": "1 month validity", "description": "Credits are valid for 1 month from activation. Unused credits don't carry forward.", "icon": "mdi-calendar-clock", "priceMinor": 0, "included": true },
-    { "code": "HUMAN_SUPPORT_24X7", "title": "24×7 human support", "shortTitle": "24×7 support", "description": "…", "icon": "mdi-headset", "priceMinor": 0, "included": true },
     { "code": "EMAIL_SUPPORT", "title": "Email support", "shortTitle": "Email support", "description": "…", "icon": "mdi-email-outline", "priceMinor": 0, "included": true }
   ],
   "calculatorFlowIds": ["india"]
@@ -292,7 +291,6 @@ Prices the current selection. Request a new quote every time the plan, the custo
   "coupon": { "code": "FOUNDING8", "percentBps": 800, "amountMinor": 14994 },
   "addOns": [
     { "code": "VALIDITY", "title": "Credit validity", "priceMinor": 0 },
-    { "code": "HUMAN_SUPPORT_24X7", "title": "24×7 human support", "priceMinor": 0 },
     { "code": "EMAIL_SUPPORT", "title": "Email support", "priceMinor": 0 }
   ],
   "totalBeforeTaxMinor": 172431,
@@ -435,7 +433,6 @@ India, **Already paid**, customer in Maharashtra:
   ],
   "addOnLines": [
     { "code": "VALIDITY", "title": "Credit validity" },
-    { "code": "HUMAN_SUPPORT_24X7", "title": "24×7 human support" },
     { "code": "EMAIL_SUPPORT", "title": "Email support" }
   ],
   "discounts": { "plan": null, "coupon": null },

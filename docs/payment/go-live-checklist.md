@@ -61,6 +61,7 @@ The scripts are in [scripts/](scripts/). Run them in mongosh after `use <db>`. *
 - [ ] [1-seed-price-books-and-coupons.js](scripts/1-seed-price-books-and-coupons.js): price book v1 (India and Global plans) and the FOUNDING8 and FOUNDING15 coupons. Every environment needs it, including a fresh database. Safe to run again.
 - [ ] [2-backfill-kyb-approved-at.js](scripts/2-backfill-kyb-approved-at.js): sets `companyVerificationApprovedAt` for organisations approved before the billing release. Only needed on a database that already has organisations. The dates are approximate, so review the list first.
 - [ ] [3-staging-test-account.js](scripts/3-staging-test-account.js): **staging only. Never run it on production.**
+- [ ] [4-remove-human-support-add-on.js](scripts/4-remove-human-support-add-on.js): removes the 24×7 human support add-on from price books, quotes and orders not yet invoiced, so it no longer shows in the catalog or on new invoices. Only needed on a database seeded before it was dropped. Issued invoices are left unchanged. Safe to run again.
 - [ ] Check: `GET /api/v1/billing/catalog` for an Indian account and for a Global account returns the expected plans and prices.
 
 ## 3. Razorpay setup

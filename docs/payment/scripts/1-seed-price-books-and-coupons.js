@@ -40,7 +40,6 @@ function plansFor(prefix, tiers) {
 function addOns(validityDays, validityShort, validityText) {
   return [
     { code: 'VALIDITY', title: 'Credit validity', shortTitle: validityShort, description: validityText, icon: 'mdi-calendar-clock', priceMinor: 0, included: true, config: { validityDays } },
-    { code: 'HUMAN_SUPPORT_24X7', title: '24×7 human support', shortTitle: '24×7 support', description: 'Talk to our support team at any time.', icon: 'mdi-headset', priceMinor: 0, included: true },
     { code: 'EMAIL_SUPPORT', title: 'Email support', shortTitle: 'Email support', description: 'Get help by email.', icon: 'mdi-email-outline', priceMinor: 0, included: true },
   ];
 }

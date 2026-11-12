@@ -46,7 +46,7 @@ export class DiscountRule {
 @Schema({ _id: false })
 export class PriceBookAddOn {
   @Prop({ type: String, required: true })
-  code: string; // VALIDITY, HUMAN_SUPPORT_24X7, EMAIL_SUPPORT, …
+  code: string; // VALIDITY, EMAIL_SUPPORT, …
   @Prop({ type: String, required: true })
   title: string;
   @Prop({ type: String, required: true })

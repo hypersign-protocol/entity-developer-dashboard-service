@@ -24,7 +24,7 @@ The pricing team has agreed the commercial model, and the dashboard UI is built 
 
 - **Two billing regions, India and Global.** The region comes from where the customer is taxed, as given on the onboarding form. India pays in INR and Global pays in USD.
 - **Plans with a fixed discount each.** India: ₹999 / ₹2,499 / ₹4,999 / ₹9,999 at 10 / 25 / 28 / 35% off (prices exclude GST). Global: $99 / $199 / $299 / $499 / $1,499 at 0 / 40 / 46.5 / 52 / 55% off. A customer can also click **Custom amount** and enter any amount between the smallest and largest plan (₹999–₹9,999 or $99–$1,499).
-- **Add-ons that are free today but must be shown.** These are credit validity (1 month for India, 6 months for Global, with no carry-forward), 24×7 human support and email support.
+- **Add-ons that are free today but must be shown.** These are credit validity (1 month for India, 6 months for Global, with no carry-forward) and email support.
 - **Coupons tied to a region.** Only **FOUNDING15** (Global) and **FOUNDING8** (India) are active at launch. REFER, PARTNER and WINBACK are designed but switched off (see §4.3). Customers apply a coupon from a small **Apply a coupon** dialog, where they can type a code or pick from the offers listed for them.
 - **1 credit = ₹1.** A discount lowers the price, not the number of credits. Global top-ups get 90 credits per $1 (still to be confirmed).
 - **"Understand your credits"** opens the Credit Calculator, so the customer can see how many verifications the top-up covers. It only shows the verification flows for their region: Non-Doc ID Verification (India) for India, and Global Identity Verification and Business Verification for Global.
@@ -438,7 +438,7 @@ class PriceBook {
     priority: number;                    // highest matching rule wins. Plan discounts never stack
   }[];
   addOns: {
-    code: 'VALIDITY' | 'HUMAN_SUPPORT_24X7' | 'EMAIL_SUPPORT' | string;
+    code: 'VALIDITY' | 'EMAIL_SUPPORT' | string;
     title: string; shortTitle: string; description: string; icon?: string;
     priceMinor: number;                  // 0 today, shown as "Free"
     included: boolean;                   // true = always on, no checkbox

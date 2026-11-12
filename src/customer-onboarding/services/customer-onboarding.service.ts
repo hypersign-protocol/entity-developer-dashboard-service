@@ -816,7 +816,6 @@ export class CustomerOnboardingService {
         interestedService,
         companyName,
         domain,
-        registrationNumber,
         linkedinUrl,
         twitterUrl,
         telegramUrl,
@@ -824,7 +823,6 @@ export class CustomerOnboardingService {
         phoneNumber,
         yearlyVolume,
         businessField,
-        type,
         customerEmail,
       } = createCustomerOnboardingDto;
       Logger.log('Before storing data in db', 'CustomerOnboardingService');
@@ -859,8 +857,6 @@ export class CustomerOnboardingService {
         companyName,
         companyDomain: domain,
         billingAddress: createCustomerOnboardingDto.billingAddress || '',
-        companyRegistrationNumber: registrationNumber,
-        companyType: String(type),
         linkedinUrl,
         twitterUrl,
         telegramUrl,

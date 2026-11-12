@@ -25,7 +25,6 @@ describe('mail templates render', () => {
         customerEmail: 'req@example.com',
         onboardingId: 'onb-1',
         companyName: 'Example Co',
-        companyType: 'standard',
         twitterUrl: 'tw',
         telegramUrl: 'tg',
         interestedService: ['svc'],

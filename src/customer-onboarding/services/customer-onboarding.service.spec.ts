@@ -245,6 +245,139 @@ describe('CustomerOnboardingService company verification webhook', () => {
     );
   });
 
+  describe('submitKybCompany', () => {
+    const onboardingId = '665f17f9c2b4f5a6d7e8f900';
+    const companyId = '665f17f9c2b4f5a6d7e8f901';
+    const user = { userId: 'user-1' };
+    let send: jest.SpyInstance;
+
+    beforeEach(() => {
+      send = jest
+        .spyOn(service as any, 'sendKybCompany')
+        .mockResolvedValue({ sent: true });
+    });
+
+    const submit = () => service.submitKybCompany(onboardingId, {}, [], user);
+    const claimCall = () =>
+      onboardingRepository.updateCustomerOnboardingDetails.mock.calls.find(
+        ([, update]) => update.$set?.kybSubmissionStartedAt,
+      );
+
+    it.each([
+      KybVerificationEnum.Submitted,
+      KybVerificationEnum.InProgress,
+      'SomeFutureStatus',
+      undefined,
+    ])(
+      'refuses with 409 and calls nothing while the company is %s',
+      async (status) => {
+        onboardingRepository.findCustomerOnboardingById.mockResolvedValue({
+          companyId,
+          companyVerificationStatus: status,
+        });
+
+        await expect(submit()).rejects.toBeInstanceOf(ConflictException);
+        expect(send).not.toHaveBeenCalled();
+        expect(
+          onboardingRepository.updateCustomerOnboardingDetails,
+        ).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([KybVerificationEnum.Approved, KybVerificationEnum.Completed])(
+      'returns the record unchanged once %s',
+      async (status) => {
+        const onboarding = { companyId, companyVerificationStatus: status };
+        onboardingRepository.findCustomerOnboardingById.mockResolvedValue(
+          onboarding,
+        );
+
+        await expect(submit()).resolves.toBe(onboarding);
+        expect(send).not.toHaveBeenCalled();
+        expect(
+          onboardingRepository.updateCustomerOnboardingDetails,
+        ).not.toHaveBeenCalled();
+      },
+    );
+
+    it('claims, sends and releases a first submission', async () => {
+      const claimed = { _id: onboardingId };
+      onboardingRepository.findCustomerOnboardingById.mockResolvedValue({
+        _id: onboardingId,
+      });
+      onboardingRepository.updateCustomerOnboardingDetails
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValueOnce({});
+
+      await expect(submit()).resolves.toEqual({ sent: true });
+
+      const [filter, update] = claimCall();
+      expect(filter).toMatchObject({
+        _id: onboardingId,
+        userId: 'user-1',
+        companyId: null,
+      });
+      expect(filter.companyVerificationStatus).toBeUndefined();
+      expect(send).toHaveBeenCalledWith(onboardingId, {}, [], user, claimed);
+      expect(
+        onboardingRepository.updateCustomerOnboardingDetails,
+      ).toHaveBeenLastCalledWith(
+        {
+          _id: onboardingId,
+          kybSubmissionStartedAt: update.$set.kybSubmissionStartedAt,
+        },
+        { $unset: { kybSubmissionStartedAt: '' } },
+      );
+    });
+
+    it('claims only a company that is still rejected', async () => {
+      onboardingRepository.findCustomerOnboardingById.mockResolvedValue({
+        companyId,
+        companyVerificationStatus: KybVerificationEnum.Rejected,
+      });
+      onboardingRepository.updateCustomerOnboardingDetails.mockResolvedValue(
+        {},
+      );
+
+      await submit();
+
+      expect(claimCall()[0]).toMatchObject({
+        companyId,
+        companyVerificationStatus: KybVerificationEnum.Rejected,
+      });
+      expect(send).toHaveBeenCalled();
+    });
+
+    it('refuses with 409 when another submission holds the claim', async () => {
+      onboardingRepository.findCustomerOnboardingById.mockResolvedValue({});
+      onboardingRepository.updateCustomerOnboardingDetails.mockResolvedValue(
+        null,
+      );
+
+      await expect(submit()).rejects.toBeInstanceOf(ConflictException);
+      expect(send).not.toHaveBeenCalled();
+      expect(
+        onboardingRepository.updateCustomerOnboardingDetails,
+      ).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the claim when sending fails', async () => {
+      onboardingRepository.findCustomerOnboardingById.mockResolvedValue({});
+      onboardingRepository.updateCustomerOnboardingDetails.mockResolvedValue(
+        {},
+      );
+      send.mockRejectedValue(new Error('ID-Service down'));
+
+      await expect(submit()).rejects.toThrow('ID-Service down');
+      expect(
+        onboardingRepository.updateCustomerOnboardingDetails,
+      ).toHaveBeenLastCalledWith(
+        expect.objectContaining({ _id: onboardingId }),
+        { $unset: { kybSubmissionStartedAt: '' } },
+      );
+    });
+  });
+
   describe('findUserOnboardingDetail', () => {
     it('sorts by newest instead of filtering on a sort field', async () => {
       const onboarding = { userId: 'user-1', companyName: 'Acme' };

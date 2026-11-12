@@ -643,6 +643,7 @@ export const TaxIdTypes: TaxIdInfo[] = [
 
 export enum KybVerificationEnum {
   Submitted = 'Submitted', // Company KYB verification has been submitted
+  InProgress = 'InProgress', // ID-Service: a compliance check passed and review continues. Sent back in its responses, never by webhook
   Approved = 'Approved', // Company kyb verification successfully completed and approved by customer
   Rejected = 'Rejected', // Company verification completed and was rejected by customer
   Completed = 'Completed', // Company kyb verification is finished (either failed or success)

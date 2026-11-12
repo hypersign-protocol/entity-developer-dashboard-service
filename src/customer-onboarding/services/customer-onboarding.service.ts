@@ -83,6 +83,9 @@ import { KybCompanyFieldsDto } from '../dto/submit-kyb-company.dto';
 import { KybVerificationEnum } from '../constants/identifier-types';
 import { CompanyVerificationWebhookDto } from '../dto/company-verification-webhook.dto';
 
+// A KYB submission claim older than this is from a request that crashed.
+const KYB_SUBMISSION_LOCK_MS = 10 * 60 * 1000;
+
 @Injectable()
 export class CustomerOnboardingService {
   constructor(
@@ -186,7 +189,97 @@ export class CustomerOnboardingService {
     if (!Types.ObjectId.isValid(onboardingId)) {
       throw new BadRequestException(['Invalid customer onboarding ID']);
     }
+    const onboarding =
+      await this.customerOnboardingRepository.findCustomerOnboardingById({
+        _id: onboardingId,
+        userId: user.userId,
+      });
+    if (!onboarding) {
+      throw new BadRequestException(['Customer onboarding detail not found']);
+    }
 
+    // Allowlist: a company is sent to ID-Service only the first time, or again
+    // after it was rejected. Every other status, including ones ID-Service adds
+    // later (InProgress today), is locked: changing a company under review would
+    // make the paid compliance checks already run on it stale, and an unknown
+    // status used to fall through to creating a second company.
+    const status = onboarding.companyVerificationStatus;
+    if (onboarding.companyId) {
+      if (
+        status === KybVerificationEnum.Completed ||
+        status === KybVerificationEnum.Approved
+      ) {
+        return onboarding;
+      }
+      if (status !== KybVerificationEnum.Rejected) {
+        throw new ConflictException([
+          'Your business verification is under review and can no longer be changed.',
+        ]);
+      }
+    }
+
+    // Claim the record so two submissions sent together (a double click, two
+    // tabs) can't both reach ID-Service and create two companies. The filter
+    // also fails if the company was created or its status changed since the
+    // read above. A claim older than the timeout is from a crashed request.
+    const startedAt = new Date();
+    const claimed =
+      await this.customerOnboardingRepository.updateCustomerOnboardingDetails(
+        {
+          _id: onboardingId,
+          userId: user.userId,
+          companyId: onboarding.companyId ?? null,
+          ...(onboarding.companyId && {
+            companyVerificationStatus: KybVerificationEnum.Rejected,
+          }),
+          $or: [
+            { kybSubmissionStartedAt: null },
+            {
+              kybSubmissionStartedAt: {
+                $lt: new Date(startedAt.getTime() - KYB_SUBMISSION_LOCK_MS),
+              },
+            },
+          ],
+        },
+        { $set: { kybSubmissionStartedAt: startedAt } },
+      );
+    if (!claimed) {
+      throw new ConflictException([
+        'Your business verification is already being submitted.',
+      ]);
+    }
+    try {
+      return await this.sendKybCompany(
+        onboardingId,
+        body,
+        files,
+        user,
+        claimed,
+      );
+    } finally {
+      await this.customerOnboardingRepository
+        .updateCustomerOnboardingDetails(
+          { _id: onboardingId, kybSubmissionStartedAt: startedAt },
+          { $unset: { kybSubmissionStartedAt: '' } },
+        )
+        .catch((error) =>
+          Logger.error(
+            `Failed to release the KYB submission claim of ${onboardingId}: ${error?.message}`,
+            error?.stack,
+            'CustomerOnboardingService',
+          ),
+        );
+    }
+  }
+
+  /** Sends the company to ID-Service. The caller has checked and claimed it. */
+  private async sendKybCompany(
+    onboardingId: string,
+    body: Record<string, any>,
+    files: any[],
+    user: any,
+    onboarding: CustomerOnboarding,
+  ) {
     const kybAppId = this.config.get<string>('KYB_APP_ID')?.trim();
     const idServiceUrl = this.config.get<string>('CAVACH_API_DOMAIN');
     const ssiServiceUrl = this.config.get<string>('SSI_API_DOMAIN');
@@ -196,34 +289,10 @@ export class CustomerOnboardingService {
       );
     }
 
-    const [onboarding, kybApp] = await Promise.all([
-      this.customerOnboardingRepository.findCustomerOnboardingById({
-        _id: onboardingId,
-        userId: user.userId,
-      }),
-      this.appAuthRepository.findOne({ appId: kybAppId }),
-    ]);
-    if (!onboarding) {
-      throw new BadRequestException(['Customer onboarding detail not found']);
-    }
+    const kybApp = await this.appAuthRepository.findOne({ appId: kybAppId });
     const existingCompanyId = onboarding.companyId;
-    if (
-      existingCompanyId &&
-      (onboarding.companyVerificationStatus === KybVerificationEnum.Completed ||
-        onboarding.companyVerificationStatus === KybVerificationEnum.Approved)
-    ) {
-      return onboarding;
-    }
-    const isRejectedRetry = Boolean(
-      existingCompanyId &&
-        onboarding.companyVerificationStatus === KybVerificationEnum.Rejected,
-    );
-    const isRetry = Boolean(
-      existingCompanyId &&
-        (isRejectedRetry ||
-          onboarding.companyVerificationStatus ===
-            KybVerificationEnum.Submitted),
-    );
+    // submitKybCompany lets an existing company through only when rejected.
+    const isRetry = Boolean(existingCompanyId);
 
     const companyPayload = this.parseMultipartJson(body.company, 'company');
     const company = companyPayload?.fields || companyPayload;
@@ -494,7 +563,7 @@ export class CustomerOnboardingService {
               statusReason !== undefined && {
                 companyStatusReason: this.formatStatusReason(statusReason),
               }),
-            ...(isRejectedRetry &&
+            ...(isRetry &&
               !isCompleted &&
               statusReason === undefined && {
                 companyStatusReason: '',

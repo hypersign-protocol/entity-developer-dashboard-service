@@ -155,6 +155,10 @@ export class CustomerOnboarding {
   // Set by the KYB webhook on the first move to Approved. Coupons use it.
   @Prop({ type: Date, required: false })
   companyVerificationApprovedAt?: Date;
+  // Set while a KYB submission is being sent to ID-Service, so a second one
+  // sent at the same time is refused. Cleared when the request finishes.
+  @Prop({ type: Date, required: false })
+  kybSubmissionStartedAt?: Date;
   @Prop({ type: String, required: true })
   userId: string;
   // Billing profile. Written only by the billing module (its own $set path).

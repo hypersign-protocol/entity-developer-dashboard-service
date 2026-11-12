@@ -3,6 +3,7 @@ import {
   kybApprovedBillingUpdate,
   kybBillingDefaults,
   kybPersonalTaxId,
+  normaliseTaxIds,
   paymentMissingFields,
   taxIdProblem,
 } from './billing-profile';
@@ -122,6 +123,37 @@ describe('taxIdProblem', () => {
   });
 });
 
+describe('normaliseTaxIds', () => {
+  it('keeps the official code of a mixed-case type', () => {
+    expect(
+      normaliseTaxIds([
+        { type: 'Partita IVA', number: '123 4567 8901' },
+        { type: 'partita iva', number: '12345678901' },
+        { type: 'e-tin', number: '123456789012' },
+        { type: ' gstin ', number: '29abcde1234f1z5' },
+      ]),
+    ).toEqual([
+      { type: 'Partita IVA', number: '12345678901' },
+      { type: 'Partita IVA', number: '12345678901' },
+      { type: 'e-TIN', number: '123456789012' },
+      { type: 'GSTIN', number: '29ABCDE1234F1Z5' },
+    ]);
+  });
+
+  it('upper-cases a type it does not know, so the check can name it', () => {
+    const [taxId] = normaliseTaxIds([{ type: 'nope', number: '1' }]);
+    expect(taxId.type).toBe('NOPE');
+    expect(taxIdProblem(taxId)).toBe('Unknown tax ID type NOPE');
+  });
+
+  it('accepts a valid Partita IVA and e-TIN', () => {
+    normaliseTaxIds([
+      { type: 'Partita IVA', number: '12345678901' },
+      { type: 'e-TIN', number: '123456789012' },
+    ]).forEach((taxId) => expect(taxIdProblem(taxId)).toBeNull());
+  });
+});
+
 describe('kybBillingDefaults', () => {
   const company = {
     name: 'Acme Private Limited',
@@ -142,28 +174,68 @@ describe('kybBillingDefaults', () => {
     });
   });
 
-  it('never overwrites a saved profile or a stored region', () => {
+  it('never overwrites a saved profile', () => {
     expect(
       kybBillingDefaults(
         {
           confirmedAt: new Date(),
+          region: 'GLOBAL',
           taxIds: [{ type: 'PAN', number: 'ABCDE1234F' }],
         },
         company,
       ),
     ).toEqual({});
+  });
+
+  it('takes the region from the copied address, not the registration', () => {
+    const set = kybBillingDefaults(
+      { region: 'IN' },
+      {
+        ...company,
+        address: { ...address, postalCode: '018989', country: 'SG' },
+      },
+    );
+    expect(set).toMatchObject({
+      'billing.region': 'GLOBAL',
+      'billing.currency': 'USD',
+    });
+    // A GSTIN doesn't fit an address outside India.
+    expect(set).not.toHaveProperty(['billing.taxIds']);
+    expect(set).not.toHaveProperty(['billing.gstStateCode']);
+  });
+
+  it('falls back to the registration country only with no address or region', () => {
+    const noAddress = { ...company, address: undefined };
+    expect(kybBillingDefaults(undefined, noAddress)).toMatchObject({
+      'billing.region': 'IN',
+    });
     expect(
-      kybBillingDefaults({ region: 'GLOBAL' }, company),
-    ).not.toHaveProperty('billing.region');
+      kybBillingDefaults({ region: 'GLOBAL' }, noAddress),
+    ).not.toHaveProperty(['billing.region']);
+  });
+
+  it('never moves the region of a locked profile', () => {
+    expect(
+      kybBillingDefaults({ region: 'GLOBAL', lockedAt: new Date() }, company),
+    ).not.toHaveProperty(['billing.region']);
   });
 
   it('adds only a missing company tax ID to a saved profile', () => {
     expect(
-      kybBillingDefaults({ confirmedAt: new Date(), taxIds: [] }, company),
+      kybBillingDefaults(
+        { confirmedAt: new Date(), region: 'IN', taxIds: [] },
+        company,
+      ),
     ).toEqual({
       'billing.taxIds': [{ type: 'GSTIN', number: '29ABCDE1234F1Z5' }],
       'billing.gstStateCode': '29',
     });
+    expect(
+      kybBillingDefaults(
+        { confirmedAt: new Date(), region: 'GLOBAL', taxIds: [] },
+        company,
+      ),
+    ).toEqual({});
     expect(
       kybBillingDefaults(
         { confirmedAt: new Date(), lockedAt: new Date() },
@@ -184,6 +256,26 @@ describe('kybBillingDefaults', () => {
     expect(kybBillingDefaults({ confirmedAt: new Date() }, personal)).toEqual(
       {},
     );
+  });
+
+  it('copies a mixed-case tax ID type from KYB', () => {
+    const italian = {
+      name: 'Esempio S.r.l.',
+      countryOfRegistration: 'IT',
+      taxIdType: 'Partita IVA',
+      taxIdNumber: '12345678901',
+      address: {
+        street: 'Via Roma 1',
+        city: 'Milano',
+        province: 'MI',
+        postalCode: '20121',
+        country: 'IT',
+      },
+    };
+    expect(kybBillingDefaults(undefined, italian)).toMatchObject({
+      'billing.taxIds': [{ type: 'Partita IVA', number: '12345678901' }],
+      'billing.region': 'GLOBAL',
+    });
   });
 
   it('skips an invalid tax ID and an incomplete address', () => {

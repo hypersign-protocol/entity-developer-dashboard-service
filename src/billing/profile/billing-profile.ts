@@ -82,11 +82,21 @@ export function taxIdProblem({ type, number }: TaxIdValue): string | null {
   return null;
 }
 
+// Upper-cased code → the code as written in TaxIdTypes. Most codes are upper
+// case, but not all ('Partita IVA', 'e-TIN'), so the type is matched without
+// regard to case and stored as the official code.
+const TAX_ID_CODES = new Map(
+  TaxIdTypes.map(({ code }) => [code.toUpperCase(), code]),
+);
+
 export const normaliseTaxIds = (taxIds: TaxIdValue[] = []): TaxIdValue[] =>
-  taxIds.map((t) => ({
-    type: t.type.trim().toUpperCase(),
-    number: t.number.replace(/\s+/g, '').toUpperCase(),
-  }));
+  taxIds.map((t) => {
+    const type = t.type.trim();
+    return {
+      type: TAX_ID_CODES.get(type.toUpperCase()) ?? type.toUpperCase(),
+      number: t.number.replace(/\s+/g, '').toUpperCase(),
+    };
+  });
 
 /** A tax ID given as a person's, not the company's. Only the end of it is kept. */
 export interface PersonalTaxId {
@@ -202,10 +212,18 @@ export function paymentMissingFields(profile: BillingProfile): string[] {
     : [];
 }
 
+/** A GSTIN is an Indian registration, so it only fits the IN region. */
+export const hasGstin = (taxIds: TaxIdValue[] = []) =>
+  taxIds.some((t) => t.type === 'GSTIN');
+
 /**
  * $set fields copying a KYB submission into an unconfirmed billing profile, so
  * most accounts are prefilled without asking the ID Service. Never touches a
- * profile the customer has saved, and never changes a stored region.
+ * profile the customer has saved.
+ *
+ * The region follows the billing address country (ADR §4.0): it is set from
+ * the copied address, and only when no address is copied does it fall back to
+ * the country of registration, and then only if no region is stored yet.
  */
 export function kybBillingDefaults(
   existing: StoredBilling | undefined,
@@ -220,25 +238,41 @@ export function kybBillingDefaults(
   if (!company) return {};
   const taxIdSet = kybTaxIdSet(company);
   if (existing?.confirmedAt) {
-    // A saved profile only gains a company tax ID it doesn't have yet.
-    return existing.lockedAt || existing.taxIds?.length ? {} : taxIdSet;
+    // A saved profile only gains a company tax ID it doesn't have yet, and
+    // never a GSTIN outside India.
+    if (existing.lockedAt || existing.taxIds?.length) return {};
+    const gstinMismatch =
+      hasGstin(taxIdSet['billing.taxIds'] as TaxIdValue[]) &&
+      existing.region !== BillingRegion.IN;
+    return gstinMismatch ? {} : taxIdSet;
   }
   const set: Record<string, unknown> = { ...taxIdSet };
   if (company.name) set['billing.legalName'] = company.name;
   const address = company.address;
-  if (address && ADDRESS_FIELDS.every((f) => address[f])) {
+  const copiesAddress = address && ADDRESS_FIELDS.every((f) => address[f]);
+  if (copiesAddress) {
     set['billing.address'] = Object.fromEntries(
       ADDRESS_FIELDS.map((f) => [f, String(address[f]).trim()]),
     );
   }
-  if (!existing?.region) {
-    const region =
-      regionFromCountry(company.countryOfRegistration) ||
-      regionFromCountry(address?.country);
-    if (region) {
-      set['billing.region'] = region;
-      set['billing.currency'] = REGION_CURRENCY[region];
-    }
+  const region = existing?.lockedAt
+    ? null
+    : copiesAddress
+    ? regionFromCountry(address.country)
+    : existing?.region
+    ? null
+    : regionFromCountry(company.countryOfRegistration);
+  if (region) {
+    set['billing.region'] = region;
+    set['billing.currency'] = REGION_CURRENCY[region];
+  }
+  if (
+    hasGstin(set['billing.taxIds'] as TaxIdValue[]) &&
+    (region || existing?.region) === BillingRegion.GLOBAL
+  ) {
+    // An address outside India: the customer adds the right tax ID themselves.
+    delete set['billing.taxIds'];
+    delete set['billing.gstStateCode'];
   }
   return set;
 }

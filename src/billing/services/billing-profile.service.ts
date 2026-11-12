@@ -12,6 +12,7 @@ import {
   REGION_CURRENCY,
 } from '../billing.constants';
 import { BillingException } from '../billing.exception';
+import { Order, OrderDocument, OrderStatus } from '../schemas/order.schema';
 import {
   AdminUpdateBillingProfileDto,
   UpdateBillingProfileDto,
@@ -24,6 +25,14 @@ import {
   regionFromCountry,
   taxIdProblem,
 } from '../profile/billing-profile';
+
+// Orders still to be paid or invoiced, in the region they were priced in.
+const OPEN_ORDER_STATUSES = [
+  OrderStatus.CREATED,
+  OrderStatus.PENDING_PAYMENT,
+  OrderStatus.PAID,
+  OrderStatus.NEEDS_REVIEW,
+];
 
 const PROFILE_FIELDS = {
   companyName: 1,
@@ -41,6 +50,8 @@ export class BillingProfileService {
   constructor(
     @InjectModel(CustomerOnboarding.name)
     private readonly onboardingModel: Model<CustomerOnboardingDocument>,
+    @InjectModel(Order.name)
+    private readonly orderModel: Model<OrderDocument>,
   ) {}
 
   private async findOrg(userId: string) {
@@ -105,15 +116,21 @@ export class BillingProfileService {
     const existing = org.billing || {};
     const taxIds = normaliseTaxIds(dto.taxIds);
 
-    const fields: Record<string, string> = {};
-    taxIds.forEach((taxId, i) => {
-      const problem = taxIdProblem(taxId);
-      if (problem) fields[`taxIds[${i}].number`] = problem;
-    });
+    // The billing address country decides the region and currency (ADR §4.0).
+    // A super admin may set the region outright.
     const region = (options.region ||
-      existing.region ||
       regionFromCountry(dto.address.country) ||
       BillingRegion.GLOBAL) as BillingRegion;
+
+    const fields: Record<string, string> = {};
+    taxIds.forEach((taxId, i) => {
+      const problem =
+        taxIdProblem(taxId) ||
+        (taxId.type === 'GSTIN' && region !== BillingRegion.IN
+          ? 'A GSTIN can only be used with a billing address in India'
+          : null);
+      if (problem) fields[`taxIds[${i}].number`] = problem;
+    });
     // A GSTIN fixes the state; otherwise the customer picks it.
     const gstStateCode =
       region === BillingRegion.IN
@@ -150,6 +167,34 @@ export class BillingProfileService {
         BillingErrorCode.BILLING_PROFILE_LOCKED,
         'Tax IDs can no longer be changed. Contact support to update them.',
       );
+    }
+    const regionChanges = !!existing.region && region !== existing.region;
+    if (regionChanges && existing.lockedAt && !options.admin) {
+      // Issued invoices carry the region, so it is fixed once there is one.
+      throw new BillingException(
+        HttpStatus.CONFLICT,
+        BillingErrorCode.BILLING_PROFILE_LOCKED,
+        'Your billing country sets your region and currency, which can no longer be changed. Contact support to update it.',
+      );
+    }
+    if (regionChanges) {
+      // An open order was priced, and will be invoiced, in the old region and
+      // currency. It isn't cancelled here: a payment may be in flight.
+      const openOrders = await this.orderModel
+        .find(
+          { orgId: String(org._id), status: { $in: OPEN_ORDER_STATUSES } },
+          { orderNumber: 1 },
+        )
+        .limit(10)
+        .lean();
+      if (openOrders.length) {
+        throw new BillingException(
+          HttpStatus.CONFLICT,
+          BillingErrorCode.REGION_CHANGE_BLOCKED,
+          'You have an order in progress. Finish or cancel it before changing your billing country.',
+          { orders: openOrders.map((o) => o.orderNumber) },
+        );
+      }
     }
 
     // Billing's own write path: only billing.* fields, never the rest of onboarding.

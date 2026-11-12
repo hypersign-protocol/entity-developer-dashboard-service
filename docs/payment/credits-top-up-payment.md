@@ -88,7 +88,7 @@ The first draft of this ADR assumed an `Organisation` collection and a `CreditPa
 | Credit audit trail | `creditLedger` (time-series) + `creditCommitOutbox`. They already record every grant, reservation, commit and expiry per plan. | **Reuse.** Billing doesn't duplicate credit movements. The `invoiceId` on the plan links a ledger entry to its invoice. |
 | `kybStatus` / `kybApprovedAt` | `CustomerOnboarding.companyVerificationStatus` (`KybVerificationEnum`: `Submitted`, `Approved`, `Rejected`, `Completed`) is updated by the KYB webhook (`updateCompanyVerificationStatus`). There's no approval timestamp. | **Don't copy it.** Read the status from `CustomerOnboarding`. **Add one field there:** `companyVerificationApprovedAt`, set by the webhook handler on the first move to `Approved`. FOUNDING coupons need it ("within 6 months of KYB approval"). |
 | Billing address, tax IDs | `CustomerOnboarding.billingAddress` is a **free-text string**, and `country` is optional. The structured address (`street, city, province, postalCode, country`), `countryOfRegistration` and `taxIdType`/`taxIdNumber` are sent to the ID Service's company record (`companyId`) and **not stored here**. `TaxIdTypes` in `identifier-types.ts` already has the GSTIN and PAN validation regexes. | **Add a `billing` sub-document to `CustomerOnboarding`** (§4.1) instead of a separate collection. It's prefilled from the onboarding fields and the KYB company record. Its address uses the KYB address shape, and its tax IDs reuse the `TaxIdTypes` codes and regexes. The free-text `billingAddress` stays as an onboarding input. |
-| Region | No field. The candidates are KYB `countryOfRegistration` and onboarding `country`. | Stored as `billing.region`, derived once when the billing details are first saved: `countryOfRegistration`, falling back to `country`. `IN` → `IN`, anything else (including `XX`) → `GLOBAL`. |
+| Region | No field. The candidates are KYB `countryOfRegistration` and onboarding `country`. | Stored as `billing.region`, following the **billing address country**, since tax follows where the customer receives the service. It's recalculated on every save until the profile is locked by its first invoice. Without a billing address it falls back to KYB `countryOfRegistration`, then onboarding `country`. `IN` → `IN`, anything else (including `XX`) → `GLOBAL`. |
 | Permissions `BILLING_READ` / `BILLING_WRITE` | Per-service access types in `SERVICES.CAVACH_API.ACCESS_TYPES` (`READ_CREDIT`, `WRITE_CREDIT`, …), stored in `User.accessList` and `Role.permissions`. | **Add `READ_BILLING` and `WRITE_BILLING`** to `DASHBOARD.ACCESS_TYPES`, following the existing `VERB_NOUN` naming. Billing is an account-level feature, and `DashboardAccessGuard` already checks dashboard permissions for team members. The owner passes the guard without a check. |
 | `BILLING_ADMIN` | Only `UserRole.SUPER_ADMIN` plus `SuperAdminMiddleware`. There are no finer-grained super-admin permissions. | **v1: reuse `SuperAdminMiddleware`.** A separate billing-admin role is deferred (open question 13). |
 | Pricing `CatalogVersion` | The name is taken. The credit middleware's **API price catalog** (credits charged per route) already writes `catalogVersion` into every `creditLedger` row. | **Rename ours `PriceBook`** (`priceBooks`, `priceBookId`, `priceBookVersion`), so Finance never confuses "what a customer paid" with "what an API call costs". |
@@ -346,10 +346,10 @@ export class BillingDetails {
   };
   gstStateCode?: string;         // India: 2-digit GST state code. From the GSTIN, or the address province for B2C
   taxIds: { type: string; number: string }[];  // type from TaxIdTypes ('GSTIN', 'PAN', 'VAT', …), checked with its regex
-  region: 'IN' | 'GLOBAL';       // derived once (§4.0). Only a super admin can change it
+  region: 'IN' | 'GLOBAL';       // follows address.country (§4.0) until lockedAt; then only a super admin can change it
   currency: 'INR' | 'USD';       // follows the region
   providerCustomers?: { [provider: string]: string };  // e.g. { stripe: 'cus_…' }
-  lockedAt?: Date;               // set by the first paid invoice. Region and tax ID changes then need a super admin
+  lockedAt?: Date;               // set by the first invoice (including the ₹0 promotion one). Region and tax ID changes then need a super admin
 }
 
 @Schema({ timestamps: true })
@@ -378,13 +378,13 @@ CustomerOnboardingSchema.index({ userId: 1 }, { unique: true });
 | `email` | `customerEmail` |
 | `address` | the KYB submission or company record. If there's no KYB data, the customer types it in, using the free-text `billingAddress` as a hint |
 | `taxIds` | KYB `taxIdType` / `taxIdNumber` |
-| `region` | KYB `countryOfRegistration`, falling back to `country` |
+| `region` | The billing address country (from the KYB address when it's copied), falling back to KYB `countryOfRegistration`, then `country` |
 
 The customer confirms or completes the details before their first purchase. The onboarding fields `billingAddress` and `country` stay as they are, as what the customer typed during onboarding. `billing` is the confirmed, structured version that invoices use.
 
 **Rules**
 
-- **Billing has its own write path.** `PUT /customer-onboarding/billing` updates only `billing.*` with `$set`. Apart from the one-time copy on KYB submission, which only fills an empty `billing`, onboarding code never writes `billing`. That way the onboarding workflow (steps, logs, KYB webhook) and billing edits can't overwrite each other. Once `billing.lockedAt` is set, the endpoint refuses region and tax ID changes (`409`).
+- **Billing has its own write path.** `PUT /customer-onboarding/billing` updates only `billing.*` with `$set`. Apart from the one-time copy on KYB submission, which only fills an empty `billing`, onboarding code never writes `billing`. That way the onboarding workflow (steps, logs, KYB webhook) and billing edits can't overwrite each other. Once `billing.lockedAt` is set, the endpoint refuses region and tax ID changes (`409`). Before that, a save that changes the region is refused while the organisation has an open order (`409 REGION_CHANGE_BLOCKED`), and a GSTIN needs an address in India.
 - **Invoices take a copy.** Each invoice copies the customer details from `billing` when it's issued (§4.7), so later edits never change a past invoice.
 - **KYB status isn't copied into `billing`.** Coupon checks read `companyVerificationStatus === 'Approved'` and `companyVerificationApprovedAt`, which are on the same document.
 - **`Completed` doesn't count as approved.** `KybVerificationEnum.Completed` means "finished, passed or failed", so only `Approved` counts for coupons. Product to confirm (open question 20).
@@ -1036,7 +1036,7 @@ flowchart TD
 | 11 | Coupon limits like "first 3 purchases" or "first purchase only" | `CouponAccount.redemptions` counts the account's uses of that coupon. "First purchase only" checks that the account has no `FULFILLED` order and no paid invoice. Whether a refunded order still counts is open question 5. |
 | 12 | Brute-forcing coupon codes | Rate-limit quote calls that include a coupon (for example 10 per account per 10 min). Use generic error messages. Partner and winback codes get random suffixes. |
 | 13 | Self-referral, or the same company with several accounts | Reject when referrer and referee share a GSTIN/PAN, domain or KYB identity. The referral moves to `VOID`. |
-| 14 | Customer changes billing country or region | The profile is `locked` after the first paid order. Changes go through an admin, and any open orders are cancelled. Existing credits are not converted. |
+| 14 | Customer changes billing country or region | Before the first invoice, the region follows the new country, but not while an order is open (`409 REGION_CHANGE_BLOCKED`): the customer finishes or cancels it first, since cancelling automatically could race a payment in flight. After the first invoice the profile is `locked`, and changes go through an admin. Existing credits are not converted. |
 | 15 | Onboarding or KYB not complete | Purchases are allowed, but invoices need a complete billing profile, so the UI asks for it before checkout. FOUNDING coupons need `CustomerOnboarding.companyVerificationStatus = Approved` and `companyVerificationApprovedAt` within 180 days. Whether KYB should be required to buy at all is open question 7. |
 | 16 | Custom amount out of range, with decimals, or not a number | The server checks it is a whole number of major units between `custom.minMinor` and `custom.maxMinor`, otherwise it returns `422 AMOUNT_OUT_OF_RANGE`. Larger amounts go to "Talk to sales". |
 | 17 | Rounding drift between UI and server | The UI only displays amounts from the server quote. Shared fixtures (₹2,499 + FOUNDING8 = ₹1,724.31; $299 + FOUNDING15 = $135.97) are tested on both sides. |

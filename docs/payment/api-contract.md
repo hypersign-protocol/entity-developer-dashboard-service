@@ -135,10 +135,10 @@ The company details printed on invoices. They are stored on the organisation's o
 | `gstStateCode` | India only, 2 digits. The server works it out from a GSTIN. Without a GSTIN, the UI sends it from a state dropdown |
 | `taxIds[].type` | `GSTIN`, `PAN`, `VAT`, … (the existing `TaxIdTypes`). The server validates the number against the type |
 | `personalTaxId` | `{ "type": "PAN" \| "OTHER", "number": "XXXXXX234F" }` or `null`. Read-only: from KYB when the business isn't registered for tax. Only the last 4 characters are stored. Don't send it in `PUT`, and don't add it to `taxIds`. Invoices print it masked when the profile has no `taxIds` |
-| `region`, `currency` | Read-only. Only a super admin can change them |
+| `region`, `currency` | Read-only. Set by the server from `address.country` on each save (`IN` → `IN`/`INR`, anything else → `GLOBAL`/`USD`). Once `locked`, only a super admin can change them |
 | `source` | `PREFILLED`: never saved, so the values are suggestions; show the form for confirmation. `SAVED`: the customer has confirmed them, or KYB approval saved complete prefilled details |
 | `complete` | `true` only when nothing is missing **and** the profile is saved (`source: "SAVED"`). `false` means invoices can't be issued yet. `missingFields` lists the missing fields, using the same paths as above, for example `"address.postalCode"` or `"gstStateCode"`; it can be empty while `source` is still `PREFILLED`, in which case the form only needs confirming |
-| `locked` | `true` after the first paid invoice. The region and tax IDs can't be edited any more; show them read-only, with "Contact support to change" |
+| `locked` | `true` after the first invoice (paid, offline or the ₹0 promotion invoice). The tax IDs, and an address country in another region, can't be changed any more; show them read-only, with "Contact support to change" |
 
 #### `GET /api/v1/customer-onboarding/billing`
 
@@ -165,7 +165,9 @@ Saves the profile. Needs `WRITE_BILLING`.
 - **200:** the saved `BillingProfile`, with `source: "SAVED"`.
 - **400 `VALIDATION_FAILED`:** for example, an invalid GSTIN appears as `details.fields["taxIds[0].number"]`, and a phone without its country code as `details.fields.phone`.
 - `phone` must start with `+` and the country code; spaces and dashes are fine. This is a full save: leaving `phone` out (or `""`) removes a saved one, so always send the current value.
-- **409 `BILLING_PROFILE_LOCKED`:** the request changed the tax IDs of a locked profile.
+- **400 `VALIDATION_FAILED`** also covers a GSTIN with an address outside India: `details.fields["taxIds[0].number"]`.
+- **409 `BILLING_PROFILE_LOCKED`:** the request changed the tax IDs of a locked profile, or moved its address to a country in another region.
+- **409 `REGION_CHANGE_BLOCKED`:** the new address country changes the region while an order is still open (not yet paid, or paid and not yet invoiced). `details.orders` lists their order numbers. Ask the customer to finish or cancel them first. Super admins get it too.
 
 ---
 
@@ -523,7 +525,7 @@ Completes or corrects a customer's billing profile, for example before invoicing
 
 | Field | Notes |
 |---|---|
-| `region` | Optional, `IN` or `GLOBAL`. Changes the billing region and currency |
+| `region` | Optional, `IN` or `GLOBAL`. Sets the billing region and currency regardless of the address. Left out, they follow `address.country`, even on a locked profile |
 | `unlock` | Optional. `true` clears the lock set by the first invoice |
 | `reason` | **Required.** Logged with the super admin's id |
 
@@ -1069,6 +1071,7 @@ Body `{ "appId": "…" }`; the server sets the amount and validity. Needs `WRITE
 | 2026-11-04 | Global payments: §6 checkout and §7 payment links in USD through Razorpay. `BillingProfile` gains `phone` (international form), needed for Global customers to pay (`BILLING_PROFILE_INCOMPLETE` with `missingFields: ["phone"]`). `checkout.prefill.contact`. `InvoiceDocument` gains `fx`, the INR value at Razorpay's conversion rate. |
 | 2026-11-03 | §6 agreed for phase 1 (India, Razorpay Standard Checkout, no webhooks): `POST /billing/orders` returns `checkout` options instead of `checkoutUrl`; new `POST /billing/orders/:id/confirm`; the `Order` object gains `validityDays`, `checkout`, `payment`, `lastPaymentError`, `creditPlanId`, `creditsActive`; cancel is 6.4. New codes `IDEMPOTENCY_KEY_REUSED`, `PAYMENT_VERIFICATION_FAILED`, `ORDER_NOT_FOUND`, `ORDER_NOT_PAYABLE`, `ORDER_NOT_CANCELLABLE`. §7 stays provisional (phase 2). |
 | 2026-11-05 | §2, §4: new read-only `personalTaxId` on the profile, from a KYB submission with `taxIdType: "OTHER"`. It stays out of `taxIds`, counts for coupons that need a PAN when it's an Indian PAN, and prints masked on invoices when there are no `taxIds` (`customer.taxIds` holds `{ "type": "PAN", "number": "XXXXXX234F" }`, or `"type": "Tax ID"` outside that). A saved profile with no `taxIds` now gains the company tax ID from KYB. |
+| 2026-11-12 | §2: the region and currency follow the billing address country on every save until the profile is locked (was: fixed when first derived). New `409 REGION_CHANGE_BLOCKED` while an order is open. A GSTIN needs an address in India (`400 VALIDATION_FAILED`). The KYB prefill also takes the region from the copied address. |
 | 2026-11-11 | Settings removed: `BILLING_PAY_ENABLED` (Pay, `features.pay` and Collect payment are on wherever the region's Razorpay keys are set) and `BILLING_INVOICED_GRANTS` (`POST /app/:appId/credits` now always returns `409 USE_INVOICES` for ID Service apps). `BILLING_SUPPLIER_PAN` removed: `supplier.pan` is taken from the GSTIN. |
 | 2026-11-09 | §6.5 added: optional Razorpay webhooks at `POST /billing/webhooks/razorpay` (signature checked over the raw body, `RAZORPAY_WEBHOOK_SECRET`). They only trigger the existing sync sooner; polling and reconciliation are unchanged and still cover every order without them. |
 | 2026-11-05 | §2, §8: when KYB is approved, complete prefilled billing details are saved automatically (`source: "SAVED"`, `complete: true`), unless the customer already saved their own. Incomplete details still need the billing form. Global customers still need a phone number before paying. |

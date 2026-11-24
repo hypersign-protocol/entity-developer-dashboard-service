@@ -387,18 +387,20 @@ export class AppAuthService {
       {
         $match: {
           hasDomainVerified: true,
+          // Only apps that passed DNS-01 have a linkage credential.
+          domainLinkageCredentialString: { $exists: true },
           env: APP_ENVIRONMENT.prod,
           'services.id': SERVICE_TYPES.CAVACH_API,
         },
       },
       {
         $project: {
+          _id: 0,
           domain: 1,
           logoUrl: 1,
           domainLinkageCredentialString: 1,
           issuerDid: 1,
           appName: 1,
-          appId: 1,
           description: 1,
           env: 1,
         },
@@ -539,7 +541,7 @@ export class AppAuthService {
   ): Promise<createAppResponse> {
     Logger.log('updateAnApp() method: starts....', 'AppAuthService');
 
-    const { env, hasDomainVerified, domain, logoUrl, issuerDid } = updataAppDto;
+    const { env, logoUrl } = updataAppDto;
     const { userId } = userDetail;
     if (!oldApp) {
       throw new BadRequestException([
@@ -551,37 +553,42 @@ export class AppAuthService {
       typeof updataAppDto.env !== 'undefined' &&
       updataAppDto.env !== oldApp.env;
     Logger.debug(`isEnvChanged: ${isEnvChanged}`);
-    // check if hasDomainVerified is verifed by DNS-01
-    // only if credential was not issued
-    // this should not happen everytime we update a record, only once.
-    // so better to issue verifiable credential
-    if (
-      env === 'prod' &&
-      hasDomainVerified &&
-      domain &&
-      domain != '' &&
-      issuerDid &&
-      issuerDid != '' &&
-      !oldApp.domainLinkageCredentialString
-    ) {
-      const txtRecord = 'hypersign-domain-verification.did=' + issuerDid;
-      const fetchedTxtRecord = await this.verifyDNS01Validation(
-        domain,
-        txtRecord,
-      );
-      if (fetchedTxtRecord.verified) {
-        // issue credential
-        Logger.debug('Issueing credential .... ');
-        updataAppDto['domainLinkageCredentialString'] = JSON.stringify(
-          this.getDomainLinkageCredential(issuerDid, issuerDid, domain),
-        );
-      }
-    }
 
-    // we do not allow to update the domain once domain is verified
-    if (hasDomainVerified && oldApp.domainLinkageCredentialString) {
+    // hasDomainVerified is server-owned. The client's value is only a request
+    // to run DNS-01 verification; it is never written as-is. The domain
+    // linkage credential (which the client cannot set) is the proof.
+    const verificationRequested = updataAppDto.hasDomainVerified === true;
+    delete updataAppDto.hasDomainVerified;
+    const alreadyVerified = !!oldApp.domainLinkageCredentialString;
+
+    if (alreadyVerified) {
+      // The domain cannot change once it has been verified.
       updataAppDto.domain = oldApp.domain;
+      updataAppDto.hasDomainVerified = true;
+    } else if (verificationRequested) {
+      const domainToVerify = updataAppDto.domain ?? oldApp.domain;
+      const issuerDidToVerify = updataAppDto.issuerDid ?? oldApp.issuerDid;
+      if (!domainToVerify || !issuerDidToVerify) {
+        throw new BadRequestException([
+          'Domain and issuer DID are required to verify the domain',
+        ]);
+      }
+      const txtRecord =
+        'hypersign-domain-verification.did=' + issuerDidToVerify;
+      // Throws BadRequestException when the TXT record does not match.
+      await this.verifyDNS01Validation(domainToVerify, txtRecord);
+      Logger.debug('Issueing credential .... ');
+      updataAppDto['domainLinkageCredentialString'] = JSON.stringify(
+        this.getDomainLinkageCredential(
+          issuerDidToVerify,
+          issuerDidToVerify,
+          domainToVerify,
+        ),
+      );
+      updataAppDto.hasDomainVerified = true;
     }
+    const domain = updataAppDto.domain ?? oldApp.domain;
+    const hasDomainVerified = updataAppDto.hasDomainVerified === true;
 
     // Env restrictions
     if (env === APP_ENVIRONMENT.prod) {

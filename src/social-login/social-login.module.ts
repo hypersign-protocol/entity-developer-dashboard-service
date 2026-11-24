@@ -17,6 +17,7 @@ import { SupportedServiceList } from 'src/supported-service/services/service-lis
 import { RateLimitMiddleware } from 'src/utils/middleware/rate-limit.middleware';
 import { EmailOtpLoginController } from './controller/email-otp-login.controller';
 import { EmailOtpLoginService } from './services/email-otp-login.service';
+import { DisposableEmailService } from './services/disposable-email.service';
 import { MailNotificationModule } from 'src/mail-notification/mail-notification.module';
 
 @Module({
@@ -33,6 +34,7 @@ import { MailNotificationModule } from 'src/mail-notification/mail-notification.
     GoogleStrategy,
     SupportedServiceList,
     EmailOtpLoginService,
+    DisposableEmailService,
   ],
   exports: [SocialLoginService],
 })
@@ -82,6 +84,6 @@ export class SocialLoginModule implements NestModule {
           method: RequestMethod.POST,
         },
       )
-      .forRoutes(SocialLoginController);
+      .forRoutes(SocialLoginController, EmailOtpLoginController);
   }
 }

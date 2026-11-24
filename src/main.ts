@@ -28,6 +28,23 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
+  // Behind a load balancer req.ip is the proxy's address unless Express is
+  // told how many proxy hops to trust. Default 2 = GKE container-native
+  // Google LB, whose X-Forwarded-For is "<client>, <lb-ip>". Recompute if a
+  // CDN is put in front (3) or the ingress changes. TRUST_PROXY=false disables.
+  const trustProxy = (process.env.TRUST_PROXY || '2').trim();
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .set(
+      'trust proxy',
+      trustProxy === 'false'
+        ? false
+        : /^\d+$/.test(trustProxy)
+        ? Number(trustProxy)
+        : trustProxy, // e.g. a subnet list: "loopback, 10.0.0.0/8"
+    );
+
   app.use(
     json({
       limit: '10mb',

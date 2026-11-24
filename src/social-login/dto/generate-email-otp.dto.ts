@@ -6,17 +6,24 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  MaxLength,
 } from 'class-validator';
+
+// RFC 5321 §4.5.3.1 with RFC 3696 erratum 1690: 256-octet path minus the
+// angle brackets. @IsEmail also caps the local part at 64 and domain at 254.
+export const EMAIL_MAX_LENGTH = 254;
 
 export class GenerateEmailOtpDto {
   @ApiProperty({
     name: 'email',
     description: 'emailId',
     example: 'xyz@gmail.com',
+    maxLength: EMAIL_MAX_LENGTH,
   })
   @IsEmail()
   @IsNotEmpty()
   @IsString()
+  @MaxLength(EMAIL_MAX_LENGTH)
   email: string;
 }
 export class VerifyEmailOtpDto {
@@ -24,10 +31,12 @@ export class VerifyEmailOtpDto {
     name: 'email',
     description: 'emailId',
     example: 'xyz@gmail.com',
+    maxLength: EMAIL_MAX_LENGTH,
   })
   @IsEmail()
   @IsNotEmpty()
   @IsString()
+  @MaxLength(EMAIL_MAX_LENGTH)
   email: string;
   @ApiProperty({
     name: 'otp',

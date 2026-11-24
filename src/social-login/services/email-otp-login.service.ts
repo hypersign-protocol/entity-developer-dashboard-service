@@ -14,11 +14,13 @@ import {
 import getEmailOtpMail from 'src/mail-notification/constants/templates/email-otp.template';
 import { ConfigService } from '@nestjs/config';
 import { JobNames, TIME } from 'src/utils/time-constant';
+import { DisposableEmailService } from './disposable-email.service';
 @Injectable()
 export class EmailOtpLoginService {
   constructor(
     private readonly mailNotificationService: MailNotificationService,
     private readonly config: ConfigService,
+    private readonly disposableEmail: DisposableEmailService,
   ) {}
 
   /**
@@ -36,6 +38,8 @@ export class EmailOtpLoginService {
       'generateEmailOtp(): Generating OTP request',
       'EmailOtpLoginService',
     );
+    // Before any counters are written, so blocked emails cost nothing.
+    await this.disposableEmail.assertAllowed(email, { checkDns: true });
     const otpCoolDownMinute = this.config.get<number>(
       'OTP_COOLDOWN_MINUTES',
       1,
@@ -121,6 +125,8 @@ export class EmailOtpLoginService {
       'EmailOtpLoginService',
     );
     const { email, otp } = verifyOtpDto;
+    // Blocklist only (no network): stops OTPs issued before a domain was listed.
+    await this.disposableEmail.assertAllowed(email, { checkDns: false });
     const otpKey = `otp:${email}`;
     const attemptsKey = `otp:attempts:${email}`;
     const storedHash = await redisClient.get(otpKey);

@@ -7,6 +7,8 @@ import {
   Req,
   Res,
   UseFilters,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -34,6 +36,8 @@ import {
 @UseFilters(AllExceptionsFilter)
 @ApiTags('Authentication')
 @Controller('/api/v1/auth/email/otp')
+// There is no global ValidationPipe: without this the DTO rules never run.
+@UsePipes(new ValidationPipe({ whitelist: true }))
 export class EmailOtpLoginController {
   constructor(
     private readonly config: ConfigService,

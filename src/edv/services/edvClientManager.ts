@@ -6,6 +6,7 @@ import {
 import { VaultWallet } from './vaultWalletManager';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { dirname } from 'path';
 
 type EDVDocType = {
   document: object;
@@ -32,6 +33,60 @@ export interface IEdvClientManager {
     indexes: Array<{ index: string; unique: boolean }>,
     recipients?: Array<IEncryptionRecipents>,
   ): EDVDocType;
+}
+
+const MAX_LOGGED_BODY = 1000;
+
+function stringifyBody(body: unknown): string {
+  let text: string;
+  try {
+    text = typeof body === 'string' ? body : JSON.stringify(body);
+  } catch {
+    text = String(body);
+  }
+  return text && text.length > MAX_LOGGED_BODY
+    ? text.slice(0, MAX_LOGGED_BODY) + '…(truncated)'
+    : text;
+}
+
+/**
+ * Records the last HTTP reply hypersign-edv-client receives, by hooking the
+ * axios copy nested inside that package (not the app's own axios). Best
+ * effort: if that axios can't be found, describe() says so.
+ */
+function captureEdvResponses(): { describe(): string; stop(): void } {
+  let last = 'none captured';
+  let axios: any;
+  try {
+    const edvDir = dirname(require.resolve('hypersign-edv-client'));
+    axios = require(require.resolve('axios', { paths: [edvDir] }));
+    axios = axios?.default ?? axios;
+  } catch {
+    return {
+      describe: () => 'unavailable (could not hook EDV client axios)',
+      stop: () => undefined,
+    };
+  }
+  const record = (res: any) =>
+    `${res?.config?.method?.toUpperCase()} ${res?.config?.url} -> ` +
+    `${res?.status} ${res?.statusText ?? ''} body=${stringifyBody(res?.data)}`;
+  const id = axios.interceptors.response.use(
+    (res: any) => {
+      last = record(res);
+      return res;
+    },
+    (err: any) => {
+      last = err?.response
+        ? record(err.response)
+        : `${err?.config?.method?.toUpperCase()} ${err?.config?.url} -> ` +
+          `no response (${err?.code ?? ''} ${err?.message})`;
+      return Promise.reject(err);
+    },
+  );
+  return {
+    describe: () => last,
+    stop: () => axios.interceptors.response.eject(id),
+  };
 }
 
 export class EdvClientManger implements IEdvClientManager {
@@ -80,7 +135,24 @@ export class EdvClientManger implements IEdvClientManager {
         : 'urn:uuid:6e8bc430-9c3a-11d9-9669-0800200c9a66',
     };
 
-    await this.vault.registerEdv(config);
+    // registerEdv() hides the EDV server's reply: on an error response it
+    // fails with "Cannot read properties of undefined (reading 'id')". Record
+    // the raw reply so a startup failure logs what the server actually said.
+    const capture = captureEdvResponses();
+    try {
+      await this.vault.registerEdv(config);
+    } catch (e: any) {
+      Logger.error(
+        `EDV vault registration failed: ${e?.message}. ` +
+          `EDV_BASE_URL=${EDV_BASE_URL} edvId=${config.edvId} ` +
+          `controller=${config.controller} ` +
+          `edvResponse=${capture.describe()}`,
+        'EdvClientManager',
+      );
+      throw e;
+    } finally {
+      capture.stop();
+    }
     return this;
   }
 

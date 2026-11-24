@@ -81,6 +81,9 @@ export namespace SERVICES {
       WRITE_USER_CONSENT = 'WRITE_USER_CONSENT',
       READ_SESSION = 'READ_SESSION',
       WRITE_SESSION = 'WRITE_SESSION',
+      // Admin-only: record a manual decision on a session. Kept separate from
+      // WRITE_SESSION so end-user (verifier/app-auth) tokens can't decide their own session.
+      WRITE_SESSION_DECISION = 'WRITE_SESSION_DECISION',
       WRITE_PASSIVE_LIVELINESS = 'WRITE_PASSIVE_LIVELINESS',
       WRITE_DOC_OCR = 'WRITE_DOC_OCR',
       READ_WIDGET_CONFIG = 'READ_WIDGET_CONFIG',

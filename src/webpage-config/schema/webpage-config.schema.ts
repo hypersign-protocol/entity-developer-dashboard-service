@@ -29,6 +29,13 @@ export class WebPageConfig {
   contactEmail?: string;
   @Prop({ type: Array<string>, required: false })
   linkedWidgetConfigIds?: Types.ObjectId[];
+  // Owner's kill switch: a disabled page serves no config and no tokens.
+  // Missing on older documents, which are treated as active.
+  @Prop({ type: Boolean, default: true })
+  isActive?: boolean;
+  // Optional cap on tokens issued per UTC day for this page.
+  @Prop({ type: Number, required: false })
+  dailyTokenLimit?: number;
 }
 export const WebPageConfigSchema = SchemaFactory.createForClass(WebPageConfig);
 WebPageConfigSchema.index({ serviceId: 1, pageType: 1 }, { unique: true });

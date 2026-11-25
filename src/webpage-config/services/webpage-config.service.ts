@@ -1,14 +1,17 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ThrottlerException } from '@nestjs/throttler';
 import {
   CreateWebpageConfigDto,
   CreateWebpageConfigResponseDto,
   ExpiryType,
   PageType,
+  VerifierPageTokenResponse,
 } from '../dto/create-webpage-config.dto';
 import { UpdateWebpageConfigDto } from '../dto/update-webpage-config.dto';
 import { AppRepository } from 'src/app-auth/repositories/app.repository';
@@ -25,15 +28,19 @@ import { ConfigService } from '@nestjs/config';
 import { urlSanitizer } from 'src/utils/sanitizeUrl.validator';
 import { isValidObjectId, Types } from 'mongoose';
 import { WEBPAGE_CONFIG_ERRORS } from '../constant/en';
-import { redisClient } from 'src/utils/redis.provider';
-import { EXPIRY_CONFIG } from 'src/utils/time-constant';
-import {
-  evaluateAccessPolicy,
-  generateHash,
-  getAccessListForModule,
-  REDIS_KEYS,
-} from 'src/utils/utils';
+import { EXPIRY_CONFIG, TIME, TIME_UNIT } from 'src/utils/time-constant';
+import { evaluateAccessPolicy, getAccessListForModule } from 'src/utils/utils';
 import { TokenModule } from 'src/config/access-matrix';
+import {
+  hitCounter,
+  newVerifierSessionId,
+  pageDailyKey,
+  pageIpRateKey,
+  pageRateKey,
+  revokeVerifierSessions,
+  trackVerifierSessions,
+  VERIFIER_TOKEN_RATE_LIMIT,
+} from '../utils/verifier-session.util';
 
 @Injectable()
 export class WebpageConfigService {
@@ -60,6 +67,8 @@ export class WebpageConfigService {
       pageType = 'kyc',
       contactEmail,
       linkedWidgetConfigIds,
+      isActive = true,
+      dailyTokenLimit,
     } = createWebpageConfigDto;
     const serviceDetail = await this.appRepository.findOne({
       appId: serviceId,
@@ -107,6 +116,8 @@ export class WebpageConfigService {
       linkedWidgetConfigIds: linkedWidgetConfigIds?.map(
         (id) => new Types.ObjectId(id),
       ),
+      isActive,
+      dailyTokenLimit,
     };
     Logger.log('Before inserting webpage detail', 'WebpageConfigService');
     const webpageConfigData = await this.webPageConfigRepo.createwebPageConfig(
@@ -201,6 +212,8 @@ export class WebpageConfigService {
         `No webpage configuration found for id: ${id}`,
       ]);
     }
+    // Public endpoint used by the verifier page itself.
+    this.assertPageUsable(webpageConfiguration);
     Logger.log(
       'Inside serviceDetail(): before making db call',
       'WebpageConfigService',
@@ -267,14 +280,19 @@ export class WebpageConfigService {
       'before updating webpage config detail....',
       'WebpageConfigService',
     );
+    // Scope by serviceId too, so a caller can only edit pages of the app
+    // they were authorised for.
     const webpageConfiguration = await this.webPageConfigRepo.findOneAndUpdate(
-      { _id: new Types.ObjectId(id) },
+      { _id: new Types.ObjectId(id), serviceId },
       dataToUpdate,
     );
     if (!webpageConfiguration || webpageConfiguration == null) {
       throw new NotFoundException([
         `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
       ]);
+    }
+    if (webpageConfiguration.isActive === false) {
+      await revokeVerifierSessions(id);
     }
     const { appName, logoUrl } = serviceDetail;
     const env: APP_ENVIRONMENT = serviceDetail?.env as APP_ENVIRONMENT;
@@ -304,6 +322,7 @@ export class WebpageConfigService {
         `No webpage configuration found for serviceId: ${serviceId} and docId: ${id}`,
       ]);
     }
+    await revokeVerifierSessions(id);
 
     return deletedConfig;
   }
@@ -340,6 +359,7 @@ export class WebpageConfigService {
         '1month': 30,
         '3months': 90,
         '6months': 180,
+        '12months': 365,
       };
       const days = monthsMap[expiryType] || 30;
       expiresIn = days * 24;
@@ -347,7 +367,61 @@ export class WebpageConfigService {
     }
     return { expiryDate };
   }
-  public async generateWebpageConfigTokens(id, appId, businessId?) {
+  // Throws when the page is switched off or past its expiry date.
+  private assertPageUsable(config: {
+    isActive?: boolean;
+    expiryDate?: Date;
+  }): void {
+    if (config.isActive === false) {
+      throw new ForbiddenException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_DISABLED,
+      ]);
+    }
+    if (
+      config.expiryDate &&
+      new Date(config.expiryDate).getTime() <= Date.now()
+    ) {
+      throw new ForbiddenException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_EXPIRED,
+      ]);
+    }
+  }
+
+  private async enforceTokenLimits(
+    pageId: string,
+    clientIp: string | undefined,
+    dailyTokenLimit?: number,
+  ): Promise<void> {
+    const { PER_IP_PER_MINUTE, PER_PAGE_PER_MINUTE, WINDOW } =
+      VERIFIER_TOKEN_RATE_LIMIT;
+    const [ipCount, pageCount] = await Promise.all([
+      hitCounter(pageIpRateKey(pageId, clientIp || 'unknown'), WINDOW),
+      hitCounter(pageRateKey(pageId), WINDOW),
+    ]);
+    if (ipCount > PER_IP_PER_MINUTE || pageCount > PER_PAGE_PER_MINUTE) {
+      throw new ThrottlerException(
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_RATE_LIMITED,
+      );
+    }
+    if (dailyTokenLimit) {
+      const day = new Date().toISOString().slice(0, 10);
+      const dailyCount = await hitCounter(pageDailyKey(pageId, day), TIME.DAY);
+      if (dailyCount > dailyTokenLimit) {
+        throw new ThrottlerException(
+          WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_DAILY_LIMIT_REACHED,
+        );
+      }
+    }
+  }
+
+  // Issues the KYC/KYB + SSI tokens a verifier page needs.
+  // The app is always the one the page belongs to; the caller cannot pick it.
+  public async generateWebpageConfigTokens(
+    id: string,
+    requestedAppId?: string,
+    businessId?: string,
+    clientIp?: string,
+  ) {
     Logger.log(
       'Inside generateWebpageConfigTokens() to generate webpage config token',
       'WebpageConfigService',
@@ -363,15 +437,33 @@ export class WebpageConfigService {
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_NOT_FOUND,
       ]);
     }
-    const serviceType =
-      verifierConfig.pageType === PageType.KYB
-        ? GRANT_TYPES.access_service_kyb
-        : GRANT_TYPES.access_service_kyc;
-    const kycServiceDetail = await this.getServiceAndCache(
+    this.assertPageUsable(verifierConfig);
+
+    const appId = verifierConfig.serviceId;
+    // appId is kept on the API for older verifier page builds; it must match.
+    if (requestedAppId && requestedAppId !== appId) {
+      throw new BadRequestException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_APP_MISMATCH,
+      ]);
+    }
+    const isKyb = verifierConfig.pageType === PageType.KYB;
+    // businessId comes from executive invite links on KYC pages. It is not
+    // verified here (the links are not signed yet), so it must never be used
+    // for access decisions downstream.
+    if (businessId && isKyb) {
+      throw new BadRequestException([
+        WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_BUSINESS_ID_NOT_ALLOWED,
+      ]);
+    }
+    await this.enforceTokenLimits(id, clientIp, verifierConfig.dailyTokenLimit);
+
+    const grantType = isKyb
+      ? GRANT_TYPES.access_service_kyb
+      : GRANT_TYPES.access_service_kyc;
+    const kycServiceDetail = await this.findLinkedApp(
       appId,
       SERVICE_TYPES.CAVACH_API,
-      serviceType,
-      TokenModule.VERIFIER,
+      WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_INVALID_SERVICE_TYPE,
     );
     if (
       !kycServiceDetail.dependentServices ||
@@ -381,124 +473,120 @@ export class WebpageConfigService {
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_SSI_SERVICE_NOT_FOUND,
       ]);
     }
-    const ssiServiceId = kycServiceDetail?.dependentServices?.[0];
-    const ssiServiceDetail = await this.getServiceAndCache(
+    const ssiServiceId = kycServiceDetail.dependentServices[0];
+    const ssiServiceDetail = await this.findLinkedApp(
       ssiServiceId,
       SERVICE_TYPES.SSI_API,
-      GRANT_TYPES.access_service_ssi,
-      TokenModule.ID_SERVICE,
+      WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_INVALID_SSI_SERVICE_TYPE,
     );
-    const expiryConfig =
-      serviceType === GRANT_TYPES.access_service_kyb
-        ? EXPIRY_CONFIG.VERIFIER_CUSTOMER_KYB_APP_ACCESS
-        : EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS;
-    // generate access tokens
-    const idServiceTokenPayload = {
+
+    // Session and JWT end at the verifier TTL or the page expiry, whichever
+    // comes first.
+    const expiryConfig = isKyb
+      ? EXPIRY_CONFIG.VERIFIER_CUSTOMER_KYB_APP_ACCESS
+      : EXPIRY_CONFIG.VERIFIER_CUSTOMER_APP_ACCESS;
+    const secondsToPageExpiry = verifierConfig.expiryDate
+      ? Math.floor(
+          (new Date(verifierConfig.expiryDate).getTime() - Date.now()) / 1000,
+        )
+      : Infinity;
+    const ttlSeconds = Math.max(
+      1,
+      Math.min(expiryConfig.redisExpiryTime, secondsToPageExpiry),
+    );
+
+    // One fresh session per token request (per visitor), never shared.
+    const pageSessionId = newVerifierSessionId();
+    const ssiSessionId = newVerifierSessionId();
+    await Promise.all([
+      this.appAuthService.storeDataInRedis(
+        grantType,
+        kycServiceDetail,
+        this.verifierAccessList(SERVICE_TYPES.CAVACH_API, grantType),
+        pageSessionId,
+        undefined,
+        false,
+        ttlSeconds,
+      ),
+      this.appAuthService.storeDataInRedis(
+        GRANT_TYPES.access_service_ssi,
+        ssiServiceDetail,
+        this.verifierAccessList(
+          SERVICE_TYPES.SSI_API,
+          GRANT_TYPES.access_service_ssi,
+          TokenModule.ID_SERVICE,
+        ),
+        ssiSessionId,
+        undefined,
+        false,
+        ttlSeconds,
+      ),
+    ]);
+    await trackVerifierSessions(id, [pageSessionId, ssiSessionId]);
+
+    const pageTokenPayload = {
       appId,
       appName: kycServiceDetail.appName,
-      grantType: serviceType,
-      sessionId: generateHash(
-        serviceType === GRANT_TYPES.access_service_kyb
-          ? `${appId}_${serviceType}`
-          : appId,
-      ),
+      grantType,
+      sessionId: pageSessionId,
       subdomain: kycServiceDetail.subdomain,
+      ...(businessId && { businessId }),
     };
-    if (businessId) {
-      idServiceTokenPayload['businessId'] = businessId;
-    }
     const [ssiAccessTokenDetail, pageAccessTokenDetail] = await Promise.all([
       this.appAuthService.getAccessToken(
         {
           appId: ssiServiceId,
           appName: ssiServiceDetail.appName,
           grantType: GRANT_TYPES.access_service_ssi,
-          sessionId: generateHash(ssiServiceId),
+          sessionId: ssiSessionId,
           subdomain: ssiServiceDetail.subdomain,
         },
-        expiryConfig.jwtTime,
-        expiryConfig.jwtUnit,
+        ttlSeconds,
+        TIME_UNIT.SECOND,
       ),
       this.appAuthService.getAccessToken(
-        idServiceTokenPayload,
-        expiryConfig.jwtTime,
-        expiryConfig.jwtUnit,
+        pageTokenPayload,
+        ttlSeconds,
+        TIME_UNIT.SECOND,
       ),
     ]);
-    const redisPayload: any = {
+    const response: VerifierPageTokenResponse = {
       ssiAccessToken: ssiAccessTokenDetail.access_token,
     };
-    if (verifierConfig.pageType === PageType.KYB) {
-      redisPayload.kybAccessToken = pageAccessTokenDetail.access_token;
+    if (isKyb) {
+      response.kybAccessToken = pageAccessTokenDetail.access_token;
     } else {
-      redisPayload.kycAccessToken = pageAccessTokenDetail.access_token;
+      response.kycAccessToken = pageAccessTokenDetail.access_token;
     }
-    return {
-      ...redisPayload,
-    };
+    return response;
   }
-  public async getServiceAndCache(
-    appId: string,
+
+  private verifierAccessList(
     serviceType: SERVICE_TYPES,
     grantType: GRANT_TYPES,
-    tokenModule,
+    tokenModule: TokenModule = TokenModule.VERIFIER,
   ) {
-    Logger.debug(
-      'Inside getServiceAndCache() method to store and get service detail from redis',
-      'WebpageConfigService',
-    );
-    const key =
-      grantType === GRANT_TYPES.access_service_kyb
-        ? `${appId}_${grantType}`
-        : appId;
-    const redisKey = generateHash(key);
-    const cached = await redisClient.get(redisKey);
-    const defaultAccessList = getAccessListForModule(
-      tokenModule,
-      serviceType,
-      grantType,
-    );
-    const validateAccessList = evaluateAccessPolicy(
-      defaultAccessList,
+    return evaluateAccessPolicy(
+      getAccessListForModule(tokenModule, serviceType, grantType),
       serviceType,
       [],
     );
-    const accessListHash = generateHash(JSON.stringify(validateAccessList));
-    if (cached) {
-      const cachedServiceDetail = JSON.parse(cached);
-      if (cachedServiceDetail.accessListHash === accessListHash) {
-        return cachedServiceDetail;
-      }
+  }
 
-      const serviceDetail = await this.appRepository.findOne({ appId });
-      if (!serviceDetail) {
-        throw new BadRequestException([
-          WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
-        ]);
-      }
-      await this.appAuthService.storeDataInRedis(
-        grantType,
-        serviceDetail,
-        validateAccessList,
-        redisKey,
-        accessListHash,
-        true,
-      );
-      return serviceDetail;
-    }
+  private async findLinkedApp(
+    appId: string,
+    expectedServiceType: SERVICE_TYPES,
+    wrongTypeError: string,
+  ) {
     const serviceDetail = await this.appRepository.findOne({ appId });
     if (!serviceDetail) {
       throw new BadRequestException([
         WEBPAGE_CONFIG_ERRORS.WEBPAGE_CONFIG_LINKED_APP_NOT_FOUND,
       ]);
     }
-    await this.appAuthService.storeDataInRedis(
-      grantType,
-      serviceDetail,
-      validateAccessList,
-      redisKey,
-      accessListHash,
-    );
+    if (serviceDetail.services?.[0]?.id !== expectedServiceType) {
+      throw new BadRequestException([wrongTypeError]);
+    }
     return serviceDetail;
   }
 }

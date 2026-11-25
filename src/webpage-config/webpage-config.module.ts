@@ -74,18 +74,8 @@ export class WebpageConfigModule implements NestModule {
         },
       )
       .forRoutes(WebpageConfigController);
-    consumer
-      .apply(RateLimitMiddleware)
-      .exclude(
-        {
-          path: 'api/v1/app/verifier/:id',
-          method: RequestMethod.GET,
-        },
-        {
-          path: 'api/v1/app/verifier/:id/tokens',
-          method: RequestMethod.POST,
-        },
-      )
-      .forRoutes(WebpageConfigController);
+    // Applies to the public verifier routes too (keyed by IP there). The
+    // token route also has tighter per-page limits in WebpageConfigService.
+    consumer.apply(RateLimitMiddleware).forRoutes(WebpageConfigController);
   }
 }

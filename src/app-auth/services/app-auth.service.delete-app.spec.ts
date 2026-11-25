@@ -3,8 +3,13 @@ import { UserRole } from 'src/user/schema/user.schema';
 import { AppAuthService } from './app-auth.service';
 
 jest.mock('src/utils/redis.provider', () => ({
-  redisClient: { del: jest.fn().mockResolvedValue(1) },
+  redisClient: {
+    del: jest.fn().mockResolvedValue(1),
+    smembers: jest.fn().mockResolvedValue(['session-a', 'session-b']),
+  },
 }));
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { redisClient } = require('src/utils/redis.provider');
 jest.mock('../../edv/services/vaultWalletManager', () => ({
   VaultWalletManager: { getWallet: jest.fn().mockResolvedValue({}) },
 }));
@@ -39,6 +44,9 @@ describe('AppAuthService deleteApp', () => {
   const webpageConfigRepo = {
     deleteMany: jest.fn(),
     findOneAndDelete: jest.fn(),
+    findListOfWebpageConfig: jest
+      .fn()
+      .mockResolvedValue([{ _id: { toString: () => 'page-1' } }]),
   };
   let service: AppAuthService;
 
@@ -76,6 +84,19 @@ describe('AppAuthService deleteApp', () => {
       serviceId: 'kyc-app-1',
     });
     expect(webpageConfigRepo.findOneAndDelete).not.toHaveBeenCalled();
+  });
+
+  it("revokes live verifier sessions of the app's pages", async () => {
+    await service.deleteApp('kyc-app-1', {
+      userId: 'owner-1',
+      role: UserRole.ADMIN,
+    });
+
+    expect(redisClient.smembers).toHaveBeenCalledWith(
+      'verifier:sessions:page-1',
+    );
+    expect(redisClient.del).toHaveBeenCalledWith('session-a', 'session-b');
+    expect(redisClient.del).toHaveBeenCalledWith('verifier:sessions:page-1');
   });
 
   it('keeps the organisation and only unlinks the deleted KYC app', async () => {

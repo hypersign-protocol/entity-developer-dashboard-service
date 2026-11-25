@@ -11,6 +11,7 @@ import {
   UsePipes,
   ValidationPipe,
   Query,
+  Ip,
 } from '@nestjs/common';
 import { WebpageConfigService } from '../services/webpage-config.service';
 import {
@@ -144,17 +145,25 @@ export class WebpageConfigController {
     type: String,
     description: 'Verifier ID',
   })
-  @ApiQuery({ name: 'appId', required: true, type: String })
+  @ApiQuery({
+    name: 'appId',
+    required: false,
+    type: String,
+    description:
+      'Deprecated: the app is taken from the verifier page. If sent, it must match.',
+  })
   @ApiQuery({ name: 'businessId', required: false, type: String })
   generateWebpageConfigTokens(
-    @Query('appId') appId: string,
     @Param() params: VerifierParamsDto,
+    @Ip() clientIp: string,
+    @Query('appId') appId?: string,
     @Query('businessId') businessId?: string,
   ) {
     return this.webpageConfigService.generateWebpageConfigTokens(
       params.id,
       appId,
       businessId,
+      clientIp,
     );
   }
 }

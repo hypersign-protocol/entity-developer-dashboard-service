@@ -58,8 +58,21 @@ export class CreditService {
     private readonly moduleRef: ModuleRef,
   ) {}
 
-  async fetchCreditDetails(appId: string, status?: CreditStatus) {
+  async fetchCreditDetails(
+    appId: string,
+    status: CreditStatus | undefined,
+    caller: { userId: string; role?: string },
+  ) {
     Logger.log('Fetching credit plan list', 'CreditService');
+    // Customers may only read plans of their own apps (owner id; team members
+    // are mapped to it). Super admins may read any. Not-found and not-owned
+    // look the same, so app ids can't be probed.
+    if (caller.role !== UserRole.SUPER_ADMIN) {
+      const appDetail = await this.appRepository.findOne({ appId });
+      if (!appDetail || appDetail.userId !== caller.userId) {
+        throw new NotFoundException([`No app found with appId: ${appId}`]);
+      }
+    }
 
     const pipeline = [
       {

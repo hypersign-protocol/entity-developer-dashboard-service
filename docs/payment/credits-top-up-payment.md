@@ -15,7 +15,7 @@ Today, customers cannot buy credits themselves. A super admin grants them by han
 | Today | Endpoint |
 |---|---|
 | Grant credits to an app (super admin) | `POST /api/v1/app/:appId/credits` with `{ amount, amountDenom, validityPeriod, validityPeriodUnit }`. Creates a `CreditPlan` with `source: MANUAL_RECHARGE` |
-| List an app's credit plans | `GET /api/v1/app/:appId/credits` (returns `apiCredit.total`, `apiCredit.used`, `expiresAt`, `status`). **This route is excluded from JWT auth today**, so it must not start returning invoice or billing data |
+| List an app's credit plans | `GET /api/v1/app/:appId/credits` (returns `apiCredit.total`, `apiCredit.used`, `expiresAt`, `status`). Requires JWT auth; owners see only their own apps, super admins see any (it was public until 2026-11-25) |
 | Activate a queued plan (customer) | `POST /api/v1/app/:appId/credits/:creditId/activate` |
 
 Customer onboarding also grants starter credits through the same code path (`source: CUSTOMER_ONBOARDING`).
@@ -1171,7 +1171,7 @@ This review checked the draft against the code in this service and in `@hypersig
 
    The cost is a second, shorter state machine for admin orders. This is internal and doesn't change any agreed UI.
 2. **Fix `activateCredit` regardless of billing.** It doesn't check the plan's status, or that the app belongs to the caller. A status guard (`Inactive`, no `expiresAt`) and an ownership check should ship with invoicing, before purchased plans exist.
-3. **Keep `GET /api/v1/app/:appId/credits` free of billing data.** It is excluded from JWT auth. Purchase history should get invoice details only from the authenticated `/billing/invoices` route.
+3. **Keep `GET /api/v1/app/:appId/credits` free of billing data.** It now requires JWT auth and app ownership, but purchase history should still get invoice details only from `/billing/invoices`.
 4. **Our legal entity details belong in config, not a collection.** The invoice `supplier` block is copied from `BILLING_SUPPLIER_*` environment settings at issue time, so it is a snapshot anyway. Add them to `validateEnv`.
 5. **Monitoring.** Alert on: `PAID` invoices without `creditPlanId` after 10 minutes; orders in `PENDING_PAYMENT` for more than 1 hour; `WebhookEvent`s that are `FAILED`; and any `NEEDS_REVIEW`.
 

@@ -105,14 +105,11 @@ const CREDIT_REDIS_URL = Symbol('CREDIT_REDIS_URL');
 })
 export class CreditModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(JWTAuthorizeMiddleware)
-      .exclude({ path: 'api/v1/app/:appId/credits', method: RequestMethod.GET })
-      .forRoutes(CreditsController);
-    consumer
-      .apply(JWTAccessAccountMiddleware)
-      .exclude({ path: 'api/v1/app/:appId/credits', method: RequestMethod.GET })
-      .forRoutes(CreditsController);
+    // Every credits route needs a logged-in user. GET and activate skip only
+    // the super-admin check: owners read and activate their own apps' plans
+    // (ownership is checked in CreditService).
+    consumer.apply(JWTAuthorizeMiddleware).forRoutes(CreditsController);
+    consumer.apply(JWTAccessAccountMiddleware).forRoutes(CreditsController);
     consumer
       .apply(SuperAdminMiddleware)
       .exclude(

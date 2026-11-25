@@ -1,12 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
+  IsInt,
   IsMongoId,
   IsNotEmpty,
   IsOptional,
   IsString,
+  Min,
   ValidateIf,
 } from 'class-validator';
 import { APP_ENVIRONMENT } from 'src/supported-service/services/iServiceList';
@@ -98,6 +101,30 @@ export class CreateWebpageConfigDto {
   @IsArray()
   @IsMongoId({ each: true })
   linkedWidgetConfigIds?: string[];
+
+  @ApiProperty({
+    name: 'isActive',
+    description:
+      'Whether the page is live. A disabled page serves no configuration or tokens.',
+    example: true,
+    default: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @ApiProperty({
+    name: 'dailyTokenLimit',
+    description:
+      'Optional maximum number of token requests per UTC day for this page.',
+    example: 500,
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  dailyTokenLimit?: number;
 }
 
 export class CreateWebpageConfigResponseDto extends CreateWebpageConfigDto {

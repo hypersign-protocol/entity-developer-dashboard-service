@@ -29,6 +29,7 @@ import { UserRepository } from 'src/user/repository/user.repository';
 import { EdvClientKeysManager } from 'src/edv/services/edv.singleton';
 import { UserRole } from 'src/user/schema/user.schema';
 import { WebPageConfigRepository } from 'src/webpage-config/repositories/webpage-config.repository';
+import { revokeVerifierSessions } from 'src/webpage-config/utils/verifier-session.util';
 import { InjectModel } from '@nestjs/mongoose';
 import { CustomerOnboarding } from 'src/customer-onboarding/schemas/customer-onboarding.schema';
 import { KybVerificationEnum } from 'src/customer-onboarding/constants/identifier-types';
@@ -743,6 +744,12 @@ export class AppAuthService {
       // delete webpage config data of that service (KYC and KYB pages).
       // WebPageConfig stores the app id as serviceId; filtering on appId was
       // stripped by strictQuery and deleted an unrelated config.
+      const pages = await this.webpageConfigRepo.findListOfWebpageConfig({
+        serviceId: appId,
+      });
+      await Promise.all(
+        pages.map((page) => revokeVerifierSessions(page._id.toString())),
+      );
       await this.webpageConfigRepo.deleteMany({ serviceId: appId });
     }
     appDetail = await this.appRepository.findOneAndDelete({ appId, userId });
@@ -961,6 +968,7 @@ export class AppAuthService {
     sessionId,
     accessListHash?: string,
     preserveTtl = false,
+    ttlSeconds: number = EXPIRY_CONFIG.DASHBOARD_ACCESS.redisExpiryTime,
   ) {
     const payload = {
       appId: appDetail.appId,
@@ -997,12 +1005,7 @@ export class AppAuthService {
       await redisClient.set(sessionId, JSON.stringify(payload), 'KEEPTTL');
       return;
     }
-    await redisClient.set(
-      sessionId,
-      JSON.stringify(payload),
-      'EX',
-      EXPIRY_CONFIG.DASHBOARD_ACCESS.redisExpiryTime,
-    );
+    await redisClient.set(sessionId, JSON.stringify(payload), 'EX', ttlSeconds);
   }
 
   async grantPermission(

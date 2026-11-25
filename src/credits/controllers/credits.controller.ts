@@ -46,14 +46,19 @@ export class CreditsController {
     name: 'status',
     required: false,
   })
+  @ApiBearerAuth('Authorization')
   @UsePipes(new ValidationPipe({ transform: true }))
   @Get(':appId/credits')
   async getCredits(
     @Param('appId') appId: string,
     @Query() query: GetCreditsQueryDto,
+    @Req() req: any,
   ) {
     const { status } = query;
-    return this.creditService.fetchCreditDetails(appId, status);
+    return this.creditService.fetchCreditDetails(appId, status, {
+      userId: req.user.userId,
+      role: req.user.role,
+    });
   }
 
   @ApiBearerAuth('Authorization')

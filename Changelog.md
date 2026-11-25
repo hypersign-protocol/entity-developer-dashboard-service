@@ -1,6 +1,18 @@
 # Changelog
 
 ## [Unreleased]
+## [3.18.1] - 2026-11-25
+
+### Security
+
+- Bound verifier token generation to the app stored on the verifier page and reject a mismatched `appId`. Added page activation and expiry checks, per-visitor token sessions, session revocation, and per-IP/per-page rate limits. The verifier token endpoint remains public, so this prevents cross-app token minting but does not require callers to authenticate.
+- Require authentication to read `GET /api/v1/app/:appId/credits` and check that non-super-admin callers own the requested app. Unknown and non-owned apps return the same not-found response.
+
+### Added
+
+- Added disposable-email detection and DNS validation for email OTP login, with configurable public DNS resolvers.
+- Added EDV vault registration failure diagnostics that log the last captured EDV HTTP response, with response bodies truncated to 1,000 characters.
+- Added the `WRITE_SESSION_DECISION` dashboard access type.
 
 ## [3.18.0] - 2026-11-11
 

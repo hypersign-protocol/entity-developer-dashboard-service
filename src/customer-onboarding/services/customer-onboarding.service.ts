@@ -3176,13 +3176,12 @@ export class CustomerOnboardingService {
             method: 'GET',
             headers: {
               'x-kyb-access-token': kybAccessToken,
-              // for server to server call it is not required
-              // Origin: sanitizeUrl(
-              //   this.config.get<string>(
-              //     'DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP',
-              //   ),
-              //   false,
-              // ),
+              Origin: sanitizeUrl(
+                this.config.get<string>(
+                  'DEVELOPER_DASHBOARD_SERVICE_PUBLIC_EP',
+                ),
+                false,
+              ),
             },
           },
           'Failed to refresh the KYB company verification status',
